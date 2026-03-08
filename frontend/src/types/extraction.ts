@@ -1,0 +1,18 @@
+export type {
+  ExtractionResult,
+  ExtractionStats,
+  ExtractionRecord,
+  SourcedValue,
+  SourcedNumber,
+  SourcedBoolean,
+  Verfahrensdaten,
+  Schuldner,
+  Antragsteller,
+  Forderungen,
+  Gutachterbestellung,
+  Ermittlungsergebnisse,
+  Frist,
+  Standardanschreiben,
+  FehlendInfo,
+  AnschreibenStatus,
+} from '@shared/types/extraction';
