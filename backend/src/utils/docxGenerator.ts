@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import type { ExtractionResult } from '../types/extraction';
 
-const TEMPLATES_DIR = path.resolve(__dirname, '../../../standardschreiben');
+const TEMPLATES_DIR = path.resolve(process.cwd(), 'standardschreiben');
 const MAPPING_PATH = path.join(TEMPLATES_DIR, 'platzhalter-mapping.json');
 
 interface FieldMapping {

@@ -124,6 +124,15 @@ export function useExtraction() {
     setState(s => ({ ...s, loading: true, error: null, progress: 'Lade Verlauf…', progressPercent: 50 }));
     try {
       const { data } = await apiClient.get(`/history/${id}`);
+      if (!data.result) {
+        setState(s => ({
+          ...s,
+          loading: false,
+          error: `Extraktion #${id} hat kein Ergebnis (Status: ${data.status ?? 'unbekannt'})`,
+          progress: '',
+        }));
+        return;
+      }
       setState({
         loading: false,
         progress: '',

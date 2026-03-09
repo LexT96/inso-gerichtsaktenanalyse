@@ -23,7 +23,7 @@ interface ChecklistConfig {
   anschreiben: ChecklistItem[];
 }
 
-const CHECKLIST_PATH = path.resolve(__dirname, '../../../standardschreiben/checklisten.json');
+const CHECKLIST_PATH = path.resolve(process.cwd(), 'standardschreiben/checklisten.json');
 
 function loadChecklists(): ChecklistConfig {
   const raw = fs.readFileSync(CHECKLIST_PATH, 'utf-8');

@@ -42,8 +42,13 @@ router.post('/:extractionId/:typ', authMiddleware, (req: Request, res: Response)
     return;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const checklisten = require('../../../standardschreiben/checklisten.json') as {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const checklisten = JSON.parse(
+    require('fs').readFileSync(
+      require('path').resolve(process.cwd(), 'standardschreiben/checklisten.json'),
+      'utf-8'
+    )
+  ) as {
     anschreiben: Array<{ typ: string; templatePdf?: string; typAliases?: string[] }>;
   };
 
