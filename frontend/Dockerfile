@@ -12,8 +12,6 @@ COPY frontend/vite.config.ts ./
 COPY frontend/tailwind.config.js ./
 COPY frontend/postcss.config.js ./
 COPY frontend/public ./public
-# Worker aus node_modules (Version-Sync mit pdfjs-dist)
-RUN cp node_modules/pdfjs-dist/build/pdf.worker.min.mjs public/pdf.worker.min.mjs
 # Fallback: Demo-PDF aus testdokumente, falls public/demo/test-pdf.pdf fehlt
 COPY testdokumente/ ./testdokumente/
 RUN mkdir -p public/demo && \
