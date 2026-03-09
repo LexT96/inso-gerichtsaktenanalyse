@@ -22,9 +22,11 @@ function fieldIsEmpty(field: AnySourced): boolean {
   return w === null || w === undefined || w === '';
 }
 
-/** Extract page number from quelle string (e.g. "Seite 3, Beschluss..." or "Seiten 3-5" → 3) */
+/** Extract page number from quelle string.
+ *  Handles: Seite 3, Seiten 3-5, S. 3, S.3, S3, page 3, p. 3, p.3
+ */
 function parsePageNumber(quelle: string): number | null {
-  const match = quelle.match(/Seiten?\s+(\d+)/i);
+  const match = quelle.match(/(?:Seiten?|S\.?\s*|page\s+|p\.?\s*)(\d+)/i);
   return match ? parseInt(match[1], 10) : null;
 }
 
