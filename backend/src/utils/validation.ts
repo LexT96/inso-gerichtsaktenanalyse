@@ -63,7 +63,13 @@ const sourcedValueSchema = z.preprocess(
 const sourcedNumberSchema = z.preprocess(
   (v) => {
     const r = toSourcedValue(v);
-    const n = typeof r.wert === 'number' ? r.wert : parseFloat(String(r.wert ?? '')) || 0;
+    if (typeof r.wert === 'number') return { wert: r.wert, quelle: r.quelle };
+    // Handle German number format: "1.234,56" → 1234.56
+    let raw = String(r.wert ?? '').trim();
+    if (raw.includes(',')) {
+      raw = raw.replace(/\./g, '').replace(',', '.');
+    }
+    const n = parseFloat(raw);
     return { wert: Number.isNaN(n) ? 0 : n, quelle: r.quelle };
   },
   z.object({ wert: z.number(), quelle: z.string() }).passthrough()
@@ -72,15 +78,18 @@ const sourcedNumberSchema = z.preprocess(
 const sourcedBooleanSchema = z.preprocess(
   (v) => {
     const r = toSourcedValue(v);
-    const b = r.wert === true || String(r.wert).toLowerCase() === 'ja' || String(r.wert) === 'true' || String(r.wert) === '1';
-    return { wert: !!b, quelle: r.quelle };
+    // Preserve null = "unknown / not investigated" vs false = "confirmed absent"
+    if (r.wert === null || r.wert === undefined) return { wert: null, quelle: r.quelle };
+    const s = String(r.wert).toLowerCase();
+    const b = r.wert === true || s === 'ja' || s === 'true' || s === '1';
+    return { wert: b, quelle: r.quelle };
   },
-  z.object({ wert: z.boolean(), quelle: z.string() }).passthrough()
+  z.object({ wert: z.boolean().nullable(), quelle: z.string() }).passthrough()
 );
 
 const defaultSourced = { wert: null, quelle: '' };
 const defaultSourcedNum = { wert: 0, quelle: '' };
-const defaultSourcedBool = { wert: false, quelle: '' };
+const defaultSourcedBool = { wert: null, quelle: '' };
 
 // ─── Sub-schemas with full coercion ───
 
@@ -177,27 +186,30 @@ const standardanschreibenItemSchema = z.preprocess(
     ),
     begruendung: stringOrObjectSchema.optional().default(''),
     fehlende_daten: z.preprocess((val) => ensureArray(val), z.array(stringOrObjectSchema)).optional().default([]),
-  }).transform((item) => {
-    // Downgrade "bereit" to "fehlt" if empfaenger is empty
-    if (item.status === 'bereit' && !item.empfaenger.trim()) {
-      return {
-        ...item,
-        status: 'fehlt' as const,
-        fehlende_daten: item.fehlende_daten.includes('empfaenger')
-          ? item.fehlende_daten
-          : [...item.fehlende_daten, 'empfaenger'],
-      };
-    }
-    return item;
   })
 );
 
+function normalizeFehlendInfoItem(v: unknown): Record<string, unknown> {
+  if (v != null && typeof v === 'object' && !Array.isArray(v)) {
+    const o = v as Record<string, unknown>;
+    const info = toString(o.information ?? '');
+    const grund = toString(o.grund ?? '');
+    const ermittlung = toString(o.ermittlung_ueber ?? '');
+    return { information: info, grund, ermittlung_ueber: ermittlung };
+  }
+  // Plain string from AI: use as information
+  if (typeof v === 'string' && v.trim()) {
+    return { information: v.trim(), grund: '', ermittlung_ueber: '' };
+  }
+  return { information: '', grund: '', ermittlung_ueber: '' };
+}
+
 const fehlendeInfoItemSchema = z.preprocess(
-  (v) => ensureObject(v),
+  normalizeFehlendInfoItem,
   z.object({
-    information: stringOrObjectSchema.optional().default(''),
-    grund: stringOrObjectSchema.optional().default(''),
-    ermittlung_ueber: stringOrObjectSchema.optional().default(''),
+    information: z.string(),
+    grund: z.string(),
+    ermittlung_ueber: z.string(),
   })
 );
 
@@ -267,7 +279,15 @@ const extractionResultSchemaInner = z.object({
   ermittlungsergebnisse: ermittlungsergebnisseSchema.optional().default({}),
   fristen: z.preprocess(ensureArray, z.array(fristItemSchema)).optional().default([]),
   standardanschreiben: z.preprocess(ensureArray, z.array(standardanschreibenItemSchema)).optional().default([]),
-  fehlende_informationen: z.preprocess(ensureArray, z.array(fehlendeInfoItemSchema)).optional().default([]),
+  fehlende_informationen: z.preprocess(
+    (v) => {
+      const arr = ensureArray(v);
+      return arr
+        .map(normalizeFehlendInfoItem)
+        .filter((item) => String(item.information ?? '').trim() !== '');
+    },
+    z.array(fehlendeInfoItemSchema)
+  ).optional().default([]),
   zusammenfassung: z.preprocess(toString, z.string()).optional().default(''),
   risiken_hinweise: z.preprocess(ensureArray, z.array(stringOrObjectSchema)).optional().default([]),
 });

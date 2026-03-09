@@ -19,7 +19,7 @@ function LetterCard({ letter }: { letter: Standardanschreiben }) {
       <div className="flex justify-between items-center">
         <div>
           <div className="text-xs font-semibold text-text font-sans">{letter.typ}</div>
-          <div className="text-[10px] text-text-dim mt-0.5">An: {letter.empfaenger}</div>
+          <div className="text-[10px] text-text-dim mt-0.5">An: {letter.empfaenger?.trim() || '—'}</div>
         </div>
         <Badge type={st} />
       </div>

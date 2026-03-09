@@ -4,10 +4,11 @@ interface PdfUploaderProps {
   file: File | null;
   onFileSelect: (file: File) => void;
   onAnalyze: () => void;
+  onDemo?: () => void;
   loading: boolean;
 }
 
-export function PdfUploader({ file, onFileSelect, onAnalyze, loading }: PdfUploaderProps) {
+export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading }: PdfUploaderProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback((e: DragEvent<HTMLDivElement> | ChangeEvent<HTMLInputElement>) => {
@@ -56,6 +57,15 @@ export function PdfUploader({ file, onFileSelect, onAnalyze, loading }: PdfUploa
           <div className="text-[10px] text-text-muted mt-1.5">
             Max. 50 MB · PDF-Dateien
           </div>
+          {onDemo && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDemo(); }}
+              disabled={loading}
+              className="mt-4 px-4 py-2 rounded-sm border border-ie-blue-border text-ie-blue text-[11px] font-mono hover:bg-ie-blue/10 transition-colors disabled:opacity-50"
+            >
+              Demo starten (PDF + Quellen testen)
+            </button>
+          )}
         </>
       )}
     </div>

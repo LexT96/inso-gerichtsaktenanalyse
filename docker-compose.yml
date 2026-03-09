@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     ports:
-      - "3001:3001"
+      - "3003:3001"
     environment:
       - NODE_ENV=production
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -16,7 +16,7 @@ services:
       - RATE_LIMIT_EXTRACTIONS_PER_HOUR=${RATE_LIMIT_EXTRACTIONS_PER_HOUR:-10}
       - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD}
-      - CORS_ORIGIN=http://localhost:3000
+      - CORS_ORIGIN=http://localhost:3002
       - PORT=3001
       - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
@@ -28,7 +28,7 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     ports:
-      - "3000:80"
+      - "3002:80"
     depends_on:
       - backend
     restart: unless-stopped

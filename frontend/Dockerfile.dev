@@ -1,0 +1,20 @@
+# Entwicklungs-Frontend: Vite dev server mit Hot-Reload
+FROM node:20-alpine
+
+WORKDIR /workspace/frontend
+
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm install
+
+COPY frontend/index.html ./
+COPY frontend/tsconfig.json ./
+COPY frontend/vite.config.ts ./
+COPY frontend/tailwind.config.js ./
+COPY frontend/postcss.config.js ./
+COPY frontend/src ./src
+COPY frontend/public ./public
+COPY shared /workspace/shared
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

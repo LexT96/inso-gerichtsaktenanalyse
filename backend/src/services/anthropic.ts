@@ -3,7 +3,7 @@ import { jsonrepair } from 'jsonrepair';
 import { config } from '../config';
 import { extractionResultSchema } from '../utils/validation';
 import { logger } from '../utils/logger';
-import type { ExtractionResult, Standardanschreiben } from '../types/extraction';
+import type { ExtractionResult, Standardanschreiben, FehlendInfo } from '../types/extraction';
 
 const anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
 
@@ -27,9 +27,10 @@ const RATE_LIMIT_RETRY_DELAY_MS = 65_000;
 
 const EXTRACTION_PROMPT = `Du bist ein spezialisierter KI-Assistent für deutsche Insolvenzverwalter. Analysiere die hochgeladene Gerichtsakte und extrahiere ALLE relevanten Informationen strukturiert.
 
-WICHTIG: Für JEDES extrahierte Datenfeld gib die QUELLE an — d.h. aus welchem Dokument/Abschnitt der Akte die Information stammt (z.B. "Beschluss vom 18.12.2025", "Insolvenzantrag der HEK", "Mitteilung des Gerichtsvollziehers vom 03.12.2025", "Meldeauskunft", "Grundbuchamt Trier" etc.).
+PFLICHT: Jedes Feld mit ausgefülltem "wert" MUSS eine "quelle" haben. Ohne Quelle ist die Extraktion unbrauchbar. Die Quelle MUSS mit der Seitenzahl beginnen: "Seite X, [Dokumentbezeichnung]". Beispiele: "Seite 1, Beschluss vom 18.12.2025", "Seite 3, Insolvenzantrag der HEK", "Seite 7, Mitteilung des Gerichtsvollziehers vom 03.12.2025", "Seite 12, Meldeauskunft", "Seite 15, Grundbuchamt Trier". Regel: wert nicht leer → quelle nicht leer.
+Datumsformat: TT.MM.JJJJ (z.B. 18.12.2025). Beträge: deutsche Schreibweise mit Komma (1.234,56) oder Zahl.
 
-Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICHTIG: In allen String-Werten Anführungszeichen mit \\ escapen, keine Zeilenumbrüche innerhalb von Strings. Verwende folgende Struktur:
+Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICHTIG: In allen String-Werten Anführungszeichen mit \\ escapen, keine Zeilenumbrüche innerhalb von Strings. Bei Zahlen: Nur 0 setzen, wenn der Wert tatsächlich 0 in der Akte steht — sonst null und quelle leer lassen. Verwende folgende Struktur:
 
 {
   "verfahrensdaten": {
@@ -134,28 +135,39 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICH
   "risiken_hinweise": []
 }
 
-Die 9 Standardanschreiben-Typen sind:
-1. Bankenauskunft (an Banken/Sparkassen)
-2. Versicherungsanfrage (an Versicherungen)
-3. Steuerberater-Kontakt (an StB/WP)
-4. Krankenkassen-Anfrage (an GKV)
-5. Gerichtsvollzieher-Anfrage (an zuständigen GV)
-6. Grundbuchanfrage (an Grundbuchamt)
-7. KFZ-Halteranfrage (an Kraftfahrt-Bundesamt)
-8. Kreditreform-Auskunft (über bestehenden Zugang)
-9. Gewerbeauskunft (an zuständige Behörde)
+Die 10 Standardanschreiben-Typen (je ein Dokument) sind:
+1. Bankenauskunft
+2. Bausparkassen-Anfrage
+3. Steuerberater-Kontakt
+4. Strafakte-Akteneinsicht
+5. KFZ-Halteranfrage Zulassungsstelle
+6. Gewerbeauskunft
+7. Finanzamt-Anfrage
+8. KFZ-Halteranfrage KBA
+9. Versicherungsanfrage
+10. Gerichtsvollzieher-Anfrage
 
-Für jeden Typ bestimme ob: "bereit" (alle Daten da), "fehlt" (Daten unvollständig), oder "entfaellt" (bereits vom Gericht erledigt).
-WICHTIG: "bereit" nur wenn empfaenger (konkrete Institution/Person mit Name) ausgefüllt ist. Ist empfaenger leer oder unbekannt → status MUSS "fehlt" sein.
-Bei "fehlt" liste die fehlenden Datenfelder auf.
-Bei "entfaellt" begründe warum (z.B. "Bereits vom Gericht am 27.11.2025 beim Grundbuchamt angefragt").
+Für jeden Typ bestimme ob: "bereit" (alle Daten da, sofort generierbar), "fehlt" (Daten unvollständig), oder "entfaellt" (Anfrage nicht nötig/bereits erledigt).
+WICHTIG: "bereit" NUR wenn fehlende_daten LEER ist. Bei "bereit" darf fehlende_daten keine Einträge haben.
+"entfaellt" wenn: (a) bereits vom Gericht erledigt, ODER (b) der Sachverhalt nicht vorliegt (z.B. keine Fahrzeuge → KFZ-Anfragen entfallen; keine Versicherungen bekannt → Versicherungsanfrage kann trotzdem bereit sein mit generischem Empfänger).
+"fehlt" wenn konkrete Daten fehlen, um den Brief zu versenden (z.B. Name der Krankenkasse, Name des Gerichtsvollziehers).
+WICHTIG für empfaenger: Wenn eine konkrete Institution/Person aus der Akte bekannt ist, trage diese ein. Wenn nicht, verwende den generischen Empfänger des Typs.
+Bei "fehlt" liste die fehlenden Datenfelder in fehlende_daten auf.
+Bei "entfaellt" begründe warum (z.B. "Bereits vom Gericht angefragt" oder "Kein Grundvermögen vorhanden").
 
-Extrahiere ALLE verfügbaren Daten. Bei fehlenden Informationen setze null/leere Strings und fülle fehlende_informationen mit konkreten Hinweisen, wie die Information ermittelt werden kann.`;
+Extrahiere ALLE verfügbaren Daten. Bei fehlenden Informationen setze null/leere Strings und fülle fehlende_informationen mit konkreten Hinweisen, wie die Information ermittelt werden kann.
+Für betroffene_arbeitnehmer: Bei Arbeitnehmerangaben Objekte mit anzahl, typ, quelle (z.B. {"anzahl":44,"typ":"Arbeitnehmer insgesamt","quelle":"Seite 7, Angaben zu Arbeitnehmerverhältnissen"}). Sonst [].
+
+ERINNERUNG: Jeder nicht-leere wert braucht eine quelle (Seite X, ...). Keine Ausnahme.
+
+WICHTIG für fehlende_informationen: Jeder Eintrag MUSS ein Objekt mit allen drei Feldern sein. Das Feld "information" darf NIEMALS leer sein — trage dort stets eine kurze, prägnante Bezeichnung der fehlenden Information ein (z.B. "Beschlussdatum des Insolvenzgerichts", "Konkrete Bankverbindungen"). Keine Platzhalter wie {"information":"","grund":"..."} ausgeben. Wenn nichts fehlt, leere Liste [].`;
 
 // Short prompt for chunks 2+ — schema already established, just extract the content
-const EXTRACTION_PROMPT_CONTINUATION = `Du bist ein KI-Assistent für deutsche Insolvenzverwalter. Extrahiere alle verfügbaren Daten aus diesem Aktenabschnitt und gib das Ergebnis als valides JSON zurück (kein Markdown, keine Backticks). In String-Werten Anführungszeichen mit \\ escapen, keine Zeilenumbrüche in Strings. Verwende exakt dasselbe JSON-Schema — fehlende Felder auf null/""/0 setzen. Für JEDES Feld die QUELLE angeben.
+const EXTRACTION_PROMPT_CONTINUATION = `Du bist ein KI-Assistent für deutsche Insolvenzverwalter. Extrahiere alle verfügbaren Daten aus diesem Aktenabschnitt und gib das Ergebnis als valides JSON zurück (kein Markdown, keine Backticks). In String-Werten Anführungszeichen mit \\ escapen, keine Zeilenumbrüche in Strings. Verwende exakt dasselbe JSON-Schema — fehlende Felder auf null/""/0 setzen.
 
-Gleiche Struktur: verfahrensdaten, schuldner, antragsteller, forderungen, gutachterbestellung, ermittlungsergebnisse, fristen[], standardanschreiben[] (9 Typen: Bankenauskunft|Versicherungsanfrage|Steuerberater-Kontakt|Krankenkassen-Anfrage|Gerichtsvollzieher-Anfrage|Grundbuchanfrage|KFZ-Halteranfrage|Kreditreform-Auskunft|Gewerbeauskunft mit status bereit|fehlt|entfaellt), fehlende_informationen[], zusammenfassung, risiken_hinweise[].`;
+PFLICHT: Jeder nicht-leere wert MUSS eine quelle haben ("Seite X, [Dokument]"). Ohne quelle keine gültige Extraktion.
+
+Gleiche Struktur: verfahrensdaten, schuldner, antragsteller, forderungen, gutachterbestellung, ermittlungsergebnisse, fristen[], standardanschreiben[] (10 Typen: Bankenauskunft|Bausparkassen-Anfrage|Steuerberater-Kontakt|Strafakte-Akteneinsicht|KFZ-Halteranfrage Zulassungsstelle|Gewerbeauskunft|Finanzamt-Anfrage|KFZ-Halteranfrage KBA|Versicherungsanfrage|Gerichtsvollzieher-Anfrage mit status bereit|fehlt|entfaellt), fehlende_informationen[] (jeder Eintrag: {"information":"kurze Bezeichnung","grund":"...","ermittlung_ueber":"..."} — "information" nie leer), zusammenfassung, risiken_hinweise[].`;
 
 // ─── Helpers ───
 
@@ -210,23 +222,43 @@ function mergeStandardanschreiben(a: Standardanschreiben[], b: Standardanschreib
     // Merge field-by-field: keep best status AND best data from both
     const newPrio = ANSCHREIBEN_PRIORITY[letter.status] ?? 0;
     const existPrio = ANSCHREIBEN_PRIORITY[existing.status] ?? 0;
+    const winningStatus = newPrio >= existPrio ? letter.status : existing.status;
+    // "bereit" und "entfaellt" schließen fehlende_daten aus — nur bei "fehlt" kombinieren
+    const fehlendeDaten =
+      winningStatus === 'fehlt'
+        ? [...new Set([...(existing.fehlende_daten || []), ...(letter.fehlende_daten || [])])]
+        : [];
     const merged: Standardanschreiben = {
       typ: letter.typ,
       empfaenger: existing.empfaenger || letter.empfaenger,
-      status: newPrio >= existPrio ? letter.status : existing.status,
+      status: winningStatus,
       begruendung: (newPrio >= existPrio ? letter.begruendung : existing.begruendung) || existing.begruendung || letter.begruendung,
-      fehlende_daten: newPrio >= existPrio ? letter.fehlende_daten : existing.fehlende_daten,
+      fehlende_daten: fehlendeDaten,
     };
-    // Downgrade to "fehlt" if empfaenger is still empty for "bereit"
-    if (merged.status === 'bereit' && !merged.empfaenger) {
-      merged.status = 'fehlt';
-      if (!merged.fehlende_daten.includes('empfaenger')) {
-        merged.fehlende_daten = [...merged.fehlende_daten, 'empfaenger'];
-      }
-    }
     byTyp.set(letter.typ, merged);
   }
   return Array.from(byTyp.values());
+}
+
+function mergeFehlendeInformationen(a: FehlendInfo[], b: FehlendInfo[]): FehlendInfo[] {
+  const combined = [...a, ...b].filter(
+    (item) => item && typeof item.information === 'string' && item.information.trim() !== ''
+  );
+  const byKey = new Map<string, FehlendInfo>();
+  for (const item of combined) {
+    const key = item.information.trim().toLowerCase();
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, item);
+      continue;
+    }
+    byKey.set(key, {
+      information: item.information,
+      grund: item.grund || existing.grund,
+      ermittlung_ueber: item.ermittlung_ueber || existing.ermittlung_ueber,
+    });
+  }
+  return Array.from(byKey.values());
 }
 
 function mergeField(a: unknown, b: unknown): unknown {
@@ -235,6 +267,10 @@ function mergeField(a: unknown, b: unknown): unknown {
     const firstItem = a[0] ?? b[0];
     if (firstItem && typeof firstItem === 'object' && 'typ' in (firstItem as object)) {
       return mergeStandardanschreiben(a as Standardanschreiben[], b as Standardanschreiben[]);
+    }
+    // Fehlende Informationen: merge by information, filter empty placeholders
+    if (firstItem && typeof firstItem === 'object' && 'information' in (firstItem as object)) {
+      return mergeFehlendeInformationen(a as FehlendInfo[], b as FehlendInfo[]);
     }
     // Generic arrays: deduplicate by JSON
     const seen = new Set<string>();
@@ -248,10 +284,17 @@ function mergeField(a: unknown, b: unknown): unknown {
   if (a && b && typeof a === 'object' && !Array.isArray(a) && typeof b === 'object') {
     const aObj = a as Record<string, unknown>;
     const bObj = b as Record<string, unknown>;
-    // {wert, quelle} field: take first non-empty value
+    // {wert, quelle} field: take best value (prefer non-empty quelle when both have wert)
     if ('wert' in aObj) {
-      const empty = aObj['wert'] === null || aObj['wert'] === undefined || aObj['wert'] === '' || aObj['wert'] === 0;
-      return empty ? b : a;
+      const aW = aObj['wert'];
+      const bW = (bObj as Record<string, unknown>)['wert'];
+      const aEmpty = aW === null || aW === undefined || aW === '';
+      const bEmpty = bW === null || bW === undefined || bW === '';
+      if (aEmpty) return b;
+      if (bEmpty) return a;
+      const aQ = String((aObj as Record<string, unknown>).quelle ?? '').trim();
+      const bQ = String((bObj as Record<string, unknown>).quelle ?? '').trim();
+      return bQ && !aQ ? b : a;
     }
     // Nested object: recurse
     const result: Record<string, unknown> = {};
@@ -267,6 +310,9 @@ function mergeField(a: unknown, b: unknown): unknown {
 }
 
 function mergeExtractionResults(results: ExtractionResult[]): ExtractionResult {
+  if (results.length === 0) {
+    return extractionResultSchema.parse({}) as unknown as ExtractionResult;
+  }
   return results.reduce((merged, current) =>
     mergeField(merged, current) as ExtractionResult
   );
@@ -329,15 +375,10 @@ function parseAndValidateResponse(text: string): ExtractionResult {
     paths: issues.map(i => `${i.path.join('.')}: ${i.message}`),
   });
 
-  // Force-parse: strip unknown fields, apply defaults for missing ones
-  // This always succeeds because every field has .optional().default()
-  try {
-    return extractionResultSchema.parse(parsed ?? {}) as unknown as ExtractionResult;
-  } catch {
-    // Absolute last resort: return parsed data with an empty-schema wrapper
-    logger.error('Schema-Validierung komplett fehlgeschlagen, verwende Rohdaten');
-    return extractionResultSchema.parse({}) as unknown as ExtractionResult;
-  }
+  // safeParse failed but the preprocess schema should handle anything.
+  // Last resort: return the parsed data directly — better partial data than empty.
+  logger.warn('Schema-Validierung fehlgeschlagen, verwende geparste Rohdaten');
+  return (parsed ?? {}) as ExtractionResult;
 }
 
 // ─── Claude API call ───
@@ -412,7 +453,9 @@ export async function extractFromPageTexts(pageTexts: string[]): Promise<Extract
 
     const startPage = i * PAGES_PER_CHUNK + 1;
     const endPage = Math.min((i + 1) * PAGES_PER_CHUNK, totalPages);
-    const chunkText = pageChunks[i].join('\n\n--- Seite ---\n\n');
+    const chunkText = pageChunks[i]
+      .map((text, idx) => `=== SEITE ${startPage + idx} ===\n${text}`)
+      .join('\n\n');
 
     logger.info(`Chunk ${i + 1}/${pageChunks.length} (Seiten ${startPage}–${endPage})`);
 

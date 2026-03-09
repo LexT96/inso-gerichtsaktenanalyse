@@ -21,8 +21,7 @@ RUN npm install --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY backend/src/db/migrations ./dist/db/migrations
-
-RUN mkdir -p /data uploads
+COPY standardschreiben ./standardschreiben
 
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "dist/index.js"]

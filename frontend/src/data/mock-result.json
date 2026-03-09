@@ -1,0 +1,86 @@
+{
+  "verfahrensdaten": {
+    "aktenzeichen": {"wert": "1 IN 123/25", "quelle": "Seite 1, Beschluss"},
+    "gericht": {"wert": "Amtsgericht Musterstadt", "quelle": "Seite 1, Beschluss"},
+    "richter": {"wert": "RA Dr. Schmidt", "quelle": "Seite 1, Beschluss"},
+    "antragsdatum": {"wert": "15.11.2025", "quelle": "Seite 2, Insolvenzantrag"},
+    "beschlussdatum": {"wert": "18.12.2025", "quelle": "Seite 1, Beschluss"},
+    "antragsart": {"wert": "Antrag auf Eröffnung", "quelle": "Seite 2, Antrag"},
+    "eroeffnungsgrund": {"wert": "Zahlungsunfähigkeit", "quelle": "Seite 2, Antrag"},
+    "zustellungsdatum_schuldner": {"wert": "20.12.2025", "quelle": "Seite 1, Zustellungsnachweis"}
+  },
+  "schuldner": {
+    "name": {"wert": "Muster GmbH", "quelle": "Seite 1, Beschluss"},
+    "vorname": {"wert": "", "quelle": ""},
+    "geburtsdatum": {"wert": "", "quelle": ""},
+    "geburtsort": {"wert": "", "quelle": ""},
+    "geburtsland": {"wert": "", "quelle": ""},
+    "staatsangehoerigkeit": {"wert": "", "quelle": ""},
+    "familienstand": {"wert": "", "quelle": ""},
+    "geschlecht": {"wert": "", "quelle": ""},
+    "aktuelle_adresse": {"wert": "Musterstraße 1, 12345 Musterstadt", "quelle": "Seite 2, Antrag"},
+    "fruehere_adressen": [],
+    "firma": {"wert": "Muster GmbH", "quelle": "Seite 1, Beschluss"},
+    "rechtsform": {"wert": "GmbH", "quelle": "Seite 2, Handelsregisterauszug"},
+    "betriebsstaette_adresse": {"wert": "Musterstraße 1, 12345 Musterstadt", "quelle": "Seite 2, Gewerbeanmeldung"},
+    "handelsregisternummer": {"wert": "HRB 12345", "quelle": "Seite 2, Handelsregisterauszug"},
+    "kinder": []
+  },
+  "antragsteller": {
+    "name": {"wert": "Handelskrankenkasse", "quelle": "Seite 2, Antragsteller"},
+    "adresse": {"wert": "HKV-Platz 1, 20099 Hamburg", "quelle": "Seite 2, Antragsteller"},
+    "ansprechpartner": {"wert": "Frau Müller", "quelle": "Seite 2, Antragsteller"},
+    "telefon": {"wert": "040 123456", "quelle": "Seite 2, Antragsteller"},
+    "fax": {"wert": "", "quelle": ""},
+    "email": {"wert": "insolvenz@hkv.de", "quelle": "Seite 2, Antragsteller"},
+    "betriebsnummer": {"wert": "123456789", "quelle": "Seite 2, Antragsteller"},
+    "bankverbindung_iban": {"wert": "DE89 3704 0044 0532 0130 00", "quelle": "Seite 2, Antragsteller"},
+    "bankverbindung_bic": {"wert": "COBADEFFXXX", "quelle": "Seite 2, Antragsteller"}
+  },
+  "forderungen": {
+    "hauptforderung_beitraege": {"wert": 45678.5, "quelle": "Seite 2, Forderungsaufstellung"},
+    "saeumniszuschlaege": {"wert": 1234.56, "quelle": "Seite 2, Forderungsaufstellung"},
+    "mahngebuehren": {"wert": 89, "quelle": "Seite 2, Forderungsaufstellung"},
+    "vollstreckungskosten": {"wert": 0, "quelle": ""},
+    "antragskosten": {"wert": 500, "quelle": "Seite 2, Forderungsaufstellung"},
+    "gesamtforderung": {"wert": 47502.06, "quelle": "Seite 2, Forderungsaufstellung"},
+    "zeitraum_von": {"wert": "01.01.2024", "quelle": "Seite 2, Forderungsaufstellung"},
+    "zeitraum_bis": {"wert": "31.12.2025", "quelle": "Seite 2, Forderungsaufstellung"},
+    "laufende_monatliche_beitraege": {"wert": 3500, "quelle": "Seite 2, Forderungsaufstellung"},
+    "betroffene_arbeitnehmer": [
+      {"anzahl": 12, "typ": "Arbeitnehmer insgesamt", "quelle": "Seite 2, Angaben zu Arbeitnehmerverhältnissen"},
+      {"anzahl": 2, "typ": "Arbeitnehmer mit Beendigung", "quelle": "Seite 2, Angaben zu Arbeitnehmerverhältnissen"}
+    ]
+  },
+  "gutachterbestellung": {
+    "gutachter_name": {"wert": "", "quelle": ""},
+    "gutachter_kanzlei": {"wert": "", "quelle": ""},
+    "gutachter_adresse": {"wert": "", "quelle": ""},
+    "gutachter_telefon": {"wert": "", "quelle": ""},
+    "gutachter_email": {"wert": "", "quelle": ""},
+    "abgabefrist": {"wert": "", "quelle": ""},
+    "befugnisse": []
+  },
+  "ermittlungsergebnisse": {
+    "grundbuch": {"ergebnis": {"wert": "", "quelle": ""}, "grundbesitz_vorhanden": {"wert": null, "quelle": ""}, "datum": {"wert": "", "quelle": ""}},
+    "gerichtsvollzieher": {"name": {"wert": "", "quelle": ""}, "betriebsstaette_bekannt": {"wert": null, "quelle": ""}, "vollstreckungen": {"wert": "", "quelle": ""}, "masse_deckend": {"wert": null, "quelle": ""}, "vermoegensauskunft_abgegeben": {"wert": null, "quelle": ""}, "haftbefehle": {"wert": null, "quelle": ""}, "datum": {"wert": "", "quelle": ""}},
+    "vollstreckungsportal": {"schuldnerverzeichnis_eintrag": {"wert": null, "quelle": ""}, "vermoegensverzeichnis_eintrag": {"wert": null, "quelle": ""}},
+    "meldeauskunft": {"meldestatus": {"wert": "", "quelle": ""}, "datum": {"wert": "", "quelle": ""}}
+  },
+  "fristen": [],
+  "standardanschreiben": [
+    {"typ": "Bankenauskunft", "empfaenger": "Banken/Sparkassen des Schuldners", "status": "fehlt", "begruendung": "Bankverbindungen nicht konkret bekannt", "fehlende_daten": ["Konkrete Banken mit Adresse"]},
+    {"typ": "Bausparkassen-Anfrage", "empfaenger": "Bausparkassen des Schuldners", "status": "fehlt", "begruendung": "", "fehlende_daten": ["Bekannte Bausparkassen"]},
+    {"typ": "Steuerberater-Kontakt", "empfaenger": "Dr. Schmitz Steuerberater", "status": "bereit", "begruendung": "Steuerberater ist bekannt", "fehlende_daten": []},
+    {"typ": "Strafakte-Akteneinsicht", "empfaenger": "Zuständige Staatsanwaltschaft", "status": "entfaellt", "begruendung": "Kein Strafverfahren bekannt", "fehlende_daten": []},
+    {"typ": "KFZ-Halteranfrage Zulassungsstelle", "empfaenger": "Zuständige Zulassungsstelle", "status": "fehlt", "begruendung": "", "fehlende_daten": ["Geburtsdatum"]},
+    {"typ": "Gewerbeauskunft", "empfaenger": "Zuständige Gewerbebehörde", "status": "bereit", "begruendung": "Betriebsstätte bekannt", "fehlende_daten": []},
+    {"typ": "Finanzamt-Anfrage", "empfaenger": "Zuständiges Finanzamt", "status": "fehlt", "begruendung": "", "fehlende_daten": ["Steuer-ID"]},
+    {"typ": "KFZ-Halteranfrage KBA", "empfaenger": "Kraftfahrt-Bundesamt", "status": "fehlt", "begruendung": "", "fehlende_daten": ["Geburtsdatum"]},
+    {"typ": "Versicherungsanfrage", "empfaenger": "Versicherungen des Schuldners", "status": "fehlt", "begruendung": "", "fehlende_daten": ["Bekannte Versicherungen"]},
+    {"typ": "Gerichtsvollzieher-Anfrage", "empfaenger": "Zuständiger Gerichtsvollzieher", "status": "fehlt", "begruendung": "", "fehlende_daten": ["Name des Gerichtsvollziehers"]}
+  ],
+  "fehlende_informationen": [],
+  "zusammenfassung": "Demo-Extraktion zum Testen der PDF-Vorschau und Quellennavigation.",
+  "risiken_hinweise": []
+}

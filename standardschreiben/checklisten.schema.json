@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Standardanschreiben-Checklisten",
+  "type": "object",
+  "properties": {
+    "version": { "type": "string" },
+    "beschreibung": { "type": "string" },
+    "anschreiben": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["typ", "empfaengerDefault", "requiredFields"],
+        "properties": {
+          "typ": { "type": "string" },
+          "empfaengerDefault": { "type": "string" },
+          "templatePdf": { "type": ["string", "null"] },
+          "requiredFields": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "requiredFieldsOr": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "description": "OR-Gruppen: Pro Gruppe mindestens ein Feld muss gesetzt sein"
+          },
+          "requiredFieldsHint": { "type": "string" },
+          "fehlendeDatenBeispiele": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

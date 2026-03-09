@@ -18,6 +18,24 @@
     border-radius: 3px;
   }
 
+  /* PDF viewer text layer: make selectable text transparent overlay */
+  .react-pdf__Page__textContent {
+    opacity: 0.3;
+  }
+  .react-pdf__Page__textContent span::selection {
+    background: rgba(201, 162, 39, 0.3);
+  }
+  /* Quellen-Highlight beim Klick auf [S.X] */
+  .react-pdf__Page__textContent mark.source-highlight {
+    background: rgba(201, 162, 39, 0.5);
+    padding: 0 1px;
+    border-radius: 1px;
+  }
+  .react-pdf__Page__canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
   input::placeholder {
     color: #565d6e;
   }

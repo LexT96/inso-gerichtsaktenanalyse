@@ -28,21 +28,31 @@ Anwendung öffnen: **http://localhost:3000**
 
 Login mit den konfigurierten Admin-Credentials (Standard-Benutzername: `admin`).
 
-## Entwicklungsmodus (ohne Docker)
+## Entwicklungsmodus (empfohlen für Debugging)
+
+**Ohne Docker** – schnellster Weg, mit Debugger und Hot-Reload:
 
 ```bash
-# Backend
+# Terminal 1: Backend
 cd backend
 npm install
 npm run dev
 
-# Frontend (neues Terminal)
+# Terminal 2: Frontend
 cd frontend
 npm install
 npm run dev
 ```
 
 Backend: `http://localhost:3001` · Frontend: `http://localhost:3000`
+
+**Mit Docker** – Code-Änderungen ohne Rebuild (Volume-Mounts):
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+Nach dem ersten Build werden Änderungen in `backend/src` und `frontend/src` automatisch übernommen. `LOG_LEVEL=debug` für detaillierte Logs.
 
 ## Architektur
 
@@ -57,6 +67,22 @@ Backend: `http://localhost:3001` · Frontend: `http://localhost:3000`
                          │  Port 3001           │     │  (Datenbank) │
                          └──────────────────────┘     └──────────────┘
 ```
+
+## Extraktion verifizieren
+
+Um zu prüfen, ob alle Werte korrekt extrahiert werden:
+
+```bash
+cd backend
+
+# Bestehende Extraktion aus der DB prüfen (nur DATABASE_PATH in .env nötig)
+npm run verify -- --id=1
+
+# Neue Extraktion durchführen und Bericht ausgeben (volle .env nötig)
+npm run verify -- ../standardschreiben/Bankenanfrage.pdf
+```
+
+Der Bericht zeigt: Feldabdeckung (✓/○ pro Feld), Standardanschreiben-Status, fehlende Informationen.
 
 ## API-Endpunkte
 

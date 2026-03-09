@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Badge } from './Badge';
+import { usePdf } from '../../contexts/PdfContext';
 import type { SourcedValue, SourcedNumber, SourcedBoolean } from '../../types/extraction';
 
 type AnySourced = SourcedValue | SourcedNumber | SourcedBoolean | null | undefined;
@@ -18,7 +19,13 @@ function getQuelle(field: AnySourced): string {
 
 function fieldIsEmpty(field: AnySourced): boolean {
   const w = getWert(field);
-  return w === null || w === undefined || w === '' || w === 0;
+  return w === null || w === undefined || w === '';
+}
+
+/** Extract page number from quelle string (e.g. "Seite 3, Beschluss..." or "Seiten 3-5" → 3) */
+function parsePageNumber(quelle: string): number | null {
+  const match = quelle.match(/Seiten?\s+(\d+)/i);
+  return match ? parseInt(match[1], 10) : null;
 }
 
 interface DataFieldProps {
@@ -29,17 +36,31 @@ interface DataFieldProps {
 
 export function DataField({ label, field, isCurrency }: DataFieldProps) {
   const [showSrc, setShowSrc] = useState(false);
+  const { goToPageAndHighlight, totalPages } = usePdf();
   const w = getWert(field);
   const q = getQuelle(field);
-  const empty = fieldIsEmpty(field);
+  const empty =
+    fieldIsEmpty(field) ||
+    (isCurrency && (w === 0 || w === null) && !q?.trim());
+  const pageNum = q ? parsePageNumber(q) : null;
 
   const displayValue = (): string => {
-    if (empty) return '—';
+    if (empty) return '\u2014';
     if (isCurrency && typeof w === 'number') {
-      return `${w.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`;
+      return `${w.toLocaleString('de-DE', { minimumFractionDigits: 2 })} \u20ac`;
     }
     if (typeof w === 'boolean') return w ? 'Ja' : 'Nein';
+    if (w === 0) return '0';
     return String(w);
+  };
+
+  const handleQuelleClick = () => {
+    if (pageNum && totalPages > 0) {
+      const val = displayValue();
+      const textToHighlight = empty || val === '\u2014' ? undefined : val;
+      goToPageAndHighlight(pageNum, textToHighlight);
+    }
+    setShowSrc(!showSrc);
   };
 
   return (
@@ -52,16 +73,33 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
           </span>
           {q && (
             <button
-              onClick={() => setShowSrc(!showSrc)}
-              className="bg-transparent border border-border rounded-sm text-text-muted text-[8px] px-1.5 py-px cursor-pointer font-mono tracking-wide hover:border-accent hover:text-accent transition-colors"
+              onClick={handleQuelleClick}
+              title={pageNum ? `Seite ${pageNum} anzeigen` : 'Quelle anzeigen'}
+              className={`bg-transparent border rounded-sm text-[8px] px-1.5 py-px cursor-pointer font-mono tracking-wide transition-colors
+                ${showSrc
+                  ? 'border-accent text-accent'
+                  : pageNum
+                    ? 'border-ie-blue-border text-ie-blue hover:border-ie-blue hover:text-ie-blue'
+                    : 'border-border text-text-muted hover:border-accent hover:text-accent'
+                }`}
             >
-              {showSrc ? '×' : 'Q'}
+              {showSrc ? '\u00d7' : pageNum ? `S.${pageNum}` : 'Q'}
             </button>
           )}
         </div>
         {showSrc && q && (
-          <div className="mt-0.5 px-2 py-0.5 bg-bg border border-border rounded-sm text-[10px] text-accent italic">
-            ↳ {q}
+          <div
+            className={`mt-0.5 px-2 py-0.5 bg-bg border rounded-sm text-[10px] italic
+              ${pageNum ? 'border-ie-blue-border text-ie-blue cursor-pointer hover:border-ie-blue' : 'border-border text-accent'}`}
+            onClick={() => {
+              if (pageNum && totalPages > 0) {
+                const val = displayValue();
+                const textToHighlight = empty || val === '\u2014' ? undefined : val;
+                goToPageAndHighlight(pageNum, textToHighlight);
+              }
+            }}
+          >
+            {'\u21b3'} {q}
           </div>
         )}
       </div>

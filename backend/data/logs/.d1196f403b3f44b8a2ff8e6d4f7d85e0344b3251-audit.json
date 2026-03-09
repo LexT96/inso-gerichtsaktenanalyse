@@ -1,0 +1,20 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 30
+    },
+    "auditLog": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/.d1196f403b3f44b8a2ff8e6d4f7d85e0344b3251-audit.json",
+    "files": [
+        {
+            "date": 1773002278945,
+            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-08.log",
+            "hash": "3c8e4cdddb7ed212f0d64a96449e80f63abe826e43b7308657df7b9f5238df10"
+        },
+        {
+            "date": 1773012397095,
+            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-09.log",
+            "hash": "b430dd3b5ba74ed03cdb5faeea8a5c44cd593e26e7e83680ac4202ca5f23cf42"
+        }
+    ],
+    "hashType": "sha256"
+}

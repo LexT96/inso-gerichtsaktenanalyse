@@ -1,8 +1,9 @@
+import './env';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { config } from './config';
-import { initDatabase, closeDatabase } from './db/database';
+import { initDatabase, closeDatabase, getDb } from './db/database';
 import { logger } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth';
@@ -39,7 +40,7 @@ async function start(): Promise<void> {
   initDatabase(config.DATABASE_PATH);
 
   // Seed admin user if not exists
-  const db = (await import('./db/database')).getDb();
+  const db = getDb();
   const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(config.DEFAULT_ADMIN_USERNAME);
   if (!existing) {
     const hash = await bcrypt.hash(config.DEFAULT_ADMIN_PASSWORD, 12);
@@ -68,6 +69,8 @@ process.on('SIGINT', () => {
 });
 
 start().catch(err => {
-  logger.error('Startfehler', { error: err });
+  const msg = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack : undefined;
+  logger.error('Startfehler', { message: msg, stack });
   process.exit(1);
 });

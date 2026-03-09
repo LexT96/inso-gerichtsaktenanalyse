@@ -4,6 +4,7 @@ import { extractFromPdfBuffer, extractFromPageTexts } from './anthropic';
 import { extractTextPerPage, getPageCount } from './pdfProcessor';
 import { getDb } from '../db/database';
 import { logger } from '../utils/logger';
+import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
 import type { ExtractionResult } from '../types/extraction';
 
 const PDF_DOCUMENT_PAGE_LIMIT = 100;
@@ -21,7 +22,7 @@ interface ExtractionStats {
 function isEmpty(field: { wert?: unknown; quelle?: unknown } | null | undefined): boolean {
   if (!field) return true;
   const w = field.wert;
-  return w === null || w === undefined || w === '' || w === 0;
+  return w === null || w === undefined || w === '';
 }
 
 function computeStats(result: ExtractionResult): ExtractionStats {
@@ -99,6 +100,8 @@ export async function processExtraction(
         result = await extractFromPageTexts(pageTexts);
       }
     }
+
+    result = validateLettersAgainstChecklists(result);
 
     const processingTimeMs = Date.now() - startTime;
     const stats = computeStats(result);

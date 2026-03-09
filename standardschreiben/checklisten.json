@@ -1,0 +1,197 @@
+{
+  "$schema": "./checklisten.schema.json",
+  "version": "1.0",
+  "beschreibung": "Ein Anschreiben-Typ pro Dokument. Pfade beziehen sich auf ExtractionResult (z.B. verfahrensdaten.aktenzeichen → .wert prüfen).",
+  "anschreiben": [
+    {
+      "typ": "Bankenauskunft",
+      "empfaengerDefault": "Banken/Sparkassen des Schuldners",
+      "templatePdf": "Bankenanfrage.pdf",
+      "requiredFields": [
+        "verfahrensdaten.aktenzeichen",
+        "verfahrensdaten.gericht"
+      ],
+      "requiredFieldsOr": [
+        ["schuldner.name", "schuldner.vorname", "schuldner.aktuelle_adresse"],
+        ["schuldner.firma", "schuldner.betriebsstaette_adresse"]
+      ],
+      "requiredFieldsHint": "Verfahrensdaten Pflicht. Schuldner: entweder (Name+Vorname+Adresse) ODER (Firma+Betriebsstätte).",
+      "fehlendeDatenBeispiele": [
+        "Konkrete Banken/Sparkassen mit Adresse",
+        "IBAN/BIC der Konten",
+        "Schuldner-Adresse",
+        "Aktenzeichen"
+      ]
+    },
+    {
+      "typ": "Bausparkassen-Anfrage",
+      "empfaengerDefault": "Bausparkassen des Schuldners",
+      "templatePdf": "Anfrage_zu_bestehendem_Vertragsverhältnis_Bausparkasse_.pdf",
+      "requiredFields": [
+        "verfahrensdaten.aktenzeichen",
+        "verfahrensdaten.gericht"
+      ],
+      "requiredFieldsOr": [
+        ["schuldner.name", "schuldner.vorname", "schuldner.aktuelle_adresse"],
+        ["schuldner.firma", "schuldner.betriebsstaette_adresse"]
+      ],
+      "requiredFieldsHint": "Verfahrensdaten Pflicht. Schuldner: (Name+Vorname+Adresse) ODER (Firma+Betriebsstätte).",
+      "fehlendeDatenBeispiele": [
+        "Bekannte Bausparkassen",
+        "Vertragsnummer",
+        "Schuldner-Adresse"
+      ]
+    },
+    {
+      "typ": "Steuerberater-Kontakt",
+      "empfaengerDefault": "Steuerberater/Wirtschaftsprüfer des Schuldners",
+      "templatePdf": "Muster_Kontaktaufnahme_Steuerberater.pdf",
+      "requiredFields": [
+        "verfahrensdaten.aktenzeichen",
+        "verfahrensdaten.gericht"
+      ],
+      "requiredFieldsOr": [
+        ["schuldner.name", "schuldner.vorname"],
+        ["schuldner.firma"]
+      ],
+      "requiredFieldsHint": "Verfahrensdaten Pflicht. Schuldner: (Name+Vorname) ODER Firma.",
+      "fehlendeDatenBeispiele": [
+        "Name und Adresse des Steuerberaters/WP",
+        "Telefon/E-Mail des StB"
+      ]
+    },
+    {
+      "typ": "Strafakte-Akteneinsicht",
+      "empfaengerDefault": "Zuständige Staatsanwaltschaft",
+      "templatePdf": "Einsichtnahmegesuch_Strafakte_Anfrage_zur_Akteneinsicht_.pdf",
+      "requiredFields": [
+        "verfahrensdaten.aktenzeichen",
+        "verfahrensdaten.gericht"
+      ],
+      "requiredFieldsOr": [
+        ["schuldner.name", "schuldner.vorname", "schuldner.aktuelle_adresse"],
+        ["schuldner.firma", "schuldner.betriebsstaette_adresse"]
+      ],
+      "requiredFieldsHint": "Verfahrensdaten Pflicht. Schuldner-Adresse für Aktenbezug.",
+      "fehlendeDatenBeispiele": [
+        "Aktenzeichen Strafverfahren",
+        "Zuständige Staatsanwaltschaft",
+        "Schuldner-Adresse"
+      ]
+    },
+    {
+      "typ": "KFZ-Halteranfrage Zulassungsstelle",
+      "empfaengerDefault": "Zuständige Zulassungsstelle",
+      "templatePdf": "Halteranfrage_Zulassungsstelle.pdf",
+      "requiredFields": [
+        "verfahrensdaten.aktenzeichen",
+        "verfahrensdaten.gericht"
+      ],
+      "requiredFieldsOr": [
+        ["schuldner.name", "schuldner.vorname", "schuldner.geburtsdatum", "schuldner.aktuelle_adresse"],
+        ["schuldner.firma", "schuldner.handelsregisternummer", "schuldner.betriebsstaette_adresse"]
+      ],
+      "requiredFieldsHint": "Verfahrensdaten Pflicht. Nat. Person: Name+Vorname+Geburtsdatum+Adresse. Firma: Firma+HRB+Betriebsstätte.",
+      "fehlendeDatenBeispiele": [
+        "Geburtsdatum des Schuldners",
+        "Vollständige Anschrift",
+        "Zuständige Zulassungsstelle"
+      ]
+    },
+    {
+      "typ": "Gewerbeauskunft",
+      "empfaengerDefault": "Zuständige Gewerbebehörde",
+      "templatePdf": "Gewerbeanfrage.pdf",
+      "requiredFields": [
+        "verfahrensdaten.aktenzeichen",
+        "verfahrensdaten.gericht"
+      ],
+      "requiredFieldsOr": [
+        ["schuldner.name", "schuldner.vorname", "schuldner.betriebsstaette_adresse"],
+        ["schuldner.firma", "schuldner.betriebsstaette_adresse"]
+      ],
+      "requiredFieldsHint": "Verfahrensdaten Pflicht. Schuldner mit Betriebsstätte: (Name+Vorname) ODER Firma.",
+      "fehlendeDatenBeispiele": [
+        "Adresse der Betriebsstätte",
+        "Handelsregisternummer",
+        "Zuständige Behörde (Stadt/Landkreis)"
+      ]
+    },
+    {
+      "typ": "Finanzamt-Anfrage",
+      "empfaengerDefault": "Zuständiges Finanzamt",
+      "templatePdf": "Anfrage_ans_Finanzamt.pdf",
+      "requiredFields": [
+        "verfahrensdaten.aktenzeichen",
+        "verfahrensdaten.gericht"
+      ],
+      "requiredFieldsOr": [
+        ["schuldner.name", "schuldner.vorname", "schuldner.aktuelle_adresse"],
+        ["schuldner.firma", "schuldner.betriebsstaette_adresse"]
+      ],
+      "requiredFieldsHint": "Verfahrensdaten Pflicht. Schuldner-Adresse für Steuer-ID/FIN.",
+      "fehlendeDatenBeispiele": [
+        "Steuer-ID / FIN",
+        "Zuständiges Finanzamt",
+        "Schuldner-Adresse"
+      ]
+    },
+    {
+      "typ": "KFZ-Halteranfrage KBA",
+      "typAliases": ["KFZ-Halteranfrage"],
+      "empfaengerDefault": "Kraftfahrt-Bundesamt",
+      "templatePdf": "Halteranfrage_Kraftfahrt_Bundesamt.pdf",
+      "requiredFields": [
+        "verfahrensdaten.aktenzeichen",
+        "verfahrensdaten.gericht"
+      ],
+      "requiredFieldsOr": [
+        ["schuldner.name", "schuldner.vorname", "schuldner.geburtsdatum", "schuldner.aktuelle_adresse"],
+        ["schuldner.firma", "schuldner.handelsregisternummer", "schuldner.betriebsstaette_adresse"]
+      ],
+      "requiredFieldsHint": "Verfahrensdaten Pflicht. Nat. Person: Name+Vorname+Geburtsdatum+Adresse. Firma: Firma+HRB+Betriebsstätte.",
+      "fehlendeDatenBeispiele": [
+        "Geburtsdatum des Schuldners",
+        "Vollständige Anschrift"
+      ]
+    },
+    {
+      "typ": "Versicherungsanfrage",
+      "empfaengerDefault": "Versicherungen des Schuldners",
+      "templatePdf": "Muster_Versicherungsanfrage.pdf",
+      "requiredFields": [
+        "verfahrensdaten.aktenzeichen",
+        "verfahrensdaten.gericht"
+      ],
+      "requiredFieldsOr": [
+        ["schuldner.name", "schuldner.vorname", "schuldner.aktuelle_adresse"],
+        ["schuldner.firma", "schuldner.betriebsstaette_adresse"]
+      ],
+      "requiredFieldsHint": "Verfahrensdaten Pflicht. Schuldner: (Name+Vorname+Adresse) ODER (Firma+Betriebsstätte).",
+      "fehlendeDatenBeispiele": [
+        "Bekannte Versicherungsunternehmen",
+        "Vertragsnummern oder Police",
+        "Schuldner-Adresse"
+      ]
+    },
+    {
+      "typ": "Gerichtsvollzieher-Anfrage",
+      "empfaengerDefault": "Zuständiger Gerichtsvollzieher",
+      "templatePdf": "Gerichtsvollzieheranfrage.pdf",
+      "requiredFields": [
+        "verfahrensdaten.aktenzeichen",
+        "verfahrensdaten.gericht"
+      ],
+      "requiredFieldsOr": [
+        ["schuldner.name", "schuldner.vorname", "schuldner.aktuelle_adresse"],
+        ["schuldner.firma", "schuldner.betriebsstaette_adresse"]
+      ],
+      "requiredFieldsHint": "Verfahrensdaten Pflicht. Schuldner-Adresse ODER GV-Name aus Ermittlungsergebnissen.",
+      "fehlendeDatenBeispiele": [
+        "Name des zuständigen Gerichtsvollziehers",
+        "Dienststelle/Adresse des GV",
+        "Betriebsstätte des Schuldners"
+      ]
+    }
+  ]
+}
