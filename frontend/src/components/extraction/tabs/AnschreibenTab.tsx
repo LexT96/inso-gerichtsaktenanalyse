@@ -3,13 +3,38 @@ import { Badge } from '../Badge';
 import { Section } from '../Section';
 import type { Standardanschreiben } from '../../../types/extraction';
 
-function LetterCard({ letter }: { letter: Standardanschreiben }) {
+function LetterCard({ letter, extractionId }: { letter: Standardanschreiben; extractionId: number }) {
   const [expanded, setExpanded] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const st = letter.status || 'fehlt';
 
   const bgClass = st === 'bereit' ? 'bg-ie-green-bg border-ie-green-border'
     : st === 'entfaellt' ? 'bg-ie-blue-bg border-ie-blue-border'
     : 'bg-ie-amber-bg border-ie-amber-border';
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const { apiClient } = await import('../../../api/client');
+      const response = await apiClient.post(
+        `/generate-letter/${extractionId}/${encodeURIComponent(letter.typ)}`,
+        {},
+        { responseType: 'blob' }
+      );
+      const url = URL.createObjectURL(response.data as Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${letter.typ.replace(/[^a-zA-Z0-9_-]/g, '_')}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert(`Fehler beim Erstellen von "${letter.typ}"`);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div
@@ -21,7 +46,19 @@ function LetterCard({ letter }: { letter: Standardanschreiben }) {
           <div className="text-xs font-semibold text-text font-sans">{letter.typ}</div>
           <div className="text-[10px] text-text-dim mt-0.5">An: {letter.empfaenger?.trim() || '—'}</div>
         </div>
-        <Badge type={st} />
+        <div className="flex items-center">
+          <Badge type={st} />
+          {st === 'bereit' && (
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              title="DOCX erstellen und herunterladen"
+              className="ml-2 px-2 py-0.5 text-[9px] border border-ie-green-border text-ie-green rounded-sm hover:bg-ie-green-bg transition-colors disabled:opacity-50 disabled:cursor-wait font-mono"
+            >
+              {downloading ? '…' : '↓ DOCX'}
+            </button>
+          )}
+        </div>
       </div>
       {expanded && (
         <div className="mt-2 pt-2 border-t border-border">
@@ -56,9 +93,10 @@ function StatsCardSmall({ label, value, colorClass }: StatsCardSmallProps) {
 
 interface AnschreibenTabProps {
   letters: Standardanschreiben[];
+  extractionId: number;
 }
 
-export function AnschreibenTab({ letters }: AnschreibenTabProps) {
+export function AnschreibenTab({ letters, extractionId }: AnschreibenTabProps) {
   const bereit = letters.filter(l => l.status === 'bereit');
   const fehlt = letters.filter(l => l.status === 'fehlt');
   const entfaellt = letters.filter(l => l.status === 'entfaellt');
@@ -73,17 +111,17 @@ export function AnschreibenTab({ letters }: AnschreibenTabProps) {
 
       {bereit.length > 0 && (
         <Section title="Sofort generierbar" icon="✓" count={bereit.length}>
-          {bereit.map((l, i) => <LetterCard key={i} letter={l} />)}
+          {bereit.map((l, i) => <LetterCard key={i} letter={l} extractionId={extractionId} />)}
         </Section>
       )}
       {fehlt.length > 0 && (
         <Section title="Daten unvollständig" icon="△" count={fehlt.length}>
-          {fehlt.map((l, i) => <LetterCard key={i} letter={l} />)}
+          {fehlt.map((l, i) => <LetterCard key={i} letter={l} extractionId={extractionId} />)}
         </Section>
       )}
       {entfaellt.length > 0 && (
         <Section title="Bereits erledigt" icon="○" count={entfaellt.length}>
-          {entfaellt.map((l, i) => <LetterCard key={i} letter={l} />)}
+          {entfaellt.map((l, i) => <LetterCard key={i} letter={l} extractionId={extractionId} />)}
         </Section>
       )}
       {letters.length === 0 && (

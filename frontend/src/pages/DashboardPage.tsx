@@ -48,7 +48,7 @@ function computeStats(result: ExtractionResult): { found: number; missing: numbe
 export function DashboardPage() {
   const [file, setFile] = useState<File | null>(null);
   const [tab, setTab] = useState('overview');
-  const { loading, progress, progressPercent, result, error, extract, reset, loadDemo, loadFromHistory } = useExtraction();
+  const { loading, progress, progressPercent, result, error, extractionId, extract, reset, loadDemo, loadFromHistory } = useExtraction();
   const [searchParams] = useSearchParams();
   const historyId = searchParams.get('id');
 
@@ -120,7 +120,9 @@ export function DashboardPage() {
           gutachterbestellung={result.gutachterbestellung}
         />
       )}
-      {tab === 'briefe' && <AnschreibenTab letters={letters} />}
+      {tab === 'briefe' && (
+        <AnschreibenTab letters={letters} extractionId={extractionId ?? 0} />
+      )}
       {tab === 'fehlend' && <FehlendTab missingInfo={missingInfo} />}
 
       {/* Footer */}
