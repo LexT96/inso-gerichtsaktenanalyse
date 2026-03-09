@@ -9,6 +9,7 @@ import { errorHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth';
 import extractionRoutes from './routes/extraction';
 import historyRoutes from './routes/history';
+import generateLetterRoutes from './routes/generateLetter';
 import bcrypt from 'bcrypt';
 
 const app = express();
@@ -25,6 +26,7 @@ app.set('trust proxy', 1);
 app.use('/api/auth', authRoutes);
 app.use('/api/extract', extractionRoutes);
 app.use('/api/history', historyRoutes);
+app.use('/api/generate-letter', generateLetterRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
