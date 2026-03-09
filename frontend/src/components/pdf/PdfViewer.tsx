@@ -129,19 +129,29 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
     const pageEl = pageRefs.current.get(page);
     if (!pageEl) return;
 
-    const applyHighlight = () => {
+    const applyHighlight = (): boolean => {
       const textLayer = pageEl.querySelector('.textLayer') as HTMLElement | null;
       if (!textLayer) return false;
+
       const mark = new Mark(textLayer);
       mark.unmark({ className: 'source-highlight' });
+
       try {
         const escaped = escapeForRegex(text);
-        mark.markRegExp(new RegExp(escaped, 'gi'), { className: 'source-highlight' });
+        mark.markRegExp(new RegExp(escaped, 'gi'), {
+          className: 'source-highlight',
+          done: (_count: number) => { /* kein Fehler bei 0 Treffern */ },
+        });
       } catch {
-        // Fallback for invalid regex (e.g. empty after escape)
-        mark.mark(text, { className: 'source-highlight' });
+        // Fallback: einfaches mark() ohne Regex
+        mark.mark(text, {
+          className: 'source-highlight',
+          separateWordSearch: false,
+          done: (_count: number) => { /* kein Fehler bei 0 Treffern */ },
+        });
       }
-      return true;
+
+      return true; // war ausführbar, auch wenn 0 Treffer
     };
 
     const id = setTimeout(() => {

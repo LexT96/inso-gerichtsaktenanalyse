@@ -2,6 +2,8 @@ declare module 'mark.js' {
   interface MarkOptions {
     className?: string;
     element?: string;
+    separateWordSearch?: boolean;
+    done?: (numberOfMatches: number) => void;
   }
 
   class Mark {

@@ -27,9 +27,9 @@
   }
   /* Quellen-Highlight beim Klick auf [S.X] */
   .react-pdf__Page__textContent mark.source-highlight {
-    background: rgba(201, 162, 39, 0.5);
-    padding: 0 1px;
-    border-radius: 1px;
+    background: rgba(59, 130, 246, 0.35);
+    border-radius: 2px;
+    color: inherit;
   }
   .react-pdf__Page__canvas {
     max-width: 100% !important;
