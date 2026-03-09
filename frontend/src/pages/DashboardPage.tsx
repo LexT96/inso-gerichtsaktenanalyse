@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Header } from '../components/layout/Header';
 import { PdfUploader } from '../components/upload/PdfUploader';
 import { PdfViewer } from '../components/pdf/PdfViewer';
@@ -47,7 +48,9 @@ function computeStats(result: ExtractionResult): { found: number; missing: numbe
 export function DashboardPage() {
   const [file, setFile] = useState<File | null>(null);
   const [tab, setTab] = useState('overview');
-  const { loading, progress, progressPercent, result, error, extract, reset, loadDemo } = useExtraction();
+  const { loading, progress, progressPercent, result, error, extract, reset, loadDemo, loadFromHistory } = useExtraction();
+  const [searchParams] = useSearchParams();
+  const historyId = searchParams.get('id');
 
   const handleAnalyze = useCallback(() => {
     if (file) extract(file);
@@ -63,6 +66,13 @@ export function DashboardPage() {
     setFile(null);
     setTab('overview');
   }, [reset]);
+
+  useEffect(() => {
+    if (historyId && !result && !loading) {
+      loadFromHistory(parseInt(historyId, 10));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyId]);
 
   const stats = useMemo(() => result ? computeStats(result) : { found: 0, missing: 0, total: 0 }, [result]);
 
@@ -131,6 +141,20 @@ export function DashboardPage() {
         <PdfViewer file={file}>
           {resultsContent}
         </PdfViewer>
+      ) : result && !file ? (
+        <div className="max-w-[1050px] mx-auto p-5 px-6">
+          <div className="mb-3 p-2 px-3 bg-surface border border-border rounded-sm text-[10px] text-text-muted flex items-center gap-2">
+            <span className="text-ie-amber">⚠</span>
+            Verlaufs-Ansicht · PDF nicht verfügbar (wurde nach Extraktion gelöscht)
+            <button
+              onClick={handleNewFile}
+              className="ml-auto px-2 py-0.5 border border-border rounded-sm hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
+            >
+              NEUE ANALYSE
+            </button>
+          </div>
+          {resultsContent}
+        </div>
       ) : (
         <div className="max-w-[1050px] mx-auto p-5 px-6">
           {!result && (

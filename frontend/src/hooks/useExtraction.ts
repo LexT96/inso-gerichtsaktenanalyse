@@ -120,6 +120,28 @@ export function useExtraction() {
     });
   }, [clearProgressInterval]);
 
+  const loadFromHistory = useCallback(async (id: number) => {
+    setState(s => ({ ...s, loading: true, error: null, progress: 'Lade Verlauf…', progressPercent: 50 }));
+    try {
+      const { data } = await apiClient.get(`/history/${id}`);
+      setState({
+        loading: false,
+        progress: '',
+        progressPercent: 100,
+        result: data.result,
+        error: null,
+        extractionId: data.id,
+        statsFound: data.statsFound,
+        statsMissing: data.statsMissing,
+        statsLettersReady: data.statsLettersReady,
+        processingTimeMs: data.processingTimeMs,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Fehler beim Laden des Verlaufs';
+      setState(s => ({ ...s, loading: false, error: msg, progress: '' }));
+    }
+  }, []);
+
   const loadDemo = useCallback(async () => {
     clearProgressInterval();
     setState(s => ({ ...s, loading: true, error: null, progress: 'Demo wird geladen…', progressPercent: 10 }));
@@ -164,5 +186,5 @@ export function useExtraction() {
     }
   }, [clearProgressInterval]);
 
-  return { ...state, extract, reset, loadDemo };
+  return { ...state, extract, reset, loadDemo, loadFromHistory };
 }
