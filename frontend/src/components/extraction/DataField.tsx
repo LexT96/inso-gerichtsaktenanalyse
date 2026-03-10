@@ -22,6 +22,12 @@ function fieldIsEmpty(field: AnySourced): boolean {
   return w === null || w === undefined || w === '';
 }
 
+function getVerifiziert(field: AnySourced): boolean | undefined {
+  if (!field) return undefined;
+  if (typeof field === 'object' && 'verifiziert' in field) return field.verifiziert;
+  return undefined;
+}
+
 /** Extract page number from quelle string.
  *  Handles: Seite 3, Seiten 3-5, S. 3, S.3, S3, page 3, p. 3, p.3
  */
@@ -45,6 +51,8 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
     fieldIsEmpty(field) ||
     (isCurrency && (w === 0 || w === null) && !q?.trim());
   const pageNum = q ? parsePageNumber(q) : null;
+  const verifiziert = getVerifiziert(field);
+  const isUnverified = verifiziert === false;
 
   const displayValue = (): string => {
     if (empty) return '\u2014';
@@ -57,7 +65,7 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
   };
 
   const handleQuelleClick = () => {
-    if (pageNum && totalPages > 0) {
+    if (pageNum && totalPages > 0 && !isUnverified) {
       const val = displayValue();
       const textToHighlight = empty || val === '\u2014' ? undefined : val;
       goToPageAndHighlight(pageNum, textToHighlight);
@@ -76,16 +84,18 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
           {q && (
             <button
               onClick={handleQuelleClick}
-              title={pageNum ? `Seite ${pageNum} anzeigen` : 'Quelle anzeigen'}
+              title={isUnverified ? 'Quelle nicht verifiziert' : pageNum ? `Seite ${pageNum} anzeigen` : 'Quelle anzeigen'}
               className={`bg-transparent border rounded-sm text-[8px] px-1.5 py-px cursor-pointer font-mono tracking-wide transition-colors
                 ${showSrc
                   ? 'border-accent text-accent'
-                  : pageNum
-                    ? 'border-ie-blue-border text-ie-blue hover:border-ie-blue hover:text-ie-blue'
-                    : 'border-border text-text-muted hover:border-accent hover:text-accent'
+                  : isUnverified
+                    ? 'border-ie-amber-border text-ie-amber'
+                    : pageNum
+                      ? 'border-ie-blue-border text-ie-blue hover:border-ie-blue hover:text-ie-blue'
+                      : 'border-border text-text-muted hover:border-accent hover:text-accent'
                 }`}
             >
-              {showSrc ? '\u00d7' : pageNum ? `S.${pageNum}` : 'Q'}
+              {showSrc ? '\u00d7' : isUnverified ? '?' : pageNum ? `S.${pageNum}` : 'Q'}
             </button>
           )}
         </div>
@@ -105,7 +115,7 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
           </div>
         )}
       </div>
-      <Badge type={empty ? 'missing' : 'found'} />
+      <Badge type={empty ? 'missing' : isUnverified ? 'unverified' : 'found'} />
     </div>
   );
 }

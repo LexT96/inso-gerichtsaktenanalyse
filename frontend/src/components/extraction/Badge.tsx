@@ -1,4 +1,4 @@
-type BadgeType = 'found' | 'missing' | 'partial' | 'bereit' | 'fehlt' | 'entfaellt';
+type BadgeType = 'found' | 'missing' | 'partial' | 'bereit' | 'fehlt' | 'entfaellt' | 'unverified';
 
 const badgeStyles: Record<BadgeType, { bg: string; text: string; border: string; label: string }> = {
   found:     { bg: 'bg-ie-green-bg',  text: 'text-ie-green',  border: 'border-ie-green-border',  label: 'GEFUNDEN' },
@@ -7,6 +7,7 @@ const badgeStyles: Record<BadgeType, { bg: string; text: string; border: string;
   bereit:    { bg: 'bg-ie-green-bg',  text: 'text-ie-green',  border: 'border-ie-green-border',  label: 'BEREIT' },
   fehlt:     { bg: 'bg-ie-red-bg',    text: 'text-ie-red',    border: 'border-ie-red-border',    label: 'FEHLT' },
   entfaellt: { bg: 'bg-ie-blue-bg',   text: 'text-ie-blue',   border: 'border-ie-blue-border',   label: 'ENTFÄLLT' },
+  unverified: { bg: 'bg-ie-amber-bg', text: 'text-ie-amber', border: 'border-ie-amber-border', label: 'UNGEPRÜFT' },
 };
 
 interface BadgeProps {
