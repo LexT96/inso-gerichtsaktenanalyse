@@ -13,6 +13,7 @@ import { ForderungenTab } from '../components/extraction/tabs/ForderungenTab';
 import { ErmittlungTab } from '../components/extraction/tabs/ErmittlungTab';
 import { AnschreibenTab } from '../components/extraction/tabs/AnschreibenTab';
 import { FehlendTab } from '../components/extraction/tabs/FehlendTab';
+import { PrueflisteTab } from '../components/extraction/tabs/PrueflisteTab';
 import { useExtraction } from '../hooks/useExtraction';
 import { HistoryPanel } from '../components/dashboard/HistoryPanel';
 import type { ExtractionResult } from '../types/extraction';
@@ -49,7 +50,7 @@ function computeStats(result: ExtractionResult): { found: number; missing: numbe
 export function DashboardPage() {
   const [file, setFile] = useState<File | null>(null);
   const [tab, setTab] = useState('overview');
-  const { loading, progress, progressPercent, result, error, extractionId, extract, reset, loadDemo, loadFromHistory } = useExtraction();
+  const { loading, progress, progressPercent, result, error, extractionId, extract, reset, loadDemo, loadFromHistory, updateField } = useExtraction();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const historyId = searchParams.get('id');
@@ -92,15 +93,41 @@ export function DashboardPage() {
   const fehlt = letters.filter(l => l.status === 'fehlt').length;
   const missingInfo = result?.fehlende_informationen || [];
 
+  const unconfirmedCount = useMemo(() => {
+    if (!result) return 0;
+    const paths = [
+      'verfahrensdaten.aktenzeichen', 'verfahrensdaten.gericht',
+      'schuldner.name', 'schuldner.vorname', 'schuldner.geburtsdatum',
+      'schuldner.aktuelle_adresse', 'schuldner.handelsregisternummer',
+      'schuldner.firma', 'schuldner.betriebsstaette_adresse',
+    ];
+    let count = 0;
+    for (const p of paths) {
+      const parts = p.split('.');
+      let obj: unknown = result;
+      for (const part of parts) {
+        if (obj == null || typeof obj !== 'object') { obj = null; break; }
+        obj = (obj as Record<string, unknown>)[part];
+      }
+      if (obj && typeof obj === 'object' && 'wert' in (obj as object)) {
+        const field = obj as { wert: unknown; pruefstatus?: string };
+        const hasVal = field.wert !== null && field.wert !== undefined && String(field.wert).trim() !== '';
+        if (hasVal && !field.pruefstatus) count++;
+      }
+    }
+    return count;
+  }, [result]);
+
   const tabs = useMemo(() => [
     { id: 'overview', label: 'Übersicht', icon: '\u25ce' },
     { id: 'schuldner', label: 'Schuldner', icon: '\u25cf' },
     { id: 'antragsteller', label: 'Antragsteller', icon: '\u25c6' },
     { id: 'forderungen', label: 'Forderungen', icon: '\u20ac' },
     { id: 'ermittlung', label: 'Ermittlung', icon: '\u25d0' },
+    { id: 'pruefliste', label: 'Prüfliste', icon: '\u2713', badge: unconfirmedCount },
     { id: 'briefe', label: 'Anschreiben', icon: '\u2709', badge: bereit },
     { id: 'fehlend', label: 'Fehlend', icon: '\u25b3', badge: missingInfo.length },
-  ], [bereit, missingInfo.length]);
+  ], [bereit, missingInfo.length, unconfirmedCount]);
 
   // ─── Results content (used in both layouts) ───
   const resultsContent = result && (
@@ -129,6 +156,9 @@ export function DashboardPage() {
           ermittlungsergebnisse={result.ermittlungsergebnisse}
           gutachterbestellung={result.gutachterbestellung}
         />
+      )}
+      {tab === 'pruefliste' && (
+        <PrueflisteTab result={result} onUpdateField={updateField} />
       )}
       {tab === 'briefe' && (
         <AnschreibenTab letters={letters} extractionId={extractionId ?? 0} />

@@ -183,17 +183,23 @@ function isRateLimitError(err: unknown): boolean {
   );
 }
 
+const MAX_RETRIES = 3;
+
 async function callWithRetry<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    if (isRateLimitError(err)) {
-      logger.warn(`Rate-Limit. Warte ${RATE_LIMIT_RETRY_DELAY_MS / 1000}s…`);
-      await sleep(RATE_LIMIT_RETRY_DELAY_MS);
-      return fn();
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (isRateLimitError(err) && attempt < MAX_RETRIES) {
+        const delay = RATE_LIMIT_RETRY_DELAY_MS * (attempt + 1);
+        logger.warn(`Rate-Limit (Versuch ${attempt + 1}/${MAX_RETRIES}). Warte ${delay / 1000}s…`);
+        await sleep(delay);
+        continue;
+      }
+      throw err;
     }
-    throw err;
   }
+  throw new Error('callWithRetry: max retries exhausted');
 }
 
 function extractBriefContext(result: ExtractionResult): string {

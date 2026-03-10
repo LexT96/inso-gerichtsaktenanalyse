@@ -64,11 +64,17 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
     return String(w);
   };
 
+  /** Raw value for highlighting — no currency/boolean formatting that won't match PDF text */
+  const rawSearchText = (): string | undefined => {
+    if (empty) return undefined;
+    if (w === null || w === undefined) return undefined;
+    const s = String(w).trim();
+    return s || undefined;
+  };
+
   const handleQuelleClick = () => {
-    if (pageNum && totalPages > 0 && !isUnverified) {
-      const val = displayValue();
-      const textToHighlight = empty || val === '\u2014' ? undefined : val;
-      goToPageAndHighlight(pageNum, textToHighlight);
+    if (pageNum && totalPages > 0) {
+      goToPageAndHighlight(pageNum, rawSearchText());
     }
     setShowSrc(!showSrc);
   };
@@ -105,9 +111,7 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
               ${pageNum ? 'border-ie-blue-border text-ie-blue cursor-pointer hover:border-ie-blue' : 'border-border text-accent'}`}
             onClick={() => {
               if (pageNum && totalPages > 0) {
-                const val = displayValue();
-                const textToHighlight = empty || val === '\u2014' ? undefined : val;
-                goToPageAndHighlight(pageNum, textToHighlight);
+                goToPageAndHighlight(pageNum, rawSearchText());
               }
             }}
           >
@@ -115,7 +119,7 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
           </div>
         )}
       </div>
-      <Badge type={empty ? 'missing' : isUnverified ? 'unverified' : 'found'} />
+      <Badge type={empty ? 'missing' : verifiziert === true ? 'found' : 'unverified'} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import Anthropic from '@anthropic-ai/sdk';
 import { extractFromPdfBuffer, extractFromPageTexts } from './anthropic';
-import { extractTextPerPage, getPageCount } from './pdfProcessor';
+import { extractTextPerPage } from './pdfProcessor';
 import { getDb } from '../db/database';
 import { logger } from '../utils/logger';
 import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
@@ -75,11 +75,10 @@ export async function processExtraction(
   try {
     const pdfBuffer = fs.readFileSync(filePath);
 
-    const pageCount = await getPageCount(pdfBuffer);
-    logger.info('PDF Seitenanzahl ermittelt', { pageCount });
-
     // Always extract text per page — needed for verification
     const pageTexts = await extractTextPerPage(pdfBuffer);
+    const pageCount = pageTexts.length;
+    logger.info('PDF Seitenanzahl ermittelt', { pageCount });
 
     let result: ExtractionResult;
 

@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiClient } from '../api/client';
-import type { ExtractionResult } from '../types/extraction';
+import type { ExtractionResult, Pruefstatus } from '../types/extraction';
+import { recomputeLetterStatuses } from '../utils/checklistValidator';
 import mockResult from '../data/mock-result.json';
 import demoPdfUrl from '../assets/demo/test-pdf.pdf?url';
 
@@ -42,6 +43,15 @@ export function useExtraction() {
       clearInterval(progressIntervalRef.current);
       progressIntervalRef.current = null;
     }
+  }, []);
+
+  // Cleanup interval on unmount to prevent setState on unmounted component
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
   }, []);
 
   const extract = useCallback(async (file: File) => {
@@ -195,5 +205,39 @@ export function useExtraction() {
     }
   }, [clearProgressInterval]);
 
-  return { ...state, extract, reset, loadDemo, loadFromHistory };
+  const updateField = useCallback(async (fieldPath: string, wert: string | null, pruefstatus: Pruefstatus) => {
+    if (!state.result) return;
+
+    // Optimistic local update
+    const updatedResult = structuredClone(state.result);
+    const parts = fieldPath.split('.');
+    let obj: Record<string, unknown> = updatedResult as unknown as Record<string, unknown>;
+    for (let i = 0; i < parts.length - 1; i++) {
+      obj = obj[parts[i]] as Record<string, unknown>;
+    }
+    const leafKey = parts[parts.length - 1];
+    const field = obj[leafKey] as { wert: unknown; quelle: string; verifiziert?: boolean; pruefstatus?: string };
+    field.wert = wert;
+    field.pruefstatus = pruefstatus;
+
+    // Recompute letter statuses
+    updatedResult.standardanschreiben = recomputeLetterStatuses(updatedResult);
+
+    setState(s => ({ ...s, result: updatedResult }));
+
+    // Persist to backend (skip for demo mode where extractionId is null)
+    if (state.extractionId) {
+      try {
+        await apiClient.patch(`/extractions/${state.extractionId}/fields`, {
+          fieldPath,
+          wert,
+          pruefstatus,
+        });
+      } catch (err) {
+        console.error('Failed to persist field update:', err);
+      }
+    }
+  }, [state.result, state.extractionId]);
+
+  return { ...state, extract, reset, loadDemo, loadFromHistory, updateField };
 }

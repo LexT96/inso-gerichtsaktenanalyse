@@ -48,7 +48,12 @@ function computeField(key: string, result: ExtractionResult): string {
 }
 
 export function generateDocx(templateFilename: string, result: ExtractionResult): Buffer {
-  const templatePath = path.join(TEMPLATES_DIR, templateFilename);
+  const templatePath = path.resolve(TEMPLATES_DIR, templateFilename);
+
+  // Prevent path traversal
+  if (!templatePath.startsWith(TEMPLATES_DIR)) {
+    throw new Error(`Ungültiger Template-Pfad: ${templateFilename}`);
+  }
 
   if (!fs.existsSync(templatePath)) {
     throw new Error(`Template nicht gefunden: ${templateFilename}`);

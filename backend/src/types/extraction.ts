@@ -1,20 +1,25 @@
 // Re-export types — duplicated from shared/ to avoid rootDir issues with tsc
+export type Pruefstatus = 'bestaetigt' | 'korrigiert' | 'manuell';
+
 export interface SourcedValue<T = string> {
   wert: T | null;
   quelle: string;
   verifiziert?: boolean;
+  pruefstatus?: Pruefstatus;
 }
 
 export interface SourcedNumber {
   wert: number | null;
   quelle: string;
   verifiziert?: boolean;
+  pruefstatus?: Pruefstatus;
 }
 
 export interface SourcedBoolean {
   wert: boolean | null;
   quelle: string;
   verifiziert?: boolean;
+  pruefstatus?: Pruefstatus;
 }
 
 export interface Verfahrensdaten {

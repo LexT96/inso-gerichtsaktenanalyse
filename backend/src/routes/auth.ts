@@ -19,26 +19,27 @@ function parseExpiry(expiry: string): number {
   return parseInt(num, 10) * (multipliers[unit] || 60_000);
 }
 
-router.post('/login', authRateLimit, (req: Request, res: Response): void => {
-  const parsed = loginSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Ungültige Eingabedaten' });
-    return;
-  }
+router.post('/login', authRateLimit, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Ungültige Eingabedaten' });
+      return;
+    }
 
-  const { username, password } = parsed.data;
-  const db = getDb();
+    const { username, password } = parsed.data;
+    const db = getDb();
 
-  const user = db.prepare(
-    'SELECT id, username, password_hash, display_name, role, active FROM users WHERE username = ?'
-  ).get(username) as { id: number; username: string; password_hash: string; display_name: string; role: string; active: number } | undefined;
+    const user = db.prepare(
+      'SELECT id, username, password_hash, display_name, role, active FROM users WHERE username = ?'
+    ).get(username) as { id: number; username: string; password_hash: string; display_name: string; role: string; active: number } | undefined;
 
-  if (!user || !user.active) {
-    res.status(401).json({ error: 'Ungültige Anmeldedaten' });
-    return;
-  }
+    if (!user || !user.active) {
+      res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+      return;
+    }
 
-  bcrypt.compare(password, user.password_hash).then(valid => {
+    const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       logger.warn('Fehlgeschlagener Login', { username, ip: req.ip });
       res.status(401).json({ error: 'Ungültige Anmeldedaten' });
@@ -74,9 +75,9 @@ router.post('/login', authRateLimit, (req: Request, res: Response): void => {
 
     logger.info('Erfolgreicher Login', { userId: user.id, username: user.username });
     res.json(response);
-  }).catch(() => {
+  } catch {
     res.status(500).json({ error: 'Interner Serverfehler' });
-  });
+  }
 });
 
 router.post('/refresh', (req: Request, res: Response): void => {
@@ -109,10 +110,19 @@ router.post('/refresh', (req: Request, res: Response): void => {
     return;
   }
 
+  // Rotate: delete old refresh token and issue a new one
+  db.prepare('DELETE FROM refresh_tokens WHERE id = ?').run(stored.id);
+
   const payload: JwtPayload = { userId: stored.user_id, username: stored.username, role: stored.role };
   const accessToken = jwt.sign(payload, config.JWT_SECRET, { expiresIn: config.JWT_ACCESS_EXPIRY } as jwt.SignOptions);
 
-  const response: RefreshResponse = { accessToken };
+  const newRefreshToken = uuidv4();
+  const refreshExpiresAt = new Date(Date.now() + parseExpiry(config.JWT_REFRESH_EXPIRY)).toISOString();
+  db.prepare(
+    'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)'
+  ).run(stored.user_id, newRefreshToken, refreshExpiresAt);
+
+  const response: RefreshResponse = { accessToken, refreshToken: newRefreshToken };
   res.json(response);
 });
 

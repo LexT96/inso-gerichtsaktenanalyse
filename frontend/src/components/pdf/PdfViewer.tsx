@@ -31,6 +31,8 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const scrollingToRef = useRef<number | null>(null); // suppress observer during programmatic scroll
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Use Object URL instead of ArrayBuffer to avoid "detached ArrayBuffer" when PDF.js transfers to worker
   useEffect(() => {
@@ -67,6 +69,7 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
     if (!root) return;
     const observer = new IntersectionObserver(
       (entries) => {
+        if (scrollingToRef.current !== null) return; // suppress during programmatic scroll
         for (const entry of entries) {
           if (entry.isIntersecting) {
             const page = Number(entry.target.getAttribute('data-page'));
@@ -92,27 +95,77 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
     }
   }, []);
 
+  /** Scroll to target page, retrying until layout stabilises.
+   *  When jumping many pages, placeholder→rendered height changes cause layout shifts.
+   *  We use instant scrolls + rAF retries to converge on the correct position. */
+  const scrollToPageStable = useCallback((targetPage: number) => {
+    scrollingToRef.current = targetPage;
+    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+
+    let rafId: number | null = null;
+    let lastTop = -1;
+    let stableCount = 0;
+    const MAX_RETRIES = 20;
+    let retries = 0;
+
+    const settle = () => {
+      retries++;
+      const el = pageRefs.current.get(targetPage);
+      if (!el || retries > MAX_RETRIES) {
+        scrollingToRef.current = null;
+        return;
+      }
+
+      el.scrollIntoView({ behavior: 'instant', block: 'start' });
+
+      const top = el.getBoundingClientRect().top;
+      if (Math.abs(top - lastTop) < 2) {
+        stableCount++;
+      } else {
+        stableCount = 0;
+      }
+      lastTop = top;
+
+      // Position stable for 3 consecutive frames → done
+      if (stableCount >= 3) {
+        // One final smooth scroll for polish, then release observer
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        scrollTimerRef.current = setTimeout(() => {
+          scrollingToRef.current = null;
+        }, 400);
+        return;
+      }
+
+      rafId = requestAnimationFrame(settle);
+    };
+
+    // Start settling on next frame (after React re-render queues)
+    rafId = requestAnimationFrame(settle);
+
+    // Cleanup on next call
+    const prevTimer = scrollTimerRef.current;
+    scrollTimerRef.current = setTimeout(() => {
+      if (rafId) cancelAnimationFrame(rafId);
+      scrollingToRef.current = null;
+    }, 3000); // safety timeout
+    if (prevTimer) clearTimeout(prevTimer);
+  }, []);
+
   const goToPage = useCallback((page: number) => {
     if (totalPages === 0) return;
     const clamped = Math.max(1, Math.min(page, totalPages));
     setCurrentPage(clamped);
     setHighlightRequest(null);
-    const el = pageRefs.current.get(clamped);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [totalPages]);
+    scrollToPageStable(clamped);
+  }, [totalPages, scrollToPageStable]);
 
   const goToPageAndHighlight = useCallback((page: number, text?: string) => {
     if (totalPages === 0) return;
     const clamped = Math.max(1, Math.min(page, totalPages));
     setCurrentPage(clamped);
     setHighlightRequest(text?.trim() ? { page: clamped, text: text.trim() } : null);
-    const el = pageRefs.current.get(clamped);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [totalPages]);
+    scrollToPageStable(clamped);
+  }, [totalPages, scrollToPageStable]);
 
   const clearHighlight = useCallback(() => {
     setHighlightRequest(null);
@@ -122,44 +175,95 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
     setTotalPages(numPages);
   }, []);
 
-  // Apply text highlight when we have a request and the target page is visible
+  // Apply text highlight when we have a request and the target page is visible.
+  // Uses MutationObserver to reliably wait for textLayer rendering.
   useEffect(() => {
     if (!highlightRequest?.text) return;
     const { page, text } = highlightRequest;
-    const pageEl = pageRefs.current.get(page);
-    if (!pageEl) return;
 
-    const applyHighlight = (): boolean => {
-      const textLayer = pageEl.querySelector('.textLayer') as HTMLElement | null;
-      if (!textLayer) return false;
+    let cancelled = false;
+    let observer: MutationObserver | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
+    const doHighlight = (textLayer: HTMLElement) => {
       const mark = new Mark(textLayer);
       mark.unmark({ className: 'source-highlight' });
 
+      let matchCount = 0;
+
+      // Strategy 1: exact regex match
       try {
         const escaped = escapeForRegex(text);
         mark.markRegExp(new RegExp(escaped, 'gi'), {
           className: 'source-highlight',
-          done: (_count: number) => { /* kein Fehler bei 0 Treffern */ },
+          done: (count: number) => { matchCount = count; },
         });
       } catch {
-        // Fallback: einfaches mark() ohne Regex
+        // ignore regex errors
+      }
+
+      // Strategy 2: if no match, try mark.js fuzzy (handles span boundaries)
+      if (matchCount === 0) {
         mark.mark(text, {
           className: 'source-highlight',
           separateWordSearch: false,
-          done: (_count: number) => { /* kein Fehler bei 0 Treffern */ },
+          done: (count: number) => { matchCount = count; },
         });
       }
 
-      return true; // war ausführbar, auch wenn 0 Treffer
+      // Strategy 3: if still no match and text has multiple words, try individual words
+      if (matchCount === 0) {
+        const words = text.split(/\s+/).filter(w => w.length >= 3);
+        if (words.length > 1) {
+          for (const word of words) {
+            mark.mark(word, {
+              className: 'source-highlight',
+              separateWordSearch: false,
+            });
+          }
+        }
+      }
     };
 
-    const id = setTimeout(() => {
-      if (!applyHighlight()) {
-        setTimeout(applyHighlight, 400);
+    const tryHighlight = () => {
+      if (cancelled) return;
+      const pageEl = pageRefs.current.get(page);
+      if (!pageEl) return false;
+
+      const textLayer = pageEl.querySelector('.textLayer') as HTMLElement | null;
+      if (textLayer && textLayer.childNodes.length > 0) {
+        doHighlight(textLayer);
+        return true;
       }
-    }, 500);
-    return () => clearTimeout(id);
+      return false;
+    };
+
+    // Try immediately
+    if (tryHighlight()) return;
+
+    // Watch for textLayer to appear via MutationObserver
+    const pageEl = pageRefs.current.get(page);
+    if (pageEl) {
+      observer = new MutationObserver(() => {
+        if (tryHighlight()) {
+          observer?.disconnect();
+          if (retryTimer) clearTimeout(retryTimer);
+        }
+      });
+      observer.observe(pageEl, { childList: true, subtree: true });
+    }
+
+    // Safety timeout: stop observing after 5s
+    retryTimer = setTimeout(() => {
+      observer?.disconnect();
+      tryHighlight(); // one last attempt
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      observer?.disconnect();
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [highlightRequest]);
 
   const ctx = useMemo(

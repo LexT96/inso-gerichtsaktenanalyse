@@ -15,4 +15,5 @@ export type {
   Standardanschreiben,
   FehlendInfo,
   AnschreibenStatus,
+  Pruefstatus,
 } from '@shared/types/extraction';

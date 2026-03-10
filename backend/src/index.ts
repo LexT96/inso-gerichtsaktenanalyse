@@ -10,6 +10,7 @@ import authRoutes from './routes/auth';
 import extractionRoutes from './routes/extraction';
 import historyRoutes from './routes/history';
 import generateLetterRoutes from './routes/generateLetter';
+import fieldUpdateRoutes from './routes/fieldUpdate';
 import bcrypt from 'bcrypt';
 
 const app = express();
@@ -27,6 +28,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/extract', extractionRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/generate-letter', generateLetterRoutes);
+app.use('/api/extractions', fieldUpdateRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -58,6 +60,11 @@ async function start(): Promise<void> {
 }
 
 // Graceful shutdown
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection', { reason: String(reason), promise: String(promise) });
+  process.exit(1);
+});
+
 process.on('SIGTERM', () => {
   logger.info('SIGTERM empfangen, fahre herunter…');
   closeDatabase();

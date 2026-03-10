@@ -67,16 +67,15 @@ const sourcedValueSchema = z.preprocess(
 const sourcedNumberSchema = z.preprocess(
   (v) => {
     const r = toSourcedValue(v);
-    if (typeof r.wert === 'number') return { wert: r.wert, quelle: r.quelle };
+    if (typeof r.wert === 'number') return { ...r, wert: r.wert };
     // Handle German number format: "1.234,56" → 1234.56
-    let raw = String(r.wert ?? '').trim();
-    if (raw.includes(',')) {
-      raw = raw.replace(/\./g, '').replace(',', '.');
-    }
-    const n = parseFloat(raw);
-    return { wert: Number.isNaN(n) ? 0 : n, quelle: r.quelle };
+    const raw = String(r.wert ?? '').trim();
+    if (!raw) return { ...r, wert: null };
+    const normalized = raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw;
+    const n = parseFloat(normalized);
+    return { ...r, wert: Number.isNaN(n) ? null : n };
   },
-  z.object({ wert: z.number(), quelle: z.string() }).passthrough()
+  z.object({ wert: z.number().nullable(), quelle: z.string() }).passthrough()
 );
 
 const sourcedBooleanSchema = z.preprocess(
@@ -92,7 +91,7 @@ const sourcedBooleanSchema = z.preprocess(
 );
 
 const defaultSourced = { wert: null, quelle: '' };
-const defaultSourcedNum = { wert: 0, quelle: '' };
+const defaultSourcedNum = { wert: null, quelle: '' };
 const defaultSourcedBool = { wert: null, quelle: '' };
 
 // ─── Sub-schemas with full coercion ───
