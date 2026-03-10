@@ -39,18 +39,22 @@ const stringOrObjectSchema = z.preprocess(
   z.string()
 );
 
-// Normalizes any value to {wert, quelle}
-const toSourcedValue = (v: unknown): { wert: string | number | boolean | null; quelle: string } => {
+// Normalizes any value to {wert, quelle} and preserves verifiziert if present
+const toSourcedValue = (v: unknown): { wert: string | number | boolean | null; quelle: string; verifiziert?: boolean } => {
   if (v == null) return { wert: null, quelle: '' };
   if (typeof v === 'string') return { wert: v, quelle: '' };
   if (typeof v === 'number' || typeof v === 'boolean') return { wert: v, quelle: '' };
   if (typeof v === 'object') {
     const o = v as Record<string, unknown>;
     const w = o.wert;
-    return {
+    const result: { wert: string | number | boolean | null; quelle: string; verifiziert?: boolean } = {
       wert: w === null || w === undefined ? null : (w as string | number | boolean),
       quelle: String(o.quelle ?? ''),
     };
+    if (typeof o.verifiziert === 'boolean') {
+      result.verifiziert = o.verifiziert;
+    }
+    return result;
   }
   return { wert: null, quelle: '' };
 };

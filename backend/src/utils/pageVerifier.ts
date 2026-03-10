@@ -4,7 +4,7 @@
  * actual page texts, and sets verifiziert / corrects page numbers.
  */
 
-import { ExtractionResult } from '../../types/extraction';
+import type { ExtractionResult } from '../types/extraction';
 import { parsePageNumber, replacePageNumber } from './pageParser';
 import { fuzzyFindInText } from './fuzzyMatch';
 import { logger } from './logger';

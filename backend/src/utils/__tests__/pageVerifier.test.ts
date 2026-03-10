@@ -11,7 +11,7 @@ vi.mock('../logger', () => ({
 }));
 
 import { verifyPageReferences } from '../pageVerifier';
-import type { ExtractionResult } from '../../../types/extraction';
+import type { ExtractionResult } from '../../types/extraction';
 
 /**
  * Create a minimal ExtractionResult fixture for testing.

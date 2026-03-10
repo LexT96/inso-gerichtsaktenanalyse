@@ -5,6 +5,7 @@ import { extractTextPerPage, getPageCount } from './pdfProcessor';
 import { getDb } from '../db/database';
 import { logger } from '../utils/logger';
 import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
+import { verifyPageReferences } from '../utils/pageVerifier';
 import type { ExtractionResult } from '../types/extraction';
 
 const PDF_DOCUMENT_PAGE_LIMIT = 100;
@@ -77,12 +78,14 @@ export async function processExtraction(
     const pageCount = await getPageCount(pdfBuffer);
     logger.info('PDF Seitenanzahl ermittelt', { pageCount });
 
+    // Always extract text per page — needed for verification
+    const pageTexts = await extractTextPerPage(pdfBuffer);
+
     let result: ExtractionResult;
 
     if (pageCount > PDF_DOCUMENT_PAGE_LIMIT) {
-      // Large PDF: extract text per page and process in chunks
+      // Large PDF: process in chunks
       logger.info('Großes PDF — verwende seitenbasiertes Chunking', { pageCount });
-      const pageTexts = await extractTextPerPage(pdfBuffer);
       result = await extractFromPageTexts(pageTexts);
     } else {
       // Small PDF: send as native document for best quality
@@ -96,10 +99,12 @@ export async function processExtraction(
         logger.warn('PDF-Dokument-Modus fehlgeschlagen, versuche seitenbasierten Text-Fallback', {
           error: primaryError instanceof Error ? primaryError.message : String(primaryError),
         });
-        const pageTexts = await extractTextPerPage(pdfBuffer);
         result = await extractFromPageTexts(pageTexts);
       }
     }
+
+    // Verify and correct page references against actual page texts
+    result = verifyPageReferences(result, pageTexts);
 
     result = validateLettersAgainstChecklists(result);
 
