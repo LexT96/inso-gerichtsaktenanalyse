@@ -26,7 +26,7 @@ export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading }: 
       onDrop={handleFile}
       onDragOver={e => e.preventDefault()}
       onClick={() => fileRef.current?.click()}
-      className={`border border-dashed rounded-lg py-11 px-8 text-center cursor-pointer transition-all duration-200 animate-fade-up
+      className={`border border-dashed rounded-lg py-14 px-8 text-center cursor-pointer transition-all duration-200 animate-fade-up min-h-[220px] flex flex-col items-center justify-center
         ${file
           ? 'border-accent/60 bg-accent/5'
           : 'border-border/90 bg-accent/[0.04] hover:border-accent/30 hover:bg-accent/[0.07]'}`}

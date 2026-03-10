@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Header } from '../components/layout/Header';
 import { PdfUploader } from '../components/upload/PdfUploader';
 import { PdfViewer } from '../components/pdf/PdfViewer';
@@ -14,6 +14,7 @@ import { ErmittlungTab } from '../components/extraction/tabs/ErmittlungTab';
 import { AnschreibenTab } from '../components/extraction/tabs/AnschreibenTab';
 import { FehlendTab } from '../components/extraction/tabs/FehlendTab';
 import { useExtraction } from '../hooks/useExtraction';
+import { HistoryPanel } from '../components/dashboard/HistoryPanel';
 import type { ExtractionResult } from '../types/extraction';
 
 function isFieldEmpty(field: { wert?: unknown; quelle?: unknown }): boolean {
@@ -50,7 +51,12 @@ export function DashboardPage() {
   const [tab, setTab] = useState('overview');
   const { loading, progress, progressPercent, result, error, extractionId, extract, reset, loadDemo, loadFromHistory } = useExtraction();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const historyId = searchParams.get('id');
+
+  const handleHistorySelect = useCallback((id: number) => {
+    navigate(`/dashboard?id=${id}`);
+  }, [navigate]);
 
   const handleAnalyze = useCallback(() => {
     if (file) extract(file);
@@ -65,11 +71,15 @@ export function DashboardPage() {
     reset();
     setFile(null);
     setTab('overview');
-  }, [reset]);
+    navigate('/dashboard');
+  }, [reset, navigate]);
 
   useEffect(() => {
-    if (historyId && !result && !loading) {
-      loadFromHistory(parseInt(historyId, 10));
+    if (historyId && !loading) {
+      const id = parseInt(historyId, 10);
+      if (!isNaN(id) && (id !== extractionId || !result)) {
+        loadFromHistory(id);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyId]);
@@ -138,6 +148,17 @@ export function DashboardPage() {
     <div className="min-h-screen bg-bg text-text font-mono">
       <Header />
 
+      {/* Subtle grid background on upload view */}
+      {!result && (
+        <div
+          className="fixed inset-0 opacity-[0.04] pointer-events-none"
+          style={{
+            backgroundImage: `repeating-linear-gradient(0deg, #D1D5DB 0px, transparent 1px, transparent 24px),
+              repeating-linear-gradient(90deg, #D1D5DB 0px, transparent 1px, transparent 24px)`,
+          }}
+        />
+      )}
+
       {/* Split layout when results are available + file exists */}
       {result && file ? (
         <PdfViewer file={file}>
@@ -158,15 +179,43 @@ export function DashboardPage() {
           {resultsContent}
         </div>
       ) : (
-        <div className="max-w-[1050px] mx-auto p-5 px-6">
+        <div className="max-w-[1050px] mx-auto p-6 px-6 relative">
           {!result && (
-            <PdfUploader
-              file={file}
-              onFileSelect={(f) => { setFile(f); }}
-              onAnalyze={handleAnalyze}
-              onDemo={handleDemo}
-              loading={loading}
-            />
+            <>
+              <div className="mb-6">
+                <h1 className="text-lg font-bold text-text font-sans">Neue Akte analysieren</h1>
+                <p className="text-[12px] text-text-muted mt-1 font-sans">
+                  PDF hochladen → KI extrahiert Verfahrensdaten, Schuldner, Forderungen und erstellt Standardanschreiben mit Quellenreferenzen.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
+                <PdfUploader
+                file={file}
+                onFileSelect={(f) => { setFile(f); }}
+                onAnalyze={handleAnalyze}
+                onDemo={handleDemo}
+                loading={loading}
+              />
+              <HistoryPanel
+                onSelect={handleHistorySelect}
+                currentId={historyId ? parseInt(historyId, 10) : extractionId}
+              />
+              </div>
+              <div className="mt-6 flex flex-wrap gap-6 text-[11px] text-text-muted font-sans">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[9px] font-bold">1</span>
+                  PDF hochladen
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[9px] font-bold">2</span>
+                  KI analysiert Akte
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[9px] font-bold">3</span>
+                  Standardanschreiben & Quellen
+                </span>
+              </div>
+            </>
           )}
 
           {loading && progress && (
