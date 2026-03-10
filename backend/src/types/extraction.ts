@@ -2,16 +2,19 @@
 export interface SourcedValue<T = string> {
   wert: T | null;
   quelle: string;
+  verifiziert?: boolean;
 }
 
 export interface SourcedNumber {
   wert: number | null;
   quelle: string;
+  verifiziert?: boolean;
 }
 
 export interface SourcedBoolean {
   wert: boolean | null;
   quelle: string;
+  verifiziert?: boolean;
 }
 
 export interface Verfahrensdaten {

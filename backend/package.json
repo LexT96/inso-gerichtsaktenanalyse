@@ -7,7 +7,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "seed": "tsx src/db/seed.ts",
-    "verify": "tsx src/scripts/verify-extraction.ts"
+    "verify": "tsx src/scripts/verify-extraction.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -42,6 +44,7 @@
     "@types/pdf-parse": "^1.1.4",
     "@types/uuid": "^10.0.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.18"
   }
 }
