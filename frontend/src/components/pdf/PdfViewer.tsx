@@ -178,7 +178,7 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
     <PdfContext.Provider value={ctx}>
       <div className="flex h-[calc(100vh-56px)] gap-0 overflow-hidden">
         {/* PDF Panel */}
-        <div className="w-[45%] min-w-[340px] flex flex-col bg-[#0d0f14] border-r border-border">
+        <div className="w-[45%] min-w-[340px] flex flex-col bg-surface-high border-r border-border">
           {/* Toolbar */}
           <div className="flex items-center justify-between px-3 py-1.5 bg-surface border-b border-border text-[10px] text-text-dim">
             <span className="truncate max-w-[200px]" title={file.name}>{file.name}</span>

@@ -14,6 +14,11 @@
             "date": 1773012397095,
             "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-09.log",
             "hash": "b430dd3b5ba74ed03cdb5faeea8a5c44cd593e26e7e83680ac4202ca5f23cf42"
+        },
+        {
+            "date": 1773127218931,
+            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-10.log",
+            "hash": "04b430f52d0c2c8bc114bfb8426cc2963f6220cfe704e20b138d612dfd457a3a"
         }
     ],
     "hashType": "sha256"

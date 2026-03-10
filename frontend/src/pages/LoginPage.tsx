@@ -31,10 +31,10 @@ export function LoginPage() {
     <div className="min-h-screen bg-bg flex items-center justify-center font-mono">
       {/* Grid background */}
       <div
-        className="fixed inset-0 opacity-[0.03] pointer-events-none"
+        className="fixed inset-0 opacity-[0.06] pointer-events-none"
         style={{
-          backgroundImage: `repeating-linear-gradient(0deg, #e8eaed 0px, transparent 1px, transparent 24px),
-            repeating-linear-gradient(90deg, #e8eaed 0px, transparent 1px, transparent 24px)`,
+          backgroundImage: `repeating-linear-gradient(0deg, #D1D5DB 0px, transparent 1px, transparent 24px),
+            repeating-linear-gradient(90deg, #D1D5DB 0px, transparent 1px, transparent 24px)`,
         }}
       />
 
@@ -43,11 +43,13 @@ export function LoginPage() {
           ${shake ? 'animate-shake' : 'animate-fade-up'}`}
       >
         <div className="text-center mb-9">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-sm bg-gradient-to-br from-accent to-accent-dim flex items-center justify-center text-[28px] font-bold text-bg">
-            §
-          </div>
+          <img
+            src="/demo/tbsl.png"
+            alt="TBS Logo"
+            className="h-12 mx-auto mb-4 object-contain"
+          />
           <div className="text-[15px] font-semibold text-text tracking-wide">
-            InsolvenzAkte Extraktor
+            TBS Aktenanalyse
           </div>
           <div className="text-[10px] text-text-muted mt-1 tracking-[2px] uppercase">
             Vertraulich

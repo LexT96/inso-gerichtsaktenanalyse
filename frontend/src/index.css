@@ -11,10 +11,10 @@
     width: 5px;
   }
   ::-webkit-scrollbar-track {
-    background: #0a0c10;
+    background: #F9FAFB;
   }
   ::-webkit-scrollbar-thumb {
-    background: #252a36;
+    background: #D1D5DB;
     border-radius: 3px;
   }
 
@@ -23,11 +23,11 @@
     opacity: 0.3;
   }
   .react-pdf__Page__textContent span::selection {
-    background: rgba(201, 162, 39, 0.3);
+    background: rgba(165, 42, 42, 0.25);
   }
   /* Quellen-Highlight beim Klick auf [S.X] */
   .react-pdf__Page__textContent mark.source-highlight {
-    background: rgba(59, 130, 246, 0.35);
+    background: rgba(165, 42, 42, 0.2);
     border-radius: 2px;
     color: inherit;
   }
@@ -37,10 +37,10 @@
   }
 
   input::placeholder {
-    color: #565d6e;
+    color: #6B7280;
   }
   input:focus {
     outline: none;
-    border-color: #c9a227 !important;
+    border-color: #A52A2A !important;
   }
 }

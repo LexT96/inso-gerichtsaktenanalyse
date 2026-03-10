@@ -27,7 +27,8 @@ const RATE_LIMIT_RETRY_DELAY_MS = 65_000;
 
 const EXTRACTION_PROMPT = `Du bist ein spezialisierter KI-Assistent für deutsche Insolvenzverwalter. Analysiere die hochgeladene Gerichtsakte und extrahiere ALLE relevanten Informationen strukturiert.
 
-PFLICHT: Jedes Feld mit ausgefülltem "wert" MUSS eine "quelle" haben. Ohne Quelle ist die Extraktion unbrauchbar. Die Quelle MUSS mit der Seitenzahl beginnen: "Seite X, [Dokumentbezeichnung]". Beispiele: "Seite 1, Beschluss vom 18.12.2025", "Seite 3, Insolvenzantrag der HEK", "Seite 7, Mitteilung des Gerichtsvollziehers vom 03.12.2025", "Seite 12, Meldeauskunft", "Seite 15, Grundbuchamt Trier". Regel: wert nicht leer → quelle nicht leer.
+PFLICHT: Jedes Feld mit ausgefülltem "wert" MUSS eine "quelle" haben. Ohne Quelle ist die Extraktion unbrauchbar. Die quelle MUSS die exakte Fundstelle angeben: die Seite, auf der du den Wert im vorliegenden Akteninhalt gefunden hast. Format: "Seite X, [Dokument/Abschnitt]". Beispiele: "Seite 1, Beschluss vom 18.12.2025", "Seite 3, Insolvenzantrag der HEK", "Seite 7, Mitteilung des Gerichtsvollziehers". Regel: wert nicht leer → quelle nicht leer.
+WICHTIG: Die quelle muss die tatsächliche Fundstelle sein — die Seite, auf der du den Wert im vorliegenden Dokument gefunden hast. Bei textbasiertem Akteninhalt mit "=== SEITE X ===": genau diese X verwenden. Bei PDF: die Seitenzahl der Seite, auf der der Wert erscheint. Keine generischen oder geschätzten Quellen (z.B. nicht "Seite 1, Insolvenzantrag" für Werte, die auf einer anderen Seite stehen).
 Datumsformat: TT.MM.JJJJ (z.B. 18.12.2025). Beträge: deutsche Schreibweise mit Komma (1.234,56) oder Zahl.
 
 Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICHTIG: In allen String-Werten Anführungszeichen mit \\ escapen, keine Zeilenumbrüche innerhalb von Strings. Bei Zahlen: Nur 0 setzen, wenn der Wert tatsächlich 0 in der Akte steht — sonst null und quelle leer lassen. Verwende folgende Struktur:
@@ -165,7 +166,7 @@ WICHTIG für fehlende_informationen: Jeder Eintrag MUSS ein Objekt mit allen dre
 // Short prompt for chunks 2+ — schema already established, just extract the content
 const EXTRACTION_PROMPT_CONTINUATION = `Du bist ein KI-Assistent für deutsche Insolvenzverwalter. Extrahiere alle verfügbaren Daten aus diesem Aktenabschnitt und gib das Ergebnis als valides JSON zurück (kein Markdown, keine Backticks). In String-Werten Anführungszeichen mit \\ escapen, keine Zeilenumbrüche in Strings. Verwende exakt dasselbe JSON-Schema — fehlende Felder auf null/""/0 setzen.
 
-PFLICHT: Jeder nicht-leere wert MUSS eine quelle haben ("Seite X, [Dokument]"). Ohne quelle keine gültige Extraktion.
+PFLICHT: Jeder nicht-leere wert MUSS eine quelle haben ("Seite X, [Dokument]"). Ohne quelle keine gültige Extraktion. Die quelle muss die exakte Fundstelle sein — die Seite, auf der der Wert im vorliegenden Text steht. Bei "=== SEITE X ==="-Markierungen: genau diese X verwenden. Keine generischen oder geschätzten Quellen.
 
 Gleiche Struktur: verfahrensdaten, schuldner, antragsteller, forderungen, gutachterbestellung, ermittlungsergebnisse, fristen[], standardanschreiben[] (10 Typen: Bankenauskunft|Bausparkassen-Anfrage|Steuerberater-Kontakt|Strafakte-Akteneinsicht|KFZ-Halteranfrage Zulassungsstelle|Gewerbeauskunft|Finanzamt-Anfrage|KFZ-Halteranfrage KBA|Versicherungsanfrage|Gerichtsvollzieher-Anfrage mit status bereit|fehlt|entfaellt), fehlende_informationen[] (jeder Eintrag: {"information":"kurze Bezeichnung","grund":"...","ermittlung_ueber":"..."} — "information" nie leer), zusammenfassung, risiken_hinweise[].`;
 

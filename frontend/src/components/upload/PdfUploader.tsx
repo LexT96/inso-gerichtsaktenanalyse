@@ -26,24 +26,28 @@ export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading }: 
       onDrop={handleFile}
       onDragOver={e => e.preventDefault()}
       onClick={() => fileRef.current?.click()}
-      className={`border-2 border-dashed rounded-sm py-13 px-8 text-center cursor-pointer transition-all animate-fade-up
-        ${file ? 'border-accent bg-surface-high' : 'border-border bg-surface hover:border-border-light'}`}
+      className={`border border-dashed rounded-lg py-11 px-8 text-center cursor-pointer transition-all duration-200 animate-fade-up
+        ${file
+          ? 'border-accent/60 bg-accent/5'
+          : 'border-border/90 bg-accent/[0.04] hover:border-accent/30 hover:bg-accent/[0.07]'}`}
     >
       <input ref={fileRef} type="file" accept=".pdf" onChange={handleFile} className="hidden" />
-      <div className="text-[40px] mb-3.5 opacity-50">{file ? '📄' : '📁'}</div>
+      <div className="text-[36px] mb-4 opacity-60 select-none">{file ? '📄' : '📁'}</div>
       {file ? (
         <>
-          <div className="text-sm font-semibold text-text font-sans">{file.name}</div>
-          <div className="text-[11px] text-text-dim mt-1.5 mb-5">
+          <div className="text-sm font-medium text-text font-sans truncate max-w-[280px] mx-auto">
+            {file.name}
+          </div>
+          <div className="text-[11px] text-text-muted mt-1 mb-4">
             {(file.size / 1024 / 1024).toFixed(2)} MB
           </div>
           <button
             onClick={e => { e.stopPropagation(); onAnalyze(); }}
             disabled={loading}
-            className={`px-7 py-2.5 rounded-sm border-none text-[11px] font-bold font-mono tracking-wide uppercase transition-colors
+            className={`px-6 py-2 rounded-md border-none text-[11px] font-semibold font-mono tracking-wide uppercase transition-all duration-200
               ${loading
                 ? 'bg-surface-high text-text-dim cursor-wait'
-                : 'bg-accent text-bg cursor-pointer hover:brightness-110'
+                : 'bg-accent text-white cursor-pointer hover:brightness-110 active:scale-[0.98]'
               }`}
           >
             {loading ? 'ANALYSIERE…' : 'AKTE ANALYSIEREN'}
@@ -51,17 +55,17 @@ export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading }: 
         </>
       ) : (
         <>
-          <div className="text-[13px] text-text-dim font-sans">
+          <div className="text-[13px] text-text-dim font-sans font-medium">
             Gerichtsakte (PDF) ablegen oder klicken
           </div>
-          <div className="text-[10px] text-text-muted mt-1.5">
+          <div className="text-[11px] text-text-muted mt-1.5 tracking-wide">
             Max. 50 MB · PDF-Dateien
           </div>
           {onDemo && (
             <button
               onClick={(e) => { e.stopPropagation(); onDemo(); }}
               disabled={loading}
-              className="mt-4 px-4 py-2 rounded-sm border border-ie-blue-border text-ie-blue text-[11px] font-mono hover:bg-ie-blue/10 transition-colors disabled:opacity-50"
+              className="mt-5 px-5 py-2 rounded-md border border-ie-blue-border/80 text-ie-blue text-[11px] font-medium font-sans hover:bg-ie-blue/5 hover:border-ie-blue-border transition-all duration-200 disabled:opacity-50 active:scale-[0.98]"
             >
               Demo starten (PDF + Quellen testen)
             </button>
