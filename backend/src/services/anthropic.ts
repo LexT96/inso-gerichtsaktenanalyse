@@ -5,7 +5,7 @@ import { extractionResultSchema } from '../utils/validation';
 import { logger } from '../utils/logger';
 import type { ExtractionResult, Standardanschreiben, FehlendInfo } from '../types/extraction';
 
-const anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
+export const anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
 
 // 30 pages per chunk → ~7,500 tokens of content + ~2,000 prompt ≈ 9,500 tokens/request
 // Well under the 30k/min limit even for free-tier accounts
@@ -185,7 +185,7 @@ function isRateLimitError(err: unknown): boolean {
 
 const MAX_RETRIES = 3;
 
-async function callWithRetry<T>(fn: () => Promise<T>): Promise<T> {
+export async function callWithRetry<T>(fn: () => Promise<T>): Promise<T> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       return await fn();
@@ -327,7 +327,7 @@ function mergeExtractionResults(results: ExtractionResult[]): ExtractionResult {
 
 // ─── JSON extraction from Claude response ───
 
-function extractJsonFromText(text: string): string {
+export function extractJsonFromText(text: string): string {
   // 1. Extract from ```json ... ``` or ``` ... ```
   const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) {
@@ -336,11 +336,15 @@ function extractJsonFromText(text: string): string {
   // 2. Fallback: strip ``` markers and trim
   const stripped = text.replace(/```json|```/g, '').trim();
   if (stripped) return stripped;
-  // 3. Last resort: find first { to last }
+  // 3. Last resort: find outermost JSON structure (object or array)
   const firstBrace = text.indexOf('{');
+  const firstBracket = text.indexOf('[');
   const lastBrace = text.lastIndexOf('}');
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    return text.slice(firstBrace, lastBrace + 1);
+  const lastBracket = text.lastIndexOf(']');
+  const start = firstBracket >= 0 && (firstBrace < 0 || firstBracket < firstBrace) ? firstBracket : firstBrace;
+  const end = lastBracket >= 0 && (lastBrace < 0 || lastBracket > lastBrace) ? lastBracket : lastBrace;
+  if (start >= 0 && end > start) {
+    return text.slice(start, end + 1);
   }
   return text;
 }
