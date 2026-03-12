@@ -127,7 +127,7 @@ function buildPageBlock(pageTexts: string[]): string {
 
   // Keep first 100 + last 100 pages
   const keepFront = 100;
-  const keepBack = Math.min(100, pageTexts.length - keepFront);
+  const keepBack = Math.max(0, Math.min(100, pageTexts.length - keepFront));
   const frontPages = pageTexts.slice(0, keepFront);
   const backPages = pageTexts.slice(pageTexts.length - keepBack);
   const omitted = pageTexts.length - keepFront - keepBack;
@@ -231,7 +231,7 @@ ${fieldList}`;
     const response = await callWithRetry(() =>
       anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001' as const,
-        max_tokens: 4096,
+        max_tokens: 8192,
         messages: [{ role: 'user' as const, content }],
       })
     ) as Anthropic.Message;
@@ -243,7 +243,15 @@ ${fieldList}`;
 
     const entries = parseVerificationResponse(text);
 
-    // Apply results
+    if (response.stop_reason === 'max_tokens') {
+      logger.warn('Verifikations-Antwort wurde abgeschnitten (max_tokens erreicht)', {
+        entriesReceived: entries.length,
+        fieldsTotal: fields.length,
+      });
+    }
+
+    // Stage mutations first, then apply atomically to avoid partial state on error
+    const mutations: Array<{ ref: SourcedField; verifiziert: boolean; quelle?: string }> = [];
     let verified = 0;
     let corrected = 0;
     let failed = 0;
@@ -252,22 +260,29 @@ ${fieldList}`;
       const idx = entry.nr - 1;
       if (idx < 0 || idx >= fields.length) continue;
 
-      const field = fields[idx].ref;
-      field.verifiziert = entry.verifiziert;
-
       if (entry.verifiziert) {
         if (entry.quelle_korrigiert) {
-          field.quelle = entry.quelle_korrigiert;
+          mutations.push({ ref: fields[idx].ref, verifiziert: true, quelle: entry.quelle_korrigiert });
           corrected++;
         } else {
+          mutations.push({ ref: fields[idx].ref, verifiziert: true });
           verified++;
         }
       } else {
+        mutations.push({ ref: fields[idx].ref, verifiziert: false });
         failed++;
       }
     }
 
-    const skipped = fields.length - entries.length;
+    // Apply all mutations atomically
+    for (const m of mutations) {
+      m.ref.verifiziert = m.verifiziert;
+      if (m.quelle !== undefined) {
+        m.ref.quelle = m.quelle;
+      }
+    }
+
+    const skipped = fields.length - mutations.length;
 
     logger.info('Semantische Verifikation abgeschlossen', {
       total: fields.length,
