@@ -5,7 +5,7 @@ import { extractTextPerPage } from './pdfProcessor';
 import { getDb } from '../db/database';
 import { logger } from '../utils/logger';
 import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
-import { verifyPageReferences } from '../utils/pageVerifier';
+import { semanticVerify } from '../utils/semanticVerifier';
 import type { ExtractionResult } from '../types/extraction';
 
 const PDF_DOCUMENT_PAGE_LIMIT = 100;
@@ -103,7 +103,7 @@ export async function processExtraction(
     }
 
     // Verify and correct page references against actual page texts
-    result = verifyPageReferences(result, pageTexts);
+    result = await semanticVerify(result, pageTexts);
 
     result = validateLettersAgainstChecklists(result);
 
