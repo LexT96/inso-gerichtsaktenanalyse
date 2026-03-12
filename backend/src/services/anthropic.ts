@@ -156,6 +156,11 @@ WICHTIG für empfaenger: Wenn eine konkrete Institution/Person aus der Akte beka
 Bei "fehlt" liste die fehlenden Datenfelder in fehlende_daten auf.
 Bei "entfaellt" begründe warum (z.B. "Bereits vom Gericht angefragt" oder "Kein Grundvermögen vorhanden").
 
+WICHTIG — Werte NICHT setzen wenn das Dokument die Information ausdrücklich als unbekannt beschreibt:
+- Formulierungen wie "ist mir nicht bekannt", "konnte nicht ermittelt werden", "nicht bekannt" bedeuten: Feld auf null/leer setzen, NICHT einen ähnlich klingenden Wert aus anderem Kontext eintragen.
+- betriebsstaette_adresse: NUR setzen wenn eine SEPARATE Geschäfts-/Betriebsadresse im Dokument steht. Die Privatanschrift (aktuelle_adresse) ist NICHT die Betriebsstätte. Wenn der Gerichtsvollzieher sagt "Betriebsstätte nicht bekannt" → null.
+- zustellungsdatum_schuldner: Das HANDSCHRIFTLICHE Datum des Postzustellers auf dem Zustellungsvermerk/PZU hat Vorrang. Nicht das Ausstellungsdatum des Beschlusses verwenden. Oft ist das Zustelldatum 1-3 Tage nach dem Beschlussdatum.
+
 Extrahiere ALLE verfügbaren Daten. Bei fehlenden Informationen setze null/leere Strings und fülle fehlende_informationen mit konkreten Hinweisen, wie die Information ermittelt werden kann.
 Für betroffene_arbeitnehmer: Bei Arbeitnehmerangaben Objekte mit anzahl, typ, quelle (z.B. {"anzahl":44,"typ":"Arbeitnehmer insgesamt","quelle":"Seite 7, Angaben zu Arbeitnehmerverhältnissen"}). Sonst [].
 

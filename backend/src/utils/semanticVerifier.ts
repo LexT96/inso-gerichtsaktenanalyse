@@ -96,9 +96,15 @@ Autoritative Quellen in Insolvenzakten:
 
 WICHTIG: Ein Datum, Name oder Betrag kann auf mehreren Seiten vorkommen. Wähle die Seite, auf der der Wert in seinem FACHLICHEN KONTEXT steht — nicht die erste oder zufällige Erwähnung.
 
+Zusätzliche Prüfungen:
+- Wenn das Dokument eine Information ausdrücklich als unbekannt beschreibt ("ist mir nicht bekannt", "konnte nicht ermittelt werden"), der Wert aber trotzdem gesetzt wurde → verifiziert: false + begruendung "Dokument sagt ausdrücklich, dass diese Information nicht bekannt ist"
+- betriebsstaette_adresse: Prüfe ob der Wert tatsächlich eine Betriebsstätte ist oder ob es die Privatanschrift (aktuelle_adresse) ist. Wenn der Gerichtsvollzieher sagt "Betriebsstätte nicht bekannt" und die Adresse identisch mit der Privatanschrift ist → verifiziert: false
+- zustellungsdatum_schuldner: Das handschriftliche Datum des Postzustellers auf dem Zustellungsvermerk/PZU ist maßgeblich, nicht das Ausstellungsdatum des Beschlusses. Prüfe ob das korrekte Zustelldatum verwendet wurde.
+
 Wenn der Wert im Dokument vorkommt und die Quelle korrekt ist → verifiziert: true
 Wenn der Wert vorkommt, aber auf einer anderen Seite steht → verifiziert: true + quelle_korrigiert mit korrekter Seitenangabe
 Wenn der Wert NICHT im Dokument vorkommt → verifiziert: false + begruendung
+Wenn der Wert zwar im Dokument vorkommt, aber dem falschen Feld zugeordnet wurde → verifiziert: false + begruendung
 
 Antworte AUSSCHLIESSLICH mit einem JSON-Array (kein Markdown, keine Erklärung):
 [{"nr": 1, "verifiziert": true}, {"nr": 2, "verifiziert": true, "quelle_korrigiert": "Seite X, Beschluss"}, ...]`;
