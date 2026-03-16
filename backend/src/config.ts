@@ -11,9 +11,11 @@ const envSchema = z.object({
   DEFAULT_ADMIN_USERNAME: z.string().default('admin'),
   DEFAULT_ADMIN_PASSWORD: z.string().min(1, 'DEFAULT_ADMIN_PASSWORD ist erforderlich'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
-  PORT: z.coerce.number().default(3001),
+  PORT: z.coerce.number().default(3004),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  EXTRACTION_MODEL: z.string().default('claude-sonnet-4-6'),
+  UTILITY_MODEL: z.string().default('claude-haiku-4-5-20251001'),
 });
 
 function loadConfig() {

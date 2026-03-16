@@ -63,6 +63,12 @@ export interface Antragsteller {
   bankverbindung_bic: SourcedValue;
 }
 
+export interface ArbeitnehmerInfo {
+  anzahl: number;
+  typ: string;
+  quelle: string;
+}
+
 export interface Forderungen {
   hauptforderung_beitraege: SourcedNumber;
   saeumniszuschlaege: SourcedNumber;
@@ -73,7 +79,7 @@ export interface Forderungen {
   zeitraum_von: SourcedValue;
   zeitraum_bis: SourcedValue;
   laufende_monatliche_beitraege: SourcedNumber;
-  betroffene_arbeitnehmer: Array<string | { wert?: string; name?: string }>;
+  betroffene_arbeitnehmer: Array<string | ArbeitnehmerInfo | { wert?: string; name?: string }>;
 }
 
 export interface Gutachterbestellung {
@@ -144,6 +150,6 @@ export interface ExtractionResult {
   fristen: Frist[];
   standardanschreiben: Standardanschreiben[];
   fehlende_informationen: FehlendInfo[];
-  zusammenfassung: string;
-  risiken_hinweise: string[];
+  zusammenfassung: SourcedValue[];
+  risiken_hinweise: SourcedValue[];
 }

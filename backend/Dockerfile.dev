@@ -16,7 +16,7 @@ COPY standardschreiben ./standardschreiben
 RUN mkdir -p data uploads
 
 ENV NODE_ENV=development
-EXPOSE 3001
+EXPOSE 3004
 
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["npx", "tsx", "watch", "src/index.ts"]

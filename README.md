@@ -24,7 +24,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Anwendung öffnen: **http://localhost:3000**
+Anwendung öffnen: **http://localhost:3005**
 
 Login mit den konfigurierten Admin-Credentials (Standard-Benutzername: `admin`).
 
@@ -44,7 +44,7 @@ npm install
 npm run dev
 ```
 
-Backend: `http://localhost:3001` · Frontend: `http://localhost:3000`
+Backend: `http://localhost:3004` · Frontend: `http://localhost:3005`
 
 **Mit Docker** – Code-Änderungen ohne Rebuild (Volume-Mounts):
 
@@ -61,10 +61,10 @@ Nach dem ersten Build werden Änderungen in `backend/src` und `frontend/src` aut
 │    Frontend      │────▶│      Backend         │────▶│  Claude API  │
 │  React + Vite    │     │  Express + TypeScript │     │  (Anthropic) │
 │  Tailwind CSS    │     │                      │     └──────────────┘
-│  Port 3000       │     │  JWT Auth            │
+│  Port 3005       │     │  JWT Auth            │
 └─────────────────┘     │  Rate Limiting       │     ┌──────────────┐
                          │  Audit Logging       │────▶│   SQLite     │
-                         │  Port 3001           │     │  (Datenbank) │
+                         │  Port 3004           │     │  (Datenbank) │
                          └──────────────────────┘     └──────────────┘
 ```
 
@@ -129,8 +129,8 @@ Dieses Tool verarbeitet vertrauliche Gerichtsakten. Folgende Maßnahmen sind imp
 | `DATABASE_PATH`                    | Nein    | Standard: `./data/insolvenz.db`        |
 | `UPLOAD_MAX_SIZE_MB`               | Nein    | Standard: `50`                         |
 | `RATE_LIMIT_EXTRACTIONS_PER_HOUR`  | Nein    | Standard: `10`                         |
-| `CORS_ORIGIN`                      | Nein    | Standard: `http://localhost:3000`      |
-| `PORT`                             | Nein    | Standard: `3001`                       |
+| `CORS_ORIGIN`                      | Nein    | Standard: `http://localhost:3005`      |
+| `PORT`                             | Nein    | Standard: `3004`                       |
 | `LOG_LEVEL`                        | Nein    | Standard: `info`                       |
 
 ## Lizenz

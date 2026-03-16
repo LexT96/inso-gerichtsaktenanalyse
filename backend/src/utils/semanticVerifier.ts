@@ -1,13 +1,17 @@
 /**
  * Semantic page reference verification using Claude Haiku.
  *
- * Replaces the text-matching pageVerifier with a single API call that
- * understands document context and authoritative sources.
+ * Replaces the text-matching pageVerifier with API calls that
+ * understand document context and authoritative sources.
+ *
+ * For large documents: only sends referenced pages (not all pages)
+ * and splits into batches to stay within rate limits.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
 import { jsonrepair } from 'jsonrepair';
 import { anthropic, callWithRetry, extractJsonFromText } from '../services/anthropic';
+import { config } from '../config';
 import { logger } from './logger';
 import type { ExtractionResult } from '../types/extraction';
 
@@ -29,6 +33,9 @@ interface VerificationEntry {
   verifiziert: boolean;
   quelle_korrigiert?: string;
   begruendung?: string;
+  aktion?: 'entfernen' | 'korrigieren';
+  korrekter_wert?: unknown;
+  korrekte_quelle?: string;
 }
 
 // ─── Field collection ───
@@ -77,11 +84,14 @@ export function collectFields(obj: unknown, prefix: string = ''): CollectedField
 
 // ─── Prompt ───
 
-const VERIFICATION_PROMPT = `Du prüfst extrahierte Daten aus einer deutschen Insolvenzakte.
+const VERIFICATION_PROMPT = `Du bist ein kritischer Prüfer für extrahierte Daten aus einer deutschen Insolvenzakte.
+Du prüfst UND korrigierst fehlerhafte Extraktionen.
+
 Für jedes Feld prüfe:
 1. Kommt der Wert tatsächlich im Dokument vor?
 2. Ist die angegebene Seite korrekt?
 3. Ist die Quelle die AUTORITATIVE Fundstelle — nicht bloß irgendeine Erwähnung?
+4. Passt der Wert INHALTLICH zum Feld, oder wurde er dem falschen Feld zugeordnet?
 
 Autoritative Quellen in Insolvenzakten:
 - Verfahrensdaten (Aktenzeichen, Gericht, Richter, Beschlussdatum, Antragsart) → Beschluss/Verfügung des Gerichts
@@ -96,68 +106,106 @@ Autoritative Quellen in Insolvenzakten:
 
 WICHTIG: Ein Datum, Name oder Betrag kann auf mehreren Seiten vorkommen. Wähle die Seite, auf der der Wert in seinem FACHLICHEN KONTEXT steht — nicht die erste oder zufällige Erwähnung.
 
-Zusätzliche Prüfungen:
-- Wenn das Dokument eine Information ausdrücklich als unbekannt beschreibt ("ist mir nicht bekannt", "konnte nicht ermittelt werden"), der Wert aber trotzdem gesetzt wurde → verifiziert: false + begruendung "Dokument sagt ausdrücklich, dass diese Information nicht bekannt ist"
-- betriebsstaette_adresse: Prüfe ob der Wert tatsächlich eine Betriebsstätte ist oder ob es die Privatanschrift (aktuelle_adresse) ist. Wenn der Gerichtsvollzieher sagt "Betriebsstätte nicht bekannt" und die Adresse identisch mit der Privatanschrift ist → verifiziert: false
-- zustellungsdatum_schuldner: Das handschriftliche Datum des Postzustellers auf dem Zustellungsvermerk/PZU ist maßgeblich, nicht das Ausstellungsdatum des Beschlusses. Prüfe ob das korrekte Zustelldatum verwendet wurde.
+ALLGEMEINE PRÜFREGELN — prüfe diese für JEDES Feld:
+1. UNBEKANNT: Wenn das Dokument eine Information ausdrücklich als unbekannt beschreibt ("ist mir nicht bekannt", "konnte nicht ermittelt werden", "keine Angabe möglich", "nicht bekannt"), der Wert aber trotzdem gesetzt wurde → aktion: "entfernen"
+2. FALSCHER KONTEXT: Wenn ein Wert aus dem falschen Dokumentteil stammt (z.B. ein Datum aus einem Beschluss statt aus dem Zustellungsvermerk, eine Adresse aus dem falschen Abschnitt) und der korrekte Wert im Dokument steht → aktion: "korrigieren"
+3. FALSCHE ZUORDNUNG: Wenn ein Wert identisch mit einem anderen Feld ist, wo er nicht hingehört (z.B. Privatanschrift als Betriebsstätte eingetragen) → aktion: "entfernen"
+4. FALSCHES DATUM/WERT: Wenn ein anderer Wert aus dem Dokument das fachlich korrekte Ergebnis wäre (z.B. handschriftliches Zustelldatum statt gedrucktes Beschlussdatum) → aktion: "korrigieren"
 
-Wenn der Wert im Dokument vorkommt und die Quelle korrekt ist → verifiziert: true
-Wenn der Wert vorkommt, aber auf einer anderen Seite steht → verifiziert: true + quelle_korrigiert mit korrekter Seitenangabe
-Wenn der Wert NICHT im Dokument vorkommt → verifiziert: false + begruendung
-Wenn der Wert zwar im Dokument vorkommt, aber dem falschen Feld zugeordnet wurde → verifiziert: false + begruendung
+SICHERHEITSREGEL: Bei aktion "korrigieren" MUSS der korrekter_wert WÖRTLICH im Dokumenttext vorkommen. Du darfst KEINE neuen Werte erfinden, berechnen oder zusammensetzen. Nur Werte verwenden, die im Text stehen.
+
+BOOLEAN-FELDER (grundbesitz_vorhanden, betriebsstaette_bekannt, masse_deckend, etc.):
+- Wenn das Dokument klar verneint ("kein Grundbesitz", "keine Daten gefunden", "nicht vorhanden") → der Wert sollte false sein, NICHT null
+- Wenn ein solches Boolean-Feld fälschlich auf null steht, aber das Dokument eine klare Verneinung enthält → aktion: "korrigieren", korrekter_wert: false
+
+ERGEBNISSE:
+- Wert korrekt + Quelle korrekt → verifiziert: true
+- Wert korrekt, falsche Seite → verifiziert: true + quelle_korrigiert
+- Wert FALSCH, korrekter Wert im Dokument → verifiziert: false + aktion: "korrigieren" + korrekter_wert + korrekte_quelle + begruendung
+- Wert FALSCH, sollte entfernt werden → verifiziert: false + aktion: "entfernen" + begruendung
 
 Antworte AUSSCHLIESSLICH mit einem JSON-Array (kein Markdown, keine Erklärung):
-[{"nr": 1, "verifiziert": true}, {"nr": 2, "verifiziert": true, "quelle_korrigiert": "Seite X, Beschluss"}, ...]`;
+[{"nr": 1, "verifiziert": true}, {"nr": 2, "verifiziert": true, "quelle_korrigiert": "Seite X, Beschluss"}, {"nr": 3, "verifiziert": false, "aktion": "entfernen", "begruendung": "Dokument sagt: nicht bekannt"}, {"nr": 4, "verifiziert": false, "aktion": "korrigieren", "korrekter_wert": "28.11.2025", "korrekte_quelle": "Seite 5, Zustellungsvermerk", "begruendung": "Handschriftliches Zustelldatum statt Beschlussdatum"}]`;
 
 // ─── Token estimation ───
 
-const MAX_ESTIMATED_TOKENS = 150_000;
-const CHARS_PER_TOKEN = 3;
+// Budget per API call — stays under the 50k tokens/min rate limit with headroom
+const TOKEN_BUDGET = 40_000;
+const CHARS_PER_TOKEN = 2.5; // German text with umlauts needs lower estimate (A3)
+// Pages around each referenced page to include for context
+const PAGE_BUFFER = 2;
+// Pause between batch calls to avoid rate limiting
+const BATCH_PAUSE_MS = 3_000;
+// Max fields per verification batch to prevent output truncation (A2)
+const MAX_FIELDS_PER_BATCH = 25;
+// Max tokens for verification response
+const VERIFICATION_MAX_TOKENS = 12_288;
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN);
 }
 
+// ─── Page selection ───
+
 /**
- * Build page text block. If total tokens would exceed the limit,
- * truncate by keeping first and last pages.
+ * Parse all page numbers from a quelle string.
+ * Handles: "Seite 5", "Seiten 5-7", "Seiten 3 und 5", "Seiten 3, 5 und 7", "Seiten 3-5 und 8"
  */
-function buildPageBlock(pageTexts: string[]): string {
-  const fullBlock = pageTexts
-    .map((text, i) => `=== SEITE ${i + 1} ===\n${text}`)
-    .join('\n\n');
+export function parsePagesFromQuelle(quelle: string): number[] {
+  // Match "Seite(n) <number-sequence>" pattern
+  const match = quelle.match(/Seiten?\s+([\d\s,\-–und]+)/i);
+  if (!match) return [];
 
-  if (estimateTokens(fullBlock) <= MAX_ESTIMATED_TOKENS) {
-    return fullBlock;
+  const pages = new Set<number>();
+  // Split on commas and "und", then handle ranges
+  const parts = match[1].replace(/und/g, ',').split(',');
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const rangeMatch = trimmed.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+    if (rangeMatch) {
+      const start = parseInt(rangeMatch[1], 10);
+      const end = parseInt(rangeMatch[2], 10);
+      for (let i = start; i <= end; i++) pages.add(i);
+    } else {
+      const num = parseInt(trimmed, 10);
+      if (!isNaN(num)) pages.add(num);
+    }
   }
-
-  // Keep first 100 + last 100 pages
-  const keepFront = 100;
-  const keepBack = Math.max(0, Math.min(100, pageTexts.length - keepFront));
-  const frontPages = pageTexts.slice(0, keepFront);
-  const backPages = pageTexts.slice(pageTexts.length - keepBack);
-  const omitted = pageTexts.length - keepFront - keepBack;
-
-  logger.warn('Seitentext zu groß für Verifikation, Seiten in der Mitte werden übersprungen', {
-    totalPages: pageTexts.length,
-    omittedPages: omitted,
-  });
-
-  const frontBlock = frontPages
-    .map((text, i) => `=== SEITE ${i + 1} ===\n${text}`)
-    .join('\n\n');
-  const backBlock = backPages
-    .map((text, i) => `=== SEITE ${pageTexts.length - keepBack + i + 1} ===\n${text}`)
-    .join('\n\n');
-
-  return `${frontBlock}\n\n[... ${omitted} Seiten übersprungen ...]\n\n${backBlock}`;
+  return [...pages].sort((a, b) => a - b);
 }
 
-function buildFieldList(fields: CollectedField[]): string {
+/**
+ * Collect page numbers referenced by fields + buffer pages around each.
+ * Returns sorted unique page numbers (1-based).
+ */
+function collectRelevantPages(fields: CollectedField[], totalPages: number): number[] {
+  const pages = new Set<number>();
+  for (const f of fields) {
+    const parsed = parsePagesFromQuelle(f.ref.quelle);
+    for (const page of parsed) {
+      for (let i = Math.max(1, page - PAGE_BUFFER); i <= Math.min(totalPages, page + PAGE_BUFFER); i++) {
+        pages.add(i);
+      }
+    }
+  }
+  return [...pages].sort((a, b) => a - b);
+}
+
+/**
+ * Build page text block from specific page numbers only.
+ */
+function buildSelectedPageBlock(pageTexts: string[], pageNumbers: number[]): string {
+  return pageNumbers
+    .map(p => `=== SEITE ${p} ===\n${pageTexts[p - 1]}`)
+    .join('\n\n');
+}
+
+function buildFieldList(fields: CollectedField[], globalOffset: number = 0): string {
   return fields
     .map((f, i) => {
       const wert = typeof f.ref.wert === 'string' ? f.ref.wert : String(f.ref.wert);
-      return `${i + 1}. ${f.path} | Wert: "${wert}" | Quelle: "${f.ref.quelle}"`;
+      return `${globalOffset + i + 1}. ${f.path} | Wert: "${wert}" | Quelle: "${f.ref.quelle}"`;
     })
     .join('\n');
 }
@@ -196,114 +244,310 @@ function parseVerificationResponse(text: string): VerificationEntry[] {
   );
 }
 
+// ─── Batch helpers ───
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+interface BatchDef {
+  fields: CollectedField[];
+  globalOffset: number;
+  pageBlock: string;
+  pageCount: number;
+}
+
+/**
+ * Split fields into batches that each fit within the token budget.
+ * Each batch only includes pages referenced by its fields.
+ */
+function splitIntoBatches(fields: CollectedField[], pageTexts: string[]): BatchDef[] {
+  // Try all fields in one batch first (if within both token and field count limits)
+  const allPages = collectRelevantPages(fields, pageTexts.length);
+  const allBlock = buildSelectedPageBlock(pageTexts, allPages);
+
+  if (estimateTokens(allBlock) <= TOKEN_BUDGET && fields.length <= MAX_FIELDS_PER_BATCH) {
+    return [{ fields, globalOffset: 0, pageBlock: allBlock, pageCount: allPages.length }];
+  }
+
+  // Split by both token budget and max field count
+  const estimatedBatches = Math.max(
+    Math.ceil(fields.length / MAX_FIELDS_PER_BATCH),
+    Math.ceil(estimateTokens(allBlock) / TOKEN_BUDGET) + 1
+  );
+  const batchSize = Math.min(MAX_FIELDS_PER_BATCH, Math.ceil(fields.length / estimatedBatches));
+  const batches: BatchDef[] = [];
+
+  for (let i = 0; i < fields.length; i += batchSize) {
+    const slice = fields.slice(i, i + batchSize);
+    const pages = collectRelevantPages(slice, pageTexts.length);
+    const pageBlock = buildSelectedPageBlock(pageTexts, pages);
+    batches.push({ fields: slice, globalOffset: i, pageBlock, pageCount: pages.length });
+  }
+
+  return batches;
+}
+
+// ─── Apply entries ───
+
+interface Mutation {
+  ref: SourcedField;
+  verifiziert: boolean;
+  quelle?: string;
+  setWert?: { value: unknown };
+}
+
+interface VerifyStats {
+  verified: number;
+  sourceCorrected: number;
+  valueCorrected: number;
+  removed: number;
+  failed: number;
+}
+
+function processEntries(
+  entries: VerificationEntry[],
+  fields: CollectedField[],
+  globalOffset: number,
+  mutations: Mutation[],
+  stats: VerifyStats
+): void {
+  for (const entry of entries) {
+    const localIdx = entry.nr - 1;
+    const globalIdx = globalOffset + localIdx;
+    if (localIdx < 0 || localIdx >= fields.length) continue;
+
+    const ref = fields[localIdx].ref;
+
+    if (entry.verifiziert) {
+      if (entry.quelle_korrigiert) {
+        mutations.push({ ref, verifiziert: true, quelle: entry.quelle_korrigiert });
+        stats.sourceCorrected++;
+      } else {
+        mutations.push({ ref, verifiziert: true });
+        stats.verified++;
+      }
+    } else if (entry.aktion === 'korrigieren' && entry.korrekter_wert !== undefined) {
+      mutations.push({
+        ref,
+        verifiziert: true,
+        setWert: { value: entry.korrekter_wert },
+        quelle: entry.korrekte_quelle,
+      });
+      stats.valueCorrected++;
+    } else if (entry.aktion === 'entfernen') {
+      mutations.push({
+        ref,
+        verifiziert: false,
+        setWert: { value: null },
+      });
+      stats.removed++;
+    } else {
+      mutations.push({ ref, verifiziert: false });
+      stats.failed++;
+    }
+  }
+}
+
 // ─── Main ───
 
 /**
- * Semantically verify all page references in an ExtractionResult
- * using a single Claude Haiku API call.
+ * Semantically verify and correct all extracted fields in an ExtractionResult.
  *
- * For each sourced field with a non-empty wert:
- * - If verified → verifiziert = true
- * - If wrong page → corrects quelle, verifiziert = true
- * - If value not in document → verifiziert = false
+ * Smart page selection: only sends pages referenced by extracted fields
+ * (plus a small buffer), not the entire document. For large documents,
+ * automatically splits into multiple API calls to stay within rate limits.
  *
  * On API failure: logs warning, returns result unchanged (graceful degradation).
  */
 export async function semanticVerify(
   result: ExtractionResult,
-  pageTexts: string[]
+  pageTexts: string[],
+  documentMap?: string
 ): Promise<ExtractionResult> {
-  const fields = collectFields(result);
+  const allFields = collectFields(result);
 
-  if (fields.length === 0) {
+  if (allFields.length === 0) {
     logger.info('Keine Felder zur Verifikation gefunden');
     return result;
   }
 
-  const pageBlock = buildPageBlock(pageTexts);
-  const fieldList = buildFieldList(fields);
+  const batches = splitIntoBatches(allFields, pageTexts);
+  const mapBlock = documentMap ? `\n--- STRUKTURÜBERSICHT ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---\n` : '';
 
-  const content = `${VERIFICATION_PROMPT}
+  logger.info('Verifikation gestartet', {
+    totalFields: allFields.length,
+    totalPages: pageTexts.length,
+    batches: batches.length,
+    pagesPerBatch: batches.map(b => b.pageCount),
+  });
 
---- AKTENINHALT ---
+  const mutations: Mutation[] = [];
+  const stats: VerifyStats = { verified: 0, sourceCorrected: 0, valueCorrected: 0, removed: 0, failed: 0 };
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
 
-${pageBlock}
+  for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+    const batch = batches[batchIdx];
 
---- EXTRAHIERTE FELDER (${fields.length} Stück) ---
+    if (batchIdx > 0) {
+      await sleep(BATCH_PAUSE_MS);
+    }
+
+    const fieldList = buildFieldList(batch.fields);
+
+    const content = `${VERIFICATION_PROMPT}
+${mapBlock}
+--- AKTENINHALT (${batch.pageCount} relevante Seiten von ${pageTexts.length} gesamt) ---
+
+${batch.pageBlock}
+
+--- EXTRAHIERTE FELDER (${batch.fields.length} Stück) ---
 
 ${fieldList}`;
 
-  try {
-    const response = await callWithRetry(() =>
-      anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001' as const,
-        max_tokens: 8192,
-        messages: [{ role: 'user' as const, content }],
-      })
-    ) as Anthropic.Message;
+    try {
+      const response = await callWithRetry(() =>
+        anthropic.messages.create({
+          model: config.UTILITY_MODEL,
+          max_tokens: VERIFICATION_MAX_TOKENS,
+          messages: [{ role: 'user' as const, content }],
+        })
+      ) as Anthropic.Message;
 
-    const text = response.content
-      .filter((c): c is Anthropic.TextBlock => c.type === 'text')
-      .map((c: Anthropic.TextBlock) => c.text)
-      .join('');
+      const text = response.content
+        .filter((c): c is Anthropic.TextBlock => c.type === 'text')
+        .map((c: Anthropic.TextBlock) => c.text)
+        .join('');
 
-    const entries = parseVerificationResponse(text);
+      const entries = parseVerificationResponse(text);
 
-    if (response.stop_reason === 'max_tokens') {
-      logger.warn('Verifikations-Antwort wurde abgeschnitten (max_tokens erreicht)', {
-        entriesReceived: entries.length,
-        fieldsTotal: fields.length,
-      });
-    }
+      totalInputTokens += response.usage?.input_tokens ?? 0;
+      totalOutputTokens += response.usage?.output_tokens ?? 0;
 
-    // Stage mutations first, then apply atomically to avoid partial state on error
-    const mutations: Array<{ ref: SourcedField; verifiziert: boolean; quelle?: string }> = [];
-    let verified = 0;
-    let corrected = 0;
-    let failed = 0;
+      // Truncation retry: if response was cut off and we got fewer entries than fields,
+      // retry once for the remaining fields
+      if (response.stop_reason === 'max_tokens' && entries.length < batch.fields.length) {
+        logger.warn('Verifikations-Antwort abgeschnitten — Retry für verbleibende Felder', {
+          batch: batchIdx + 1,
+          entriesReceived: entries.length,
+          fieldsInBatch: batch.fields.length,
+        });
 
-    for (const entry of entries) {
-      const idx = entry.nr - 1;
-      if (idx < 0 || idx >= fields.length) continue;
+        // Process the entries we did get
+        processEntries(entries, batch.fields, batch.globalOffset, mutations, stats);
 
-      if (entry.verifiziert) {
-        if (entry.quelle_korrigiert) {
-          mutations.push({ ref: fields[idx].ref, verifiziert: true, quelle: entry.quelle_korrigiert });
-          corrected++;
-        } else {
-          mutations.push({ ref: fields[idx].ref, verifiziert: true });
-          verified++;
+        // Retry with remaining fields
+        const answeredNrs = new Set(entries.map(e => e.nr));
+        const remainingFields = batch.fields.filter((_, i) => !answeredNrs.has(i + 1));
+
+        if (remainingFields.length > 0) {
+          await sleep(BATCH_PAUSE_MS);
+          const retryFieldList = buildFieldList(remainingFields);
+          const retryContent = `${VERIFICATION_PROMPT}
+${mapBlock}
+--- AKTENINHALT (${batch.pageCount} relevante Seiten von ${pageTexts.length} gesamt) ---
+
+${batch.pageBlock}
+
+--- EXTRAHIERTE FELDER (${remainingFields.length} Stück, Retry) ---
+
+${retryFieldList}`;
+
+          const retryResponse = await callWithRetry(() =>
+            anthropic.messages.create({
+              model: config.UTILITY_MODEL,
+              max_tokens: VERIFICATION_MAX_TOKENS,
+              messages: [{ role: 'user' as const, content: retryContent }],
+            })
+          ) as Anthropic.Message;
+
+          const retryText = retryResponse.content
+            .filter((c): c is Anthropic.TextBlock => c.type === 'text')
+            .map((c: Anthropic.TextBlock) => c.text)
+            .join('');
+
+          const retryEntries = parseVerificationResponse(retryText);
+          // Map retry entries back to original field indices
+          const remainingFieldsWithOrigIdx = batch.fields
+            .map((f, i) => ({ field: f, origIdx: i }))
+            .filter(({ origIdx }) => !answeredNrs.has(origIdx + 1));
+
+          for (const entry of retryEntries) {
+            const localIdx = entry.nr - 1;
+            if (localIdx < 0 || localIdx >= remainingFieldsWithOrigIdx.length) continue;
+            const { field } = remainingFieldsWithOrigIdx[localIdx];
+            const ref = field.ref;
+
+            if (entry.verifiziert) {
+              if (entry.quelle_korrigiert) {
+                mutations.push({ ref, verifiziert: true, quelle: entry.quelle_korrigiert });
+                stats.sourceCorrected++;
+              } else {
+                mutations.push({ ref, verifiziert: true });
+                stats.verified++;
+              }
+            } else if (entry.aktion === 'korrigieren' && entry.korrekter_wert !== undefined) {
+              mutations.push({ ref, verifiziert: true, setWert: { value: entry.korrekter_wert }, quelle: entry.korrekte_quelle });
+              stats.valueCorrected++;
+            } else if (entry.aktion === 'entfernen') {
+              mutations.push({ ref, verifiziert: false, setWert: { value: null } });
+              stats.removed++;
+            } else {
+              mutations.push({ ref, verifiziert: false });
+              stats.failed++;
+            }
+          }
+
+          totalInputTokens += retryResponse.usage?.input_tokens ?? 0;
+          totalOutputTokens += retryResponse.usage?.output_tokens ?? 0;
+
+          logger.info(`Verifikation Retry für Batch ${batchIdx + 1} abgeschlossen`, {
+            retryFields: remainingFields.length,
+            retryEntries: retryEntries.length,
+          });
         }
       } else {
-        mutations.push({ ref: fields[idx].ref, verifiziert: false });
-        failed++;
+        processEntries(entries, batch.fields, batch.globalOffset, mutations, stats);
       }
-    }
 
-    // Apply all mutations atomically
-    for (const m of mutations) {
-      m.ref.verifiziert = m.verifiziert;
-      if (m.quelle !== undefined) {
-        m.ref.quelle = m.quelle;
+      if (batches.length > 1) {
+        logger.info(`Verifikation Batch ${batchIdx + 1}/${batches.length} abgeschlossen`, {
+          fieldsInBatch: batch.fields.length,
+          pagesInBatch: batch.pageCount,
+          inputTokens: response.usage?.input_tokens,
+        });
       }
+    } catch (err) {
+      logger.warn(`Verifikation Batch ${batchIdx + 1}/${batches.length} fehlgeschlagen — übersprungen`, {
+        error: err instanceof Error ? err.message : String(err),
+        fieldsInBatch: batch.fields.length,
+      });
+      // Continue with remaining batches — partial verification is better than none
     }
-
-    const skipped = fields.length - mutations.length;
-
-    logger.info('Semantische Verifikation abgeschlossen', {
-      total: fields.length,
-      verified,
-      corrected,
-      failed,
-      skipped,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
-    });
-  } catch (err) {
-    logger.warn('Semantische Verifikation fehlgeschlagen — übersprungen', {
-      error: err instanceof Error ? err.message : String(err),
-    });
   }
+
+  // Apply all mutations atomically
+  for (const m of mutations) {
+    m.ref.verifiziert = m.verifiziert;
+    if (m.quelle !== undefined) {
+      m.ref.quelle = m.quelle;
+    }
+    if (m.setWert !== undefined) {
+      m.ref.wert = m.setWert.value;
+    }
+  }
+
+  const skipped = allFields.length - mutations.length;
+
+  logger.info('Semantische Verifikation abgeschlossen', {
+    total: allFields.length,
+    ...stats,
+    skipped,
+    batches: batches.length,
+    inputTokens: totalInputTokens,
+    outputTokens: totalOutputTokens,
+  });
 
   return result;
 }

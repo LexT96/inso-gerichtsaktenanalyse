@@ -15,6 +15,6 @@ COPY frontend/src ./src
 COPY frontend/public ./public
 COPY shared /workspace/shared
 
-EXPOSE 3000
+EXPOSE 3005
 
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

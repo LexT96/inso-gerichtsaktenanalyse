@@ -17,6 +17,7 @@
  * Für PDF: Volle Extraktion, .env mit ANTHROPIC_API_KEY etc. erforderlich.
  */
 
+import '../env';
 import fs from 'fs';
 import path from 'path';
 import { initDatabase, getDb } from '../db/database';
@@ -199,16 +200,26 @@ function printReport(result: ExtractionResult): void {
   }
 
   // 4. Zusammenfassung
-  if (result.zusammenfassung) {
+  const zf = result.zusammenfassung || [];
+  if (zf.length > 0) {
     console.log('## 4. Zusammenfassung\n');
-    console.log(`  ${result.zusammenfassung}\n`);
+    for (const z of zf) {
+      const text = typeof z === 'string' ? z : (z && typeof z === 'object' && 'wert' in z ? String(z.wert) : String(z));
+      const q = z && typeof z === 'object' && 'quelle' in z ? ` [${z.quelle}]` : '';
+      console.log(`  • ${text}${q}`);
+    }
+    console.log('');
   }
 
   // 5. Risiken/Hinweise
   const risiken = result.risiken_hinweise || [];
   if (risiken.length > 0) {
     console.log('## 5. Risiken & Hinweise\n');
-    for (const r of risiken) console.log(`  • ${r}`);
+    for (const r of risiken) {
+      const text = typeof r === 'string' ? r : (r && typeof r === 'object' && 'wert' in r ? String(r.wert) : String(r));
+      const q = r && typeof r === 'object' && 'quelle' in r ? ` [${r.quelle}]` : '';
+      console.log(`  • ${text}${q}`);
+    }
     console.log('');
   }
 
@@ -249,6 +260,8 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     console.log('\nStarte Extraktion für Verifikation...');
+    const dbPath = process.env.DATABASE_PATH || './data/insolvenz.db';
+    initDatabase(dbPath);
     const { processExtraction } = await import('../services/extraction');
     const tmpPath = path.join(process.cwd(), 'uploads', `verify-${Date.now()}.pdf`);
     fs.mkdirSync(path.dirname(tmpPath), { recursive: true });
@@ -260,6 +273,10 @@ async function main(): Promise<void> {
         fs.statSync(pdfPath).size,
         1
       );
+      // Dump raw JSON for analysis
+      const jsonOutPath = pdfPath.replace(/\.pdf$/i, '-extraction.json');
+      fs.writeFileSync(jsonOutPath, JSON.stringify(result, null, 2), 'utf-8');
+      console.log(`\nRaw JSON gespeichert: ${jsonOutPath}`);
       printReport(result);
     } catch (err) {
       console.error('Extraktion fehlgeschlagen:', err);

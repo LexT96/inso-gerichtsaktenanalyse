@@ -39,6 +39,16 @@ export function ErmittlungTab({ ermittlungsergebnisse: e, gutachterbestellung: g
         <DataField label="Telefon" field={g?.gutachter_telefon} />
         <DataField label="E-Mail" field={g?.gutachter_email} />
         <DataField label="Abgabefrist" field={g?.abgabefrist} />
+        {g?.befugnisse?.length > 0 && (
+          <div className="mt-2">
+            <span className="text-[11px] text-text-dim">Befugnisse:</span>
+            <ul className="mt-1 ml-4 list-disc">
+              {g.befugnisse.map((b, i) => (
+                <li key={i} className="text-xs text-text py-0.5">{b}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Section>
     </>
   );

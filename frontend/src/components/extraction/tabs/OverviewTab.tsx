@@ -1,6 +1,7 @@
 import { DataField } from '../DataField';
 import { Section } from '../Section';
 import { StatsBar } from '../StatsBar';
+import { SourcedItem } from '../SourcedItem';
 import type { ExtractionResult } from '../../../types/extraction';
 
 interface OverviewTabProps {
@@ -23,9 +24,11 @@ export function OverviewTab({ result: r, stats, lettersReady, lettersNA, letters
         lettersOpen={lettersOpen}
       />
 
-      {r.zusammenfassung && (
+      {r.zusammenfassung?.length > 0 && (
         <Section title="Zusammenfassung" icon="▤">
-          <p className="m-0 text-[11px] leading-7 text-text-dim font-sans">{r.zusammenfassung}</p>
+          {r.zusammenfassung.map((item, i) => (
+            <SourcedItem key={i} item={item} />
+          ))}
         </Section>
       )}
 
@@ -54,10 +57,8 @@ export function OverviewTab({ result: r, stats, lettersReady, lettersNA, letters
 
       {r.risiken_hinweise?.length > 0 && (
         <Section title="Risiken & Hinweise" icon="⚡" count={r.risiken_hinweise.length}>
-          {r.risiken_hinweise.map((h, i) => (
-            <div key={i} className="p-1.5 px-2.5 mb-1 bg-ie-amber-bg border border-ie-amber-border rounded-sm text-ie-amber text-[11px] font-sans">
-              {h}
-            </div>
+          {r.risiken_hinweise.map((item, i) => (
+            <SourcedItem key={i} item={item} variant="warning" />
           ))}
         </Section>
       )}

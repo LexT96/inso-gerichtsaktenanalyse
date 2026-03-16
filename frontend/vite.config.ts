@@ -10,12 +10,12 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 3005,
     proxy: {
       '/api': {
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:3001',
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:3004',
         changeOrigin: true,
-        timeout: 600_000, // 10 min — extraction can take long for large PDFs
+        timeout: 1_200_000, // 20 min — 3-stage pipeline + chunking + rate limit retries
         configure: (proxy) => {
           proxy.on('error', (err, req, res) => {
             console.error('[Vite Proxy] Fehler:', err.message);

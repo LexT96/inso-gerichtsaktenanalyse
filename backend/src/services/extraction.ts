@@ -5,6 +5,7 @@ import { extractTextPerPage } from './pdfProcessor';
 import { getDb } from '../db/database';
 import { logger } from '../utils/logger';
 import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
+import { analyzeDocumentStructure } from '../utils/documentAnalyzer';
 import { semanticVerify } from '../utils/semanticVerifier';
 import type { ExtractionResult } from '../types/extraction';
 
@@ -75,21 +76,25 @@ export async function processExtraction(
   try {
     const pdfBuffer = fs.readFileSync(filePath);
 
-    // Always extract text per page — needed for verification
+    // Always extract text per page — needed for analysis and verification
     const pageTexts = await extractTextPerPage(pdfBuffer);
     const pageCount = pageTexts.length;
     logger.info('PDF Seitenanzahl ermittelt', { pageCount });
 
+    // Stage 1: Analyze document structure
+    const documentMap = await analyzeDocumentStructure(pageTexts);
+
+    // Stage 2: Extract data with document context
     let result: ExtractionResult;
 
     if (pageCount > PDF_DOCUMENT_PAGE_LIMIT) {
       // Large PDF: process in chunks
       logger.info('Großes PDF — verwende seitenbasiertes Chunking', { pageCount });
-      result = await extractFromPageTexts(pageTexts);
+      result = await extractFromPageTexts(pageTexts, documentMap);
     } else {
       // Small PDF: send as native document for best quality
       try {
-        result = await extractFromPdfBuffer(pdfBuffer);
+        result = await extractFromPdfBuffer(pdfBuffer, documentMap);
       } catch (primaryError) {
         // Do NOT fall back on rate limit or auth errors — they will fail again
         if (isAnthropicApiError(primaryError)) {
@@ -98,12 +103,12 @@ export async function processExtraction(
         logger.warn('PDF-Dokument-Modus fehlgeschlagen, versuche seitenbasierten Text-Fallback', {
           error: primaryError instanceof Error ? primaryError.message : String(primaryError),
         });
-        result = await extractFromPageTexts(pageTexts);
+        result = await extractFromPageTexts(pageTexts, documentMap);
       }
     }
 
-    // Verify and correct page references against actual page texts
-    result = await semanticVerify(result, pageTexts);
+    // Stage 3: Verify and correct against actual page texts + document structure
+    result = await semanticVerify(result, pageTexts, documentMap);
 
     result = validateLettersAgainstChecklists(result);
 

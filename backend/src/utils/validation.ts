@@ -82,10 +82,15 @@ const sourcedBooleanSchema = z.preprocess(
   (v) => {
     const r = toSourcedValue(v);
     // Preserve null = "unknown / not investigated" vs false = "confirmed absent"
-    if (r.wert === null || r.wert === undefined) return { wert: null, quelle: r.quelle };
-    const s = String(r.wert).toLowerCase();
-    const b = r.wert === true || s === 'ja' || s === 'true' || s === '1';
-    return { wert: b, quelle: r.quelle };
+    if (r.wert === null || r.wert === undefined) return { ...r, wert: null };
+    if (r.wert === false) return { ...r, wert: false };
+    if (r.wert === true) return { ...r, wert: true };
+    const s = String(r.wert).toLowerCase().trim();
+    if (s === 'ja' || s === 'true' || s === '1') return { ...r, wert: true };
+    if (s === 'nein' || s === 'false' || s === '0' || s === 'kein' || s === 'keine' || s === 'nicht vorhanden') return { ...r, wert: false };
+    // Any non-empty string that looks like an answer → false (e.g. "kein Grundbesitz")
+    if (s.startsWith('kein') || s.startsWith('nicht') || s.startsWith('keine daten')) return { ...r, wert: false };
+    return { ...r, wert: true };
   },
   z.object({ wert: z.boolean().nullable(), quelle: z.string() }).passthrough()
 );
@@ -291,8 +296,26 @@ const extractionResultSchemaInner = z.object({
     },
     z.array(fehlendeInfoItemSchema)
   ).optional().default([]),
-  zusammenfassung: z.preprocess(toString, z.string()).optional().default(''),
-  risiken_hinweise: z.preprocess(ensureArray, z.array(stringOrObjectSchema)).optional().default([]),
+  zusammenfassung: z.preprocess(
+    (v) => {
+      // Backward compat: old format was a plain string → convert to single sourced item
+      if (typeof v === 'string' && v.trim()) return [{ wert: v.trim(), quelle: '' }];
+      if (typeof v === 'string') return [];
+      return ensureArray(v);
+    },
+    z.array(sourcedValueSchema)
+  ).optional().default([]),
+  risiken_hinweise: z.preprocess(
+    (v) => {
+      // Backward compat: old format was string[] → convert each to sourced item
+      const arr = ensureArray(v);
+      return arr.map((item: unknown) => {
+        if (typeof item === 'string') return { wert: item, quelle: '' };
+        return item;
+      });
+    },
+    z.array(sourcedValueSchema)
+  ).optional().default([]),
 });
 
 export const extractionResultSchema = z.preprocess(ensureObject, extractionResultSchemaInner);

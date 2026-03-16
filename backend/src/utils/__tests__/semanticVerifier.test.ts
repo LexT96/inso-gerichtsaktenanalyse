@@ -12,6 +12,14 @@ vi.mock('../logger', () => ({
   },
 }));
 
+vi.mock('../../config', () => ({
+  config: {
+    ANTHROPIC_API_KEY: 'test-key',
+    UTILITY_MODEL: 'claude-haiku-4-5-20251001',
+    EXTRACTION_MODEL: 'claude-sonnet-4-6',
+  },
+}));
+
 vi.mock('../../services/anthropic', () => ({
   anthropic: {
     messages: {
@@ -29,7 +37,7 @@ vi.mock('../../services/anthropic', () => ({
 
 // ─── Imports (after mocks are set up) ───
 
-import { collectFields, semanticVerify } from '../semanticVerifier';
+import { collectFields, parsePagesFromQuelle, semanticVerify } from '../semanticVerifier';
 import { anthropic } from '../../services/anthropic';
 
 // ─── Fixture ───
@@ -130,14 +138,22 @@ function makeResult(): ExtractionResult {
     fristen: [],
     standardanschreiben: [],
     fehlende_informationen: [],
-    zusammenfassung: '',
+    zusammenfassung: [],
     risiken_hinweise: [],
   };
 }
 
 // ─── Helper to build a mock API response ───
 
-function mockApiResponse(entries: Array<{ nr: number; verifiziert: boolean; quelle_korrigiert?: string }>): void {
+function mockApiResponse(entries: Array<{
+  nr: number;
+  verifiziert: boolean;
+  quelle_korrigiert?: string;
+  aktion?: 'entfernen' | 'korrigieren';
+  korrekter_wert?: unknown;
+  korrekte_quelle?: string;
+  begruendung?: string;
+}>): void {
   const text = JSON.stringify(entries);
   vi.mocked(anthropic.messages.create).mockResolvedValueOnce({
     content: [{ type: 'text', text }],
@@ -289,6 +305,100 @@ describe('semanticVerify', () => {
     expect(returned).toBe(result);
   });
 
+  it('nulls wert when aktion is entfernen (e.g. document says unknown)', async () => {
+    const result = makeResult();
+    const fields = collectFields(result);
+    // First field: entfernen (betriebsstaette-like scenario); rest: verified
+    const entries = fields.map((_, i) =>
+      i === 0
+        ? { nr: 1, verifiziert: false, aktion: 'entfernen' as const, begruendung: 'Dokument sagt: nicht bekannt' }
+        : { nr: i + 1, verifiziert: true }
+    );
+    mockApiResponse(entries);
+
+    await semanticVerify(result, ['page text']);
+
+    // First collected field should have its wert nulled
+    const firstField = fields[0].ref;
+    expect(firstField.wert).toBeNull();
+    expect(firstField.verifiziert).toBe(false);
+  });
+
+  it('replaces wert when aktion is korrigieren (e.g. wrong date from wrong context)', async () => {
+    const result = makeResult();
+    const fields = collectFields(result);
+    // Correct the zustellungsdatum (field index 4: zustellungsdatum_schuldner)
+    const entries = fields.map((_, i) =>
+      i === 4
+        ? {
+            nr: 5,
+            verifiziert: false,
+            aktion: 'korrigieren' as const,
+            korrekter_wert: '08.01.2024',
+            korrekte_quelle: 'Seite 12, Zustellungsvermerk',
+            begruendung: 'Handschriftliches Zustelldatum statt Beschlussdatum',
+          }
+        : { nr: i + 1, verifiziert: true }
+    );
+    mockApiResponse(entries);
+
+    await semanticVerify(result, ['page text']);
+
+    // The corrected field should have the new value, quelle, and verifiziert=true
+    const correctedField = fields[4].ref;
+    expect(correctedField.wert).toBe('08.01.2024');
+    expect(correctedField.quelle).toBe('Seite 12, Zustellungsvermerk');
+    expect(correctedField.verifiziert).toBe(true);
+  });
+
+  it('treats korrigieren without korrekter_wert as regular failure', async () => {
+    const result = makeResult();
+    const fields = collectFields(result);
+    // Send korrigieren but without korrekter_wert — should be treated as failed, not crash
+    const entries = fields.map((_, i) =>
+      i === 0
+        ? { nr: 1, verifiziert: false, aktion: 'korrigieren' as const, begruendung: 'Incomplete correction' }
+        : { nr: i + 1, verifiziert: true }
+    );
+    mockApiResponse(entries);
+
+    await semanticVerify(result, ['page text']);
+
+    // Should be marked as failed, wert unchanged
+    const firstField = fields[0].ref;
+    expect(firstField.verifiziert).toBe(false);
+    expect(firstField.wert).toBe(fields[0].ref.wert); // unchanged
+  });
+
+  it('retries remaining fields on truncation (max_tokens)', async () => {
+    const result = makeResult();
+    const fields = collectFields(result);
+    // First response: truncated, only returns first 4 of 8 fields
+    const partial = fields.slice(0, 4).map((_, i) => ({ nr: i + 1, verifiziert: true }));
+    vi.mocked(anthropic.messages.create).mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(partial) }],
+      stop_reason: 'max_tokens',
+      usage: { input_tokens: 100, output_tokens: 8192 },
+    } as never);
+    // Retry response: remaining 4 fields
+    const remaining = [1, 2, 3, 4].map(i => ({ nr: i, verifiziert: true }));
+    vi.mocked(anthropic.messages.create).mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(remaining) }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 80, output_tokens: 40 },
+    } as never);
+
+    await semanticVerify(result, ['page text']);
+
+    // All 8 fields should be verified (4 from first call + 4 from retry)
+    expect(result.verfahrensdaten.aktenzeichen.verifiziert).toBe(true);
+    expect(result.verfahrensdaten.gericht.verifiziert).toBe(true);
+    expect(result.schuldner.name.verifiziert).toBe(true);
+    expect(result.forderungen.gesamtforderung.verifiziert).toBe(true);
+    // API should have been called twice
+    expect(anthropic.messages.create).toHaveBeenCalledTimes(2);
+  });
+
   it('skips API call when no non-empty fields exist', async () => {
     // Build a result with all null/empty wert fields
     const empty: ExtractionResult = {
@@ -378,7 +488,7 @@ describe('semanticVerify', () => {
       fristen: [],
       standardanschreiben: [],
       fehlende_informationen: [],
-      zusammenfassung: '',
+      zusammenfassung: [],
       risiken_hinweise: [],
     };
 
@@ -386,5 +496,39 @@ describe('semanticVerify', () => {
 
     expect(anthropic.messages.create).not.toHaveBeenCalled();
     expect(returned).toBe(empty);
+  });
+});
+
+describe('parsePagesFromQuelle', () => {
+  it('parses single page "Seite 5"', () => {
+    expect(parsePagesFromQuelle('Seite 5, Beschluss')).toEqual([5]);
+  });
+
+  it('parses page range "Seiten 5-7"', () => {
+    expect(parsePagesFromQuelle('Seiten 5-7, Insolvenzantrag')).toEqual([5, 6, 7]);
+  });
+
+  it('parses page range with en-dash "Seiten 5–7"', () => {
+    expect(parsePagesFromQuelle('Seiten 5–7, Antrag')).toEqual([5, 6, 7]);
+  });
+
+  it('parses "Seiten 3 und 5"', () => {
+    expect(parsePagesFromQuelle('Seiten 3 und 5, Beschluss')).toEqual([3, 5]);
+  });
+
+  it('parses "Seiten 3, 5 und 7"', () => {
+    expect(parsePagesFromQuelle('Seiten 3, 5 und 7')).toEqual([3, 5, 7]);
+  });
+
+  it('parses mixed range and single "Seiten 3-5 und 8"', () => {
+    expect(parsePagesFromQuelle('Seiten 3-5 und 8')).toEqual([3, 4, 5, 8]);
+  });
+
+  it('returns empty array for no page reference', () => {
+    expect(parsePagesFromQuelle('Keine Angabe')).toEqual([]);
+  });
+
+  it('handles case insensitivity', () => {
+    expect(parsePagesFromQuelle('seite 12, test')).toEqual([12]);
   });
 });

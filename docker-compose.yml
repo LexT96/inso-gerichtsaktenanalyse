@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     ports:
-      - "3003:3001"
+      - "3004:3004"
     environment:
       - NODE_ENV=production
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -17,7 +17,7 @@ services:
       - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD}
       - CORS_ORIGIN=http://localhost:3002
-      - PORT=3001
+      - PORT=3004
       - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
       - db-data:/data

@@ -81,6 +81,6 @@
     {"typ": "Gerichtsvollzieher-Anfrage", "empfaenger": "Zuständiger Gerichtsvollzieher", "status": "fehlt", "begruendung": "", "fehlende_daten": ["Name des Gerichtsvollziehers"]}
   ],
   "fehlende_informationen": [],
-  "zusammenfassung": "Demo-Extraktion zum Testen der PDF-Vorschau und Quellennavigation.",
+  "zusammenfassung": [{"wert": "Demo-Extraktion zum Testen der PDF-Vorschau und Quellennavigation.", "quelle": "Seite 1, Beschluss"}],
   "risiken_hinweise": []
 }

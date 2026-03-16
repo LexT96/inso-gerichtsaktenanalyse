@@ -1,6 +1,10 @@
 /**
  * Validierung der Standardanschreiben gegen die Checklisten.
- * Prüft, ob die extrahierten Daten für jeden Brieftyp ausreichen.
+ *
+ * Beantwortet drei Fragen pro Brieftyp:
+ * 1. Wird das Schreiben noch benötigt? (zielFelder → entfällt wenn alle Zielinfos vorhanden)
+ * 2. Kann es mit den vorhandenen Daten erstellt werden? (requiredFields → bereit)
+ * 3. Welche Daten fehlen noch? (fehlende_daten aus requiredFields)
  */
 
 import fs from 'fs';
@@ -10,12 +14,13 @@ import type { ExtractionResult, Standardanschreiben } from '../types/extraction'
 interface ChecklistItem {
   typ: string;
   typAliases?: string[];
+  zweck: string;
   empfaengerDefault: string;
-  templatePdf: string | null;
+  entfaelltWenn?: string;
+  zielFelder?: string[];
   requiredFields: string[];
   requiredFieldsOr?: string[][];
   requiredFieldsHint?: string;
-  fehlendeDatenBeispiele?: string[];
 }
 
 interface ChecklistConfig {
@@ -60,7 +65,16 @@ function hasValue(result: ExtractionResult, fieldPath: string): boolean {
 }
 
 /**
- * Prüft, ob alle requiredFields gesetzt sind und mindestens eine requiredFieldsOr-Gruppe vollständig.
+ * Prüft ob alle Zielfelder vorhanden sind → Schreiben entfällt.
+ * Nur wenn zielFelder definiert und ALLE vorhanden.
+ */
+function zielInfoVorhanden(result: ExtractionResult, item: ChecklistItem): boolean {
+  if (!item.zielFelder || item.zielFelder.length === 0) return false;
+  return item.zielFelder.every((field) => hasValue(result, field));
+}
+
+/**
+ * Prüft ob alle requiredFields + mindestens eine requiredFieldsOr-Gruppe erfüllt.
  */
 function isChecklistSatisfied(result: ExtractionResult, item: ChecklistItem): boolean {
   for (const field of item.requiredFields) {
@@ -82,7 +96,7 @@ function getMissingFields(result: ExtractionResult, item: ChecklistItem): string
   const missing: string[] = [];
   for (const field of item.requiredFields) {
     if (!hasValue(result, field)) {
-      missing.push(field.replace(/\./g, ' → '));
+      missing.push(field.replace(/\./g, ' \u2192 '));
     }
   }
   if (item.requiredFieldsOr && item.requiredFieldsOr.length > 0) {
@@ -93,7 +107,7 @@ function getMissingFields(result: ExtractionResult, item: ChecklistItem): string
       const firstGroup = item.requiredFieldsOr[0];
       for (const field of firstGroup) {
         if (!hasValue(result, field)) {
-          missing.push(field.replace(/\./g, ' → '));
+          missing.push(field.replace(/\./g, ' \u2192 '));
         }
       }
     }
@@ -112,14 +126,17 @@ const STATUS_PRIORITY: Record<string, number> = { bereit: 3, fehlt: 2, entfaellt
 
 /**
  * Validiert die standardanschreiben des Extraktionsergebnisses gegen die Checklisten.
- * Verwendet die Checkliste als kanonische Liste: ein Typ pro Dokument, keine Duplikate.
- * KI-Varianten wie "Bankenauskunft (an Banken/Sparkassen)" werden dem Typ "Bankenauskunft" zugeordnet.
+ *
+ * Dreistufige Logik:
+ * 1. Entfällt: zielFelder alle vorhanden ODER AI sagt entfällt
+ * 2. Bereit: alle requiredFields + mindestens eine requiredFieldsOr-Gruppe erfüllt
+ * 3. Fehlt: requiredFields unvollständig → fehlende_daten auflisten
  */
 export function validateLettersAgainstChecklists(result: ExtractionResult): ExtractionResult {
   let checklists: ChecklistConfig;
   try {
     checklists = loadChecklists();
-  } catch (err) {
+  } catch {
     return result;
   }
 
@@ -147,7 +164,6 @@ export function validateLettersAgainstChecklists(result: ExtractionResult): Extr
     return undefined;
   }
 
-  // Pro Checklist-Typ: gematchten KI-Brief verwenden oder Default erzeugen
   const validated: Standardanschreiben[] = checklists.anschreiben.map((checklist) => {
     const letter = findLetterForChecklist(checklist);
     const base: Standardanschreiben = letter
@@ -166,12 +182,28 @@ export function validateLettersAgainstChecklists(result: ExtractionResult): Extr
           fehlende_daten: getMissingFields(result, checklist),
         };
 
+    // 1. Entfällt-Check: Zielinfos bereits in der Akte?
+    if (zielInfoVorhanden(result, checklist)) {
+      return {
+        ...base,
+        status: 'entfaellt' as const,
+        begruendung: base.begruendung || checklist.entfaelltWenn || 'Zielinformationen bereits in der Akte vorhanden.',
+        fehlende_daten: [],
+      };
+    }
+
+    // AI sagte entfällt → beibehalten (AI kennt den Kontext besser als Feldprüfung)
+    if (base.status === 'entfaellt') {
+      return base;
+    }
+
+    // 2. Bereit/Fehlt-Check: requiredFields prüfen
+    const satisfied = isChecklistSatisfied(result, checklist);
+
     // Widerspruch: "bereit" aber fehlende_daten nicht leer → auf "fehlt" korrigieren
     if (base.status === 'bereit' && base.fehlende_daten?.length) {
       return { ...base, status: 'fehlt' as const };
     }
-
-    const satisfied = isChecklistSatisfied(result, checklist);
 
     // KI sagte "bereit", Checklist sagt nicht erfüllt → auf "fehlt" korrigieren
     if (base.status === 'bereit' && !satisfied) {

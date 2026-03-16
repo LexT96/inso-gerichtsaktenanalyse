@@ -11,7 +11,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile.dev
     ports:
-      - "3001:3001"
+      - "3004:3004"
     environment:
       - NODE_ENV=development
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -23,8 +23,8 @@ services:
       - RATE_LIMIT_EXTRACTIONS_PER_HOUR=${RATE_LIMIT_EXTRACTIONS_PER_HOUR:-10}
       - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD}
-      - CORS_ORIGIN=http://localhost:3000
-      - PORT=3001
+      - CORS_ORIGIN=http://localhost:3005
+      - PORT=3004
       - LOG_LEVEL=${LOG_LEVEL:-debug}
     volumes:
       - ./backend/src:/app/src
@@ -37,12 +37,12 @@ services:
       context: .
       dockerfile: frontend/Dockerfile.dev
     ports:
-      - "3000:3000"
+      - "3005:3005"
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
     environment:
-      - VITE_PROXY_TARGET=http://backend:3001
+      - VITE_PROXY_TARGET=http://backend:3004
     depends_on:
       - backend
     restart: "no"

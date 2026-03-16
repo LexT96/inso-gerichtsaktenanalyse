@@ -79,7 +79,7 @@ export function useExtraction() {
 
       const { data } = await apiClient.post('/extract', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 600_000, // 10 min — large PDFs need multiple chunks + possible retry waits
+        timeout: 1_200_000, // 20 min — large PDFs: 3-stage pipeline + chunking + rate limit retries
       });
 
       clearProgressInterval();

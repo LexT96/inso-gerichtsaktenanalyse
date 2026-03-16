@@ -38,7 +38,7 @@ RUN printf 'server {\n\
     root /usr/share/nginx/html;\n\
     index index.html;\n\
     location /api {\n\
-        proxy_pass http://backend:3001;\n\
+        proxy_pass http://backend:3004;\n\
         proxy_http_version 1.1;\n\
         proxy_set_header Host $host;\n\
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n\

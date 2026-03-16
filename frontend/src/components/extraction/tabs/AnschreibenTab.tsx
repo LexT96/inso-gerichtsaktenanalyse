@@ -1,40 +1,15 @@
 import { useState } from 'react';
 import { Badge } from '../Badge';
 import { Section } from '../Section';
-import type { Standardanschreiben } from '../../../types/extraction';
+import type { Standardanschreiben, FehlendInfo } from '../../../types/extraction';
 
-function LetterCard({ letter, extractionId }: { letter: Standardanschreiben; extractionId: number }) {
+function LetterCard({ letter }: { letter: Standardanschreiben }) {
   const [expanded, setExpanded] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   const st = letter.status || 'fehlt';
 
   const bgClass = st === 'bereit' ? 'bg-ie-green-bg border-ie-green-border'
     : st === 'entfaellt' ? 'bg-ie-blue-bg border-ie-blue-border'
     : 'bg-ie-amber-bg border-ie-amber-border';
-
-  const handleDownload = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (downloading) return;
-    setDownloading(true);
-    try {
-      const { apiClient } = await import('../../../api/client');
-      const response = await apiClient.post(
-        `/generate-letter/${extractionId}/${encodeURIComponent(letter.typ)}`,
-        {},
-        { responseType: 'blob' }
-      );
-      const url = URL.createObjectURL(response.data as Blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${letter.typ.replace(/[^a-zA-Z0-9_-]/g, '_')}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      alert(`Fehler beim Erstellen von "${letter.typ}"`);
-    } finally {
-      setDownloading(false);
-    }
-  };
 
   return (
     <div
@@ -44,21 +19,9 @@ function LetterCard({ letter, extractionId }: { letter: Standardanschreiben; ext
       <div className="flex justify-between items-center">
         <div>
           <div className="text-xs font-semibold text-text font-sans">{letter.typ}</div>
-          <div className="text-[10px] text-text-dim mt-0.5">An: {letter.empfaenger?.trim() || '—'}</div>
+          <div className="text-[10px] text-text-dim mt-0.5">An: {letter.empfaenger?.trim() || '\u2014'}</div>
         </div>
-        <div className="flex items-center">
-          <Badge type={st} />
-          {st === 'bereit' && (
-            <button
-              onClick={handleDownload}
-              disabled={downloading}
-              title="DOCX erstellen und herunterladen"
-              className="ml-2 px-2 py-0.5 text-[9px] border border-ie-green-border text-ie-green rounded-sm hover:bg-ie-green-bg transition-colors disabled:opacity-50 disabled:cursor-wait font-mono"
-            >
-              {downloading ? '…' : '↓ DOCX'}
-            </button>
-          )}
-        </div>
+        <Badge type={st} />
       </div>
       {expanded && (
         <div className="mt-2 pt-2 border-t border-border">
@@ -93,10 +56,10 @@ function StatsCardSmall({ label, value, colorClass }: StatsCardSmallProps) {
 
 interface AnschreibenTabProps {
   letters: Standardanschreiben[];
-  extractionId: number;
+  missingInfo: FehlendInfo[];
 }
 
-export function AnschreibenTab({ letters, extractionId }: AnschreibenTabProps) {
+export function AnschreibenTab({ letters, missingInfo }: AnschreibenTabProps) {
   const bereit = letters.filter(l => l.status === 'bereit');
   const fehlt = letters.filter(l => l.status === 'fehlt');
   const entfaellt = letters.filter(l => l.status === 'entfaellt');
@@ -106,28 +69,48 @@ export function AnschreibenTab({ letters, extractionId }: AnschreibenTabProps) {
       <div className="flex gap-2 mb-3.5">
         <StatsCardSmall label="Bereit" value={bereit.length} colorClass="text-ie-green" />
         <StatsCardSmall label="Daten fehlen" value={fehlt.length} colorClass="text-ie-amber" />
-        <StatsCardSmall label="Entfällt" value={entfaellt.length} colorClass="text-ie-blue" />
+        <StatsCardSmall label="Entf\u00e4llt" value={entfaellt.length} colorClass="text-ie-blue" />
       </div>
 
       {bereit.length > 0 && (
-        <Section title="Sofort generierbar" icon="✓" count={bereit.length}>
-          {bereit.map((l, i) => <LetterCard key={i} letter={l} extractionId={extractionId} />)}
+        <Section title="Alle Daten vorhanden" icon={'\u2713'} count={bereit.length}>
+          {bereit.map((l, i) => <LetterCard key={i} letter={l} />)}
         </Section>
       )}
       {fehlt.length > 0 && (
-        <Section title="Daten unvollständig" icon="△" count={fehlt.length}>
-          {fehlt.map((l, i) => <LetterCard key={i} letter={l} extractionId={extractionId} />)}
+        <Section title="Daten unvollst\u00e4ndig" icon={'\u25b3'} count={fehlt.length}>
+          {fehlt.map((l, i) => <LetterCard key={i} letter={l} />)}
         </Section>
       )}
       {entfaellt.length > 0 && (
-        <Section title="Bereits erledigt" icon="○" count={entfaellt.length}>
-          {entfaellt.map((l, i) => <LetterCard key={i} letter={l} extractionId={extractionId} />)}
+        <Section title="Nicht erforderlich" icon={'\u25cb'} count={entfaellt.length} defaultOpen={false}>
+          {entfaellt.map((l, i) => <LetterCard key={i} letter={l} />)}
         </Section>
       )}
       {letters.length === 0 && (
         <div className="text-center py-10 text-text-muted text-xs">
-          Keine Anschreiben-Analyse verfügbar.
+          Keine Anschreiben-Analyse verf\u00fcgbar.
         </div>
+      )}
+
+      {missingInfo.length > 0 && (
+        <Section title="Fehlende Informationen" icon={'\u25b3'} count={missingInfo.length} defaultOpen={false}>
+          {missingInfo.map((m, i) => {
+            const title = typeof m === 'string' ? m : (m.information || m.grund || m.ermittlung_ueber || 'Fehlende Angabe').trim();
+            const titleFromGrund = typeof m === 'object' && !m.information?.trim() && m.grund?.trim() === title;
+            return (
+              <div key={i} className="p-2.5 px-3 mb-1.5 bg-ie-red-bg border border-ie-red-border rounded-sm">
+                <div className="text-xs text-text font-semibold font-sans">{title}</div>
+                {typeof m === 'object' && m.grund && !titleFromGrund && (
+                  <div className="text-[10px] text-text-dim mt-0.5">Grund: {m.grund}</div>
+                )}
+                {typeof m === 'object' && m.ermittlung_ueber && (
+                  <div className="text-[10px] text-ie-amber mt-0.5">{'\u2192'} Ermittlung \u00fcber: {m.ermittlung_ueber}</div>
+                )}
+              </div>
+            );
+          })}
+        </Section>
       )}
     </>
   );

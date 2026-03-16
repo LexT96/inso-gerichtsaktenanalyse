@@ -7,13 +7,12 @@ import { TabNavigation } from '../components/extraction/TabNavigation';
 import { ExtractionProgressBar } from '../components/common/ExtractionProgressBar';
 import { ErrorDisplay } from '../components/common/ErrorDisplay';
 import { OverviewTab } from '../components/extraction/tabs/OverviewTab';
-import { SchuldnerTab } from '../components/extraction/tabs/SchuldnerTab';
-import { AntragstellerTab } from '../components/extraction/tabs/AntragstellerTab';
+import { QuellenTab } from '../components/extraction/tabs/QuellenTab';
+import { BeteiligteTab } from '../components/extraction/tabs/BeteiligteTab';
 import { ForderungenTab } from '../components/extraction/tabs/ForderungenTab';
 import { ErmittlungTab } from '../components/extraction/tabs/ErmittlungTab';
-import { AnschreibenTab } from '../components/extraction/tabs/AnschreibenTab';
-import { FehlendTab } from '../components/extraction/tabs/FehlendTab';
 import { PrueflisteTab } from '../components/extraction/tabs/PrueflisteTab';
+import { AnschreibenTab } from '../components/extraction/tabs/AnschreibenTab';
 import { useExtraction } from '../hooks/useExtraction';
 import { HistoryPanel } from '../components/dashboard/HistoryPanel';
 import type { ExtractionResult } from '../types/extraction';
@@ -118,16 +117,17 @@ export function DashboardPage() {
     return count;
   }, [result]);
 
+  const anschreibenBadge = missingInfo.length > 0 ? missingInfo.length : bereit > 0 ? bereit : undefined;
+
   const tabs = useMemo(() => [
     { id: 'overview', label: 'Übersicht', icon: '\u25ce' },
-    { id: 'schuldner', label: 'Schuldner', icon: '\u25cf' },
-    { id: 'antragsteller', label: 'Antragsteller', icon: '\u25c6' },
+    { id: 'quellen', label: 'Quellen', icon: '\u25a1' },
+    { id: 'beteiligte', label: 'Beteiligte', icon: '\u25cf' },
     { id: 'forderungen', label: 'Forderungen', icon: '\u20ac' },
     { id: 'ermittlung', label: 'Ermittlung', icon: '\u25d0' },
     { id: 'pruefliste', label: 'Prüfliste', icon: '\u2713', badge: unconfirmedCount },
-    { id: 'briefe', label: 'Anschreiben', icon: '\u2709', badge: bereit },
-    { id: 'fehlend', label: 'Fehlend', icon: '\u25b3', badge: missingInfo.length },
-  ], [bereit, missingInfo.length, unconfirmedCount]);
+    { id: 'briefe', label: 'Anschreiben', icon: '\u2709', badge: anschreibenBadge },
+  ], [anschreibenBadge, unconfirmedCount]);
 
   // ─── Results content (used in both layouts) ───
   const resultsContent = result && (
@@ -148,8 +148,8 @@ export function DashboardPage() {
           lettersOpen={fehlt}
         />
       )}
-      {tab === 'schuldner' && <SchuldnerTab schuldner={result.schuldner} />}
-      {tab === 'antragsteller' && <AntragstellerTab antragsteller={result.antragsteller} />}
+      {tab === 'quellen' && <QuellenTab result={result} />}
+      {tab === 'beteiligte' && <BeteiligteTab schuldner={result.schuldner} antragsteller={result.antragsteller} />}
       {tab === 'forderungen' && <ForderungenTab forderungen={result.forderungen} />}
       {tab === 'ermittlung' && (
         <ErmittlungTab
@@ -161,9 +161,8 @@ export function DashboardPage() {
         <PrueflisteTab result={result} onUpdateField={updateField} />
       )}
       {tab === 'briefe' && (
-        <AnschreibenTab letters={letters} extractionId={extractionId ?? 0} />
+        <AnschreibenTab letters={letters} missingInfo={missingInfo} />
       )}
-      {tab === 'fehlend' && <FehlendTab missingInfo={missingInfo} />}
 
       {/* Footer */}
       <div className="mt-4 p-3 px-4 bg-surface border border-border rounded-sm text-[9px] text-text-muted leading-relaxed">

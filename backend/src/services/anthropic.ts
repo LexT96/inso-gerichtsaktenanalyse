@@ -132,8 +132,8 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICH
   "fehlende_informationen": [
     {"information": "", "grund": "", "ermittlung_ueber": ""}
   ],
-  "zusammenfassung": "",
-  "risiken_hinweise": []
+  "zusammenfassung": [{"wert": "Kernpunkt der Zusammenfassung", "quelle": "Seite X, Abschnitt"}],
+  "risiken_hinweise": [{"wert": "Risiko oder Hinweis", "quelle": "Seite X, Abschnitt"}]
 }
 
 Die 10 Standardanschreiben-Typen (je ein Dokument) sind:
@@ -156,24 +156,32 @@ WICHTIG für empfaenger: Wenn eine konkrete Institution/Person aus der Akte beka
 Bei "fehlt" liste die fehlenden Datenfelder in fehlende_daten auf.
 Bei "entfaellt" begründe warum (z.B. "Bereits vom Gericht angefragt" oder "Kein Grundvermögen vorhanden").
 
-WICHTIG — Werte NICHT setzen wenn das Dokument die Information ausdrücklich als unbekannt beschreibt:
-- Formulierungen wie "ist mir nicht bekannt", "konnte nicht ermittelt werden", "nicht bekannt" bedeuten: Feld auf null/leer setzen, NICHT einen ähnlich klingenden Wert aus anderem Kontext eintragen.
-- betriebsstaette_adresse: NUR setzen wenn eine SEPARATE Geschäfts-/Betriebsadresse im Dokument steht. Die Privatanschrift (aktuelle_adresse) ist NICHT die Betriebsstätte. Wenn der Gerichtsvollzieher sagt "Betriebsstätte nicht bekannt" → null.
-- zustellungsdatum_schuldner: Das HANDSCHRIFTLICHE Datum des Postzustellers auf dem Zustellungsvermerk/PZU hat Vorrang. Nicht das Ausstellungsdatum des Beschlusses verwenden. Oft ist das Zustelldatum 1-3 Tage nach dem Beschlussdatum.
+WICHTIG — "nicht bekannt" betrifft NUR das jeweilige Feld:
+- Wenn das Dokument eine Information als unbekannt beschreibt ("ist mir nicht bekannt", "konnte nicht ermittelt werden"), setze NUR DIESES EINE FELD auf null. Alle anderen Felder im selben Abschnitt werden normal extrahiert.
+
+Wenn eine DOKUMENTSTRUKTUR mitgegeben wird, nutze sie NUR um zu verstehen welcher Dokumentteil was enthält. Die SEITENZAHLEN in der quelle müssen von der EXAKTEN Seite kommen, auf der du den Wert im Akteninhalt findest — NICHT aus der Dokumentstruktur-Übersicht.
 
 Extrahiere ALLE verfügbaren Daten. Bei fehlenden Informationen setze null/leere Strings und fülle fehlende_informationen mit konkreten Hinweisen, wie die Information ermittelt werden kann.
 Für betroffene_arbeitnehmer: Bei Arbeitnehmerangaben Objekte mit anzahl, typ, quelle (z.B. {"anzahl":44,"typ":"Arbeitnehmer insgesamt","quelle":"Seite 7, Angaben zu Arbeitnehmerverhältnissen"}). Sonst [].
+Für befugnisse: Extrahiere die konkreten Befugnisse aus dem Beschluss als Textstrings (z.B. ["Sicherungsmaßnahmen gem. § 21 InsO", "Einholung von Auskünften"]). Keine leeren Strings. Wenn keine Befugnisse im Dokument stehen, leere Liste [].
+
+WICHTIG — Boolean-Felder (grundbesitz_vorhanden, betriebsstaette_bekannt, masse_deckend, vermoegensauskunft_abgegeben, haftbefehle, schuldnerverzeichnis_eintrag, vermoegensverzeichnis_eintrag):
+- "ja" / bestätigt / vorhanden → true
+- "nein" / "kein" / "keine" / "nicht vorhanden" / "hier ist kein..." / "Keine Daten gefunden" → false (NICHT null!)
+- null NUR wenn die Information weder bestätigt noch verneint wird, d.h. die Ermittlung gar nicht stattgefunden hat oder das Ergebnis völlig unbekannt ist
+- Beispiel: Grundbuchamt antwortet "hier ist kein Grundbesitz ersichtlich" → grundbesitz_vorhanden: false (NICHT null)
+- Beispiel: Kein Grundbuchschreiben in der Akte → grundbesitz_vorhanden: null
 
 ERINNERUNG: Jeder nicht-leere wert braucht eine quelle (Seite X, ...). Keine Ausnahme.
 
-WICHTIG für fehlende_informationen: Jeder Eintrag MUSS ein Objekt mit allen drei Feldern sein. Das Feld "information" darf NIEMALS leer sein — trage dort stets eine kurze, prägnante Bezeichnung der fehlenden Information ein (z.B. "Beschlussdatum des Insolvenzgerichts", "Konkrete Bankverbindungen"). Keine Platzhalter wie {"information":"","grund":"..."} ausgeben. Wenn nichts fehlt, leere Liste [].`;
+WICHTIG für fehlende_informationen: Jeder Eintrag MUSS ein Objekt mit allen drei Feldern sein. Das Feld "information" darf NIEMALS leer sein — trage dort stets eine kurze, prägnante Bezeichnung der fehlenden Information ein (z.B. "Beschlussdatum des Insolvenzgerichts", "Konkrete Bankverbindungen"). Keine Platzhalter wie {"information":"","grund":"..."} ausgeben. Wenn nichts fehlt, leere Liste []. Maximal 15 Einträge — nur die wichtigsten fehlenden Informationen, keine Wiederholungen.`;
 
 // Short prompt for chunks 2+ — schema already established, just extract the content
 const EXTRACTION_PROMPT_CONTINUATION = `Du bist ein KI-Assistent für deutsche Insolvenzverwalter. Extrahiere alle verfügbaren Daten aus diesem Aktenabschnitt und gib das Ergebnis als valides JSON zurück (kein Markdown, keine Backticks). In String-Werten Anführungszeichen mit \\ escapen, keine Zeilenumbrüche in Strings. Verwende exakt dasselbe JSON-Schema — fehlende Felder auf null/""/0 setzen.
 
 PFLICHT: Jeder nicht-leere wert MUSS eine quelle haben ("Seite X, [Dokument]"). Ohne quelle keine gültige Extraktion. Die quelle muss die exakte Fundstelle sein — die Seite, auf der der Wert im vorliegenden Text steht. Bei "=== SEITE X ==="-Markierungen: genau diese X verwenden. Keine generischen oder geschätzten Quellen.
 
-Gleiche Struktur: verfahrensdaten, schuldner, antragsteller, forderungen, gutachterbestellung, ermittlungsergebnisse, fristen[], standardanschreiben[] (10 Typen: Bankenauskunft|Bausparkassen-Anfrage|Steuerberater-Kontakt|Strafakte-Akteneinsicht|KFZ-Halteranfrage Zulassungsstelle|Gewerbeauskunft|Finanzamt-Anfrage|KFZ-Halteranfrage KBA|Versicherungsanfrage|Gerichtsvollzieher-Anfrage mit status bereit|fehlt|entfaellt), fehlende_informationen[] (jeder Eintrag: {"information":"kurze Bezeichnung","grund":"...","ermittlung_ueber":"..."} — "information" nie leer), zusammenfassung, risiken_hinweise[].`;
+Gleiche Struktur: verfahrensdaten, schuldner, antragsteller, forderungen, gutachterbestellung, ermittlungsergebnisse, fristen[], standardanschreiben[] (10 Typen: Bankenauskunft|Bausparkassen-Anfrage|Steuerberater-Kontakt|Strafakte-Akteneinsicht|KFZ-Halteranfrage Zulassungsstelle|Gewerbeauskunft|Finanzamt-Anfrage|KFZ-Halteranfrage KBA|Versicherungsanfrage|Gerichtsvollzieher-Anfrage mit status bereit|fehlt|entfaellt), fehlende_informationen[] (jeder Eintrag: {"information":"kurze Bezeichnung","grund":"...","ermittlung_ueber":"..."} — "information" nie leer), zusammenfassung[] (Array von {wert,quelle}), risiken_hinweise[] (Array von {wert,quelle}).`;
 
 // ─── Helpers ───
 
@@ -401,8 +409,8 @@ function parseAndValidateResponse(text: string): ExtractionResult {
 
 async function callClaudeText(content: string): Promise<ExtractionResult> {
   const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001' as const,
-    max_tokens: 8000,
+    model: config.EXTRACTION_MODEL,
+    max_tokens: 16_000,
     messages: [{ role: 'user' as const, content }],
   }) as Anthropic.Message;
 
@@ -416,18 +424,22 @@ async function callClaudeText(content: string): Promise<ExtractionResult> {
 
 // ─── Public API ───
 
-export async function extractFromPdfBuffer(pdfBuffer: Buffer): Promise<ExtractionResult> {
+export async function extractFromPdfBuffer(pdfBuffer: Buffer, documentMap?: string): Promise<ExtractionResult> {
   const base64 = pdfBuffer.toString('base64');
   logger.info('Starte Claude API-Aufruf mit PDF-Dokument');
 
+  const promptText = documentMap
+    ? `${EXTRACTION_PROMPT}\n\n--- STRUKTURÜBERSICHT (nur zur Orientierung, KEINE Seitenzahlen hieraus verwenden) ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---`
+    : EXTRACTION_PROMPT;
+
   const response = await callWithRetry(() => anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001' as const,
-    max_tokens: 8000,
+    model: config.EXTRACTION_MODEL,
+    max_tokens: 16_000,
     messages: [{
       role: 'user' as const,
       content: [
         { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
-        { type: 'text' as const, text: EXTRACTION_PROMPT },
+        { type: 'text' as const, text: promptText },
       ],
     }],
   })) as Anthropic.Message;
@@ -444,7 +456,7 @@ export async function extractFromPdfBuffer(pdfBuffer: Buffer): Promise<Extractio
  * Extracts from an array of per-page texts using page-based chunking.
  * Sends PAGES_PER_CHUNK pages per request, with context from previous chunks.
  */
-export async function extractFromPageTexts(pageTexts: string[]): Promise<ExtractionResult> {
+export async function extractFromPageTexts(pageTexts: string[], documentMap?: string): Promise<ExtractionResult> {
   const totalPages = pageTexts.length;
 
   // Build page chunks
@@ -476,8 +488,9 @@ export async function extractFromPageTexts(pageTexts: string[]): Promise<Extract
     logger.info(`Chunk ${i + 1}/${pageChunks.length} (Seiten ${startPage}–${endPage})`);
 
     let content: string;
+    const mapBlock = documentMap ? `\n\n--- STRUKTURÜBERSICHT (nur zur Orientierung, KEINE Seitenzahlen hieraus verwenden) ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---\n` : '';
     if (i === 0) {
-      content = `${EXTRACTION_PROMPT}\n\n--- AKTENINHALT (Seiten ${startPage}–${endPage} von ${totalPages}) ---\n\n${chunkText}`;
+      content = `${EXTRACTION_PROMPT}${mapBlock}\n\n--- AKTENINHALT (Seiten ${startPage}–${endPage} von ${totalPages}) ---\n\n${chunkText}`;
     } else {
       const contextLine = prevContext ? `Bereits bekannte Stammdaten: ${prevContext}\n\n` : '';
       content = `${EXTRACTION_PROMPT_CONTINUATION}\n\n${contextLine}--- AKTENINHALT (Seiten ${startPage}–${endPage} von ${totalPages}) ---\n\n${chunkText}`;

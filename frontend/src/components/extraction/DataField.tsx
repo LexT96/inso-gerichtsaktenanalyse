@@ -64,10 +64,15 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
     return String(w);
   };
 
-  /** Raw value for highlighting — no currency/boolean formatting that won't match PDF text */
+  /** Raw value for highlighting — format numbers in German style to match PDF text */
   const rawSearchText = (): string | undefined => {
     if (empty) return undefined;
     if (w === null || w === undefined) return undefined;
+    if (typeof w === 'number') {
+      // Format as German number (45678.5 → "45.678,50") to match PDF text
+      return w.toLocaleString('de-DE', { minimumFractionDigits: w % 1 !== 0 ? 2 : 0 });
+    }
+    if (typeof w === 'boolean') return undefined;
     const s = String(w).trim();
     return s || undefined;
   };
