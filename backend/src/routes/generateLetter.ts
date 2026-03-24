@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/database';
+import { readResultJson } from '../db/resultJson';
 import { generateDocx } from '../utils/docxGenerator';
 import type { ExtractionResult } from '../types/extraction';
 
@@ -26,7 +27,7 @@ router.post('/:extractionId/:typ', authMiddleware, (req: Request, res: Response)
     return;
   }
 
-  const result: ExtractionResult = JSON.parse(row.result_json);
+  const result = readResultJson<ExtractionResult>(row.result_json)!;
 
   const letter = result.standardanschreiben?.find(
     l => l.typ === typ || l.typ?.toLowerCase() === typ.toLowerCase()

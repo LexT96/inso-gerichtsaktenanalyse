@@ -27,13 +27,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
+    // Try to restore session by checking if cookies are still valid
     const storedUser = localStorage.getItem('user');
-    if (token && storedUser) {
+    if (storedUser) {
       try {
         setUser(JSON.parse(storedUser));
       } catch {
-        localStorage.clear();
+        localStorage.removeItem('user');
       }
     }
     setLoading(false);
@@ -41,15 +41,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (username: string, password: string) => {
     const { data } = await apiClient.post('/auth/login', { username, password });
-    localStorage.setItem('accessToken', data.accessToken);
-    localStorage.setItem('refreshToken', data.refreshToken);
+    // Tokens are now set as HTTP-only cookies by the server
+    // Only store non-sensitive user info in localStorage
     localStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+  const logout = useCallback(async () => {
+    try {
+      await apiClient.post('/auth/logout');
+    } catch {
+      // Best-effort logout
+    }
     localStorage.removeItem('user');
     setUser(null);
   }, []);

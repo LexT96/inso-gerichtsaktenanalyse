@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/database';
+import { readResultJson, writeResultJson } from '../db/resultJson';
 import type { Pruefstatus } from '../types/extraction';
 
 const router = Router();
@@ -64,12 +65,12 @@ router.patch('/:id/fields', authMiddleware, (req: Request, res: Response): void 
     return;
   }
 
-  const result = JSON.parse(row.result_json);
+  const result = readResultJson<Record<string, unknown>>(row.result_json);
   const parts = fieldPath.split('.');
 
-  let obj = result;
+  let obj: Record<string, unknown> = result as Record<string, unknown>;
   for (let i = 0; i < parts.length - 1; i++) {
-    obj = obj[parts[i]];
+    obj = obj[parts[i]] as Record<string, unknown>;
     if (!obj) {
       res.status(400).json({ error: `Pfad nicht gefunden: ${fieldPath}` });
       return;
@@ -77,7 +78,7 @@ router.patch('/:id/fields', authMiddleware, (req: Request, res: Response): void 
   }
 
   const leafKey = parts[parts.length - 1];
-  const field = obj[leafKey];
+  const field = obj[leafKey] as Record<string, unknown> | undefined;
 
   if (!field || typeof field !== 'object') {
     res.status(400).json({ error: `Feld nicht gefunden: ${fieldPath}` });
@@ -89,7 +90,12 @@ router.patch('/:id/fields', authMiddleware, (req: Request, res: Response): void 
 
   db.prepare(
     'UPDATE extractions SET result_json = ? WHERE id = ? AND user_id = ?'
-  ).run(JSON.stringify(result), id, userId);
+  ).run(writeResultJson(result), id, userId);
+
+  // Audit log
+  db.prepare(
+    'INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)'
+  ).run(userId, 'field_update', JSON.stringify({ extractionId: id, field: fieldPath, pruefstatus }), req.ip);
 
   res.json({
     ok: true,

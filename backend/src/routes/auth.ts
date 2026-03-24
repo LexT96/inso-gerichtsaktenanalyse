@@ -4,10 +4,10 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { getDb } from '../db/database';
-import { loginSchema, refreshSchema } from '../utils/validation';
+import { loginSchema } from '../utils/validation';
 import { logger } from '../utils/logger';
 import { authRateLimit } from '../middleware/rateLimit';
-import type { JwtPayload, LoginResponse, RefreshResponse } from '../types/api';
+import type { JwtPayload } from '../types/api';
 
 const router = Router();
 
@@ -17,6 +17,30 @@ function parseExpiry(expiry: string): number {
   const [, num, unit] = match;
   const multipliers: Record<string, number> = { m: 60_000, h: 3_600_000, d: 86_400_000 };
   return parseInt(num, 10) * (multipliers[unit] || 60_000);
+}
+
+const isProduction = config.NODE_ENV === 'production';
+
+function setAuthCookies(res: Response, accessToken: string, refreshToken: string): void {
+  res.cookie('accessToken', accessToken, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'strict',
+    path: '/api',
+    maxAge: parseExpiry(config.JWT_ACCESS_EXPIRY),
+  });
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'strict',
+    path: '/api/auth/refresh',
+    maxAge: parseExpiry(config.JWT_REFRESH_EXPIRY),
+  });
+}
+
+function clearAuthCookies(res: Response): void {
+  res.clearCookie('accessToken', { path: '/api' });
+  res.clearCookie('refreshToken', { path: '/api/auth/refresh' });
 }
 
 router.post('/login', authRateLimit, async (req: Request, res: Response): Promise<void> => {
@@ -47,8 +71,7 @@ router.post('/login', authRateLimit, async (req: Request, res: Response): Promis
     }
 
     const payload: JwtPayload = { userId: user.id, username: user.username, role: user.role };
-    const expiresIn = config.JWT_ACCESS_EXPIRY;
-    const accessToken = jwt.sign(payload, config.JWT_SECRET, { expiresIn } as jwt.SignOptions);
+    const accessToken = jwt.sign(payload, config.JWT_SECRET, { expiresIn: config.JWT_ACCESS_EXPIRY } as jwt.SignOptions);
 
     const refreshToken = uuidv4();
     const refreshExpiresAt = new Date(Date.now() + parseExpiry(config.JWT_REFRESH_EXPIRY)).toISOString();
@@ -62,27 +85,25 @@ router.post('/login', authRateLimit, async (req: Request, res: Response): Promis
       'INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)'
     ).run(user.id, 'login', JSON.stringify({ username: user.username }), req.ip);
 
-    const response: LoginResponse = {
-      accessToken,
-      refreshToken,
+    setAuthCookies(res, accessToken, refreshToken);
+
+    logger.info('Erfolgreicher Login', { userId: user.id, username: user.username });
+    res.json({
       user: {
         id: user.id,
         username: user.username,
         displayName: user.display_name,
         role: user.role,
       },
-    };
-
-    logger.info('Erfolgreicher Login', { userId: user.id, username: user.username });
-    res.json(response);
+    });
   } catch {
     res.status(500).json({ error: 'Interner Serverfehler' });
   }
 });
 
 router.post('/refresh', (req: Request, res: Response): void => {
-  const parsed = refreshSchema.safeParse(req.body);
-  if (!parsed.success) {
+  const refreshTokenValue = req.cookies?.refreshToken;
+  if (!refreshTokenValue) {
     res.status(400).json({ error: 'Refresh Token erforderlich' });
     return;
   }
@@ -94,18 +115,20 @@ router.post('/refresh', (req: Request, res: Response): void => {
     `SELECT rt.id, rt.user_id, rt.expires_at, u.username, u.role, u.active
      FROM refresh_tokens rt JOIN users u ON rt.user_id = u.id
      WHERE rt.token = ?`
-  ).get(parsed.data.refreshToken) as {
+  ).get(refreshTokenValue) as {
     id: number; user_id: number; expires_at: string;
     username: string; role: string; active: number;
   } | undefined;
 
   if (!stored || !stored.active) {
+    clearAuthCookies(res);
     res.status(401).json({ error: 'Ungültiges Refresh Token' });
     return;
   }
 
   if (new Date(stored.expires_at) < new Date()) {
     db.prepare('DELETE FROM refresh_tokens WHERE id = ?').run(stored.id);
+    clearAuthCookies(res);
     res.status(401).json({ error: 'Refresh Token abgelaufen' });
     return;
   }
@@ -122,8 +145,18 @@ router.post('/refresh', (req: Request, res: Response): void => {
     'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)'
   ).run(stored.user_id, newRefreshToken, refreshExpiresAt);
 
-  const response: RefreshResponse = { accessToken, refreshToken: newRefreshToken };
-  res.json(response);
+  setAuthCookies(res, accessToken, newRefreshToken);
+  res.json({ ok: true });
+});
+
+router.post('/logout', (req: Request, res: Response): void => {
+  const refreshTokenValue = req.cookies?.refreshToken;
+  if (refreshTokenValue) {
+    const db = getDb();
+    db.prepare('DELETE FROM refresh_tokens WHERE token = ?').run(refreshTokenValue);
+  }
+  clearAuthCookies(res);
+  res.json({ ok: true });
 });
 
 export default router;

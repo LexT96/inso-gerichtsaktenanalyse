@@ -2,8 +2,9 @@ import './env';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { config } from './config';
-import { initDatabase, closeDatabase, getDb } from './db/database';
+import { initDatabase, closeDatabase, getDb, cleanupExpiredExtractions, encryptExistingResults } from './db/database';
 import { logger } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth';
@@ -19,6 +20,7 @@ const app = express();
 app.use(helmet());
 app.use(cors({ origin: config.CORS_ORIGIN, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 
 // Trust proxy for rate limiter behind Docker/nginx
 app.set('trust proxy', 1);
@@ -53,6 +55,13 @@ async function start(): Promise<void> {
     ).run(config.DEFAULT_ADMIN_USERNAME, hash, 'Administrator', 'admin');
     logger.info(`Admin-Benutzer "${config.DEFAULT_ADMIN_USERNAME}" erstellt`);
   }
+
+  // Encrypt any legacy unencrypted result_json rows
+  encryptExistingResults(config.DB_ENCRYPTION_KEY);
+
+  // Data retention: cleanup expired extractions on startup and every hour
+  cleanupExpiredExtractions(config.DATA_RETENTION_HOURS);
+  setInterval(() => cleanupExpiredExtractions(config.DATA_RETENTION_HOURS), 60 * 60 * 1000);
 
   app.listen(config.PORT, () => {
     logger.info(`Server gestartet auf Port ${config.PORT}`);

@@ -21,13 +21,21 @@ function escapeForRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const ZOOM_STEP = 0.15;
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 3;
+const DEFAULT_ASPECT = 595 / 842; // A4 fallback
+
 export function PdfViewer({ file, children }: PdfViewerProps) {
   const [totalPages, setTotalPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(0);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [highlightRequest, setHighlightRequest] = useState<{ page: number; text: string } | null>(null);
+  const [zoom, setZoom] = useState(1.0);
+  const [pageAspectRatio, setPageAspectRatio] = useState(DEFAULT_ASPECT);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -52,12 +60,13 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
     [objectUrl]
   );
 
-  // Observe container width for responsive PDF scaling
+  // Observe container dimensions for responsive PDF scaling
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const obs = new ResizeObserver(([entry]) => {
       setContainerWidth(entry.contentRect.width);
+      setContainerHeight(entry.contentRect.height);
     });
     obs.observe(el);
     return () => obs.disconnect();
@@ -98,7 +107,8 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
   /** Scroll to target page, retrying until layout stabilises.
    *  When jumping many pages, placeholder→rendered height changes cause layout shifts.
    *  We use instant scrolls + rAF retries to converge on the correct position. */
-  const scrollToPageStable = useCallback((targetPage: number) => {
+  const scrollToPageStable = useCallback((targetPage: number, opts?: { block?: ScrollLogicalPosition }) => {
+    const block = opts?.block ?? 'center';
     scrollingToRef.current = targetPage;
     if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
 
@@ -116,7 +126,7 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
         return;
       }
 
-      el.scrollIntoView({ behavior: 'instant', block: 'start' });
+      el.scrollIntoView({ behavior: 'instant', block });
 
       const top = el.getBoundingClientRect().top;
       if (Math.abs(top - lastTop) < 2) {
@@ -126,28 +136,21 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
       }
       lastTop = top;
 
-      // Position stable for 3 consecutive frames → done
       if (stableCount >= 3) {
-        // One final smooth scroll for polish, then release observer
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        scrollTimerRef.current = setTimeout(() => {
-          scrollingToRef.current = null;
-        }, 400);
+        scrollingToRef.current = null;
         return;
       }
 
       rafId = requestAnimationFrame(settle);
     };
 
-    // Start settling on next frame (after React re-render queues)
     rafId = requestAnimationFrame(settle);
 
-    // Cleanup on next call
     const prevTimer = scrollTimerRef.current;
     scrollTimerRef.current = setTimeout(() => {
       if (rafId) cancelAnimationFrame(rafId);
       scrollingToRef.current = null;
-    }, 3000); // safety timeout
+    }, 3000);
     if (prevTimer) clearTimeout(prevTimer);
   }, []);
 
@@ -162,17 +165,23 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
   const goToPageAndHighlight = useCallback((page: number, text?: string) => {
     if (totalPages === 0) return;
     const clamped = Math.max(1, Math.min(page, totalPages));
+    const trimmed = text?.trim();
     setCurrentPage(clamped);
-    setHighlightRequest(text?.trim() ? { page: clamped, text: text.trim() } : null);
-    scrollToPageStable(clamped);
+    setHighlightRequest(trimmed ? { page: clamped, text: trimmed } : null);
+    // Use 'start' as initial pass; the highlight effect will refine to center on the mark
+    scrollToPageStable(clamped, trimmed ? { block: 'start' } : undefined);
   }, [totalPages, scrollToPageStable]);
 
   const clearHighlight = useCallback(() => {
     setHighlightRequest(null);
   }, []);
 
-  const onDocLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    setTotalPages(numPages);
+  const onDocLoadSuccess = useCallback((pdf: { numPages: number; getPage: (n: number) => Promise<{ getViewport: (o: { scale: number }) => { width: number; height: number } }> }) => {
+    setTotalPages(pdf.numPages);
+    pdf.getPage(1).then((page) => {
+      const vp = page.getViewport({ scale: 1 });
+      setPageAspectRatio(vp.width / vp.height);
+    }).catch(() => {});
   }, []);
 
   // Apply text highlight when we have a request and the target page is visible.
@@ -223,6 +232,16 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
           }
         }
       }
+
+      // Page was aligned to top; scroll the actual match into view inside the page.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const first = textLayer.querySelector('mark.source-highlight');
+          if (first instanceof HTMLElement) {
+            first.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+          }
+        });
+      });
     };
 
     const tryHighlight = () => {
@@ -266,6 +285,26 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
     };
   }, [highlightRequest]);
 
+  // Fit-page width: scale so the full page height fits the container
+  const pageWidth = useMemo(() => {
+    if (!containerWidth || !containerHeight) return undefined;
+    const maxWidth = containerWidth - 8;
+    const pageLabel = 24; // page number label + margins
+    const fitHeight = containerHeight - pageLabel;
+    const fitPageWidth = fitHeight * pageAspectRatio;
+    const baseWidth = Math.min(maxWidth, fitPageWidth);
+    return Math.round(baseWidth * zoom);
+  }, [containerWidth, containerHeight, pageAspectRatio, zoom]);
+
+  const placeholderHeight = useMemo(() => {
+    if (!pageWidth) return 800;
+    return Math.round(pageWidth / pageAspectRatio) + 24;
+  }, [pageWidth, pageAspectRatio]);
+
+  const zoomIn = useCallback(() => setZoom(z => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2))), []);
+  const zoomOut = useCallback(() => setZoom(z => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2))), []);
+  const zoomReset = useCallback(() => setZoom(1.0), []);
+
   const ctx = useMemo(
     () => ({ goToPage, goToPageAndHighlight, currentPage, totalPages, highlightRequest, clearHighlight }),
     [goToPage, goToPageAndHighlight, currentPage, totalPages, highlightRequest, clearHighlight]
@@ -285,30 +324,59 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
         <div className="w-[45%] min-w-[340px] flex flex-col bg-surface-high border-r border-border">
           {/* Toolbar */}
           <div className="flex items-center justify-between px-3 py-1.5 bg-surface border-b border-border text-[10px] text-text-dim">
-            <span className="truncate max-w-[200px]" title={file.name}>{file.name}</span>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => goToPage(currentPage - 1)}
-                disabled={currentPage <= 1 || totalPages === 0}
-                className="px-1.5 py-0.5 bg-surface-high border border-border rounded-sm hover:border-accent disabled:opacity-30 disabled:cursor-default transition-colors"
-              >
-                &larr;
-              </button>
-              <span className="text-text font-mono">
-                {currentPage} / {totalPages || '?'}
-              </span>
-              <button
-                onClick={() => goToPage(currentPage + 1)}
-                disabled={currentPage >= totalPages || totalPages === 0}
-                className="px-1.5 py-0.5 bg-surface-high border border-border rounded-sm hover:border-accent disabled:opacity-30 disabled:cursor-default transition-colors"
-              >
-                &rarr;
-              </button>
+            <span className="truncate max-w-[140px]" title={file.name}>{file.name}</span>
+            <div className="flex items-center gap-3">
+              {/* Zoom controls */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={zoomOut}
+                  disabled={zoom <= ZOOM_MIN}
+                  className="px-1.5 py-0.5 bg-surface-high border border-border rounded-sm hover:border-accent disabled:opacity-30 disabled:cursor-default transition-colors"
+                  title="Verkleinern"
+                >
+                  &minus;
+                </button>
+                <button
+                  onClick={zoomReset}
+                  className="px-1.5 py-0.5 bg-surface-high border border-border rounded-sm hover:border-accent transition-colors min-w-[40px] text-center"
+                  title="Ganze Seite"
+                >
+                  {Math.round(zoom * 100)}%
+                </button>
+                <button
+                  onClick={zoomIn}
+                  disabled={zoom >= ZOOM_MAX}
+                  className="px-1.5 py-0.5 bg-surface-high border border-border rounded-sm hover:border-accent disabled:opacity-30 disabled:cursor-default transition-colors"
+                  title="Vergrößern"
+                >
+                  +
+                </button>
+              </div>
+              {/* Page navigation */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage <= 1 || totalPages === 0}
+                  className="px-1.5 py-0.5 bg-surface-high border border-border rounded-sm hover:border-accent disabled:opacity-30 disabled:cursor-default transition-colors"
+                >
+                  &larr;
+                </button>
+                <span className="text-text font-mono">
+                  {currentPage} / {totalPages || '?'}
+                </span>
+                <button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage >= totalPages || totalPages === 0}
+                  className="px-1.5 py-0.5 bg-surface-high border border-border rounded-sm hover:border-accent disabled:opacity-30 disabled:cursor-default transition-colors"
+                >
+                  &rarr;
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Scrollable PDF area */}
-          <div ref={containerRef} className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div ref={containerRef} className="flex-1 overflow-auto">
             {loadError ? (
               <div className="flex items-center justify-center h-full text-ie-red text-xs p-4">
                 {loadError}
@@ -336,13 +404,13 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
                       key={pageNum}
                       data-page={pageNum}
                       ref={pageRefCallback(pageNum)}
-                      className="mb-1 border-b border-border/30"
-                      style={!inRange ? { height: '800px' } : undefined}
+                      className="mb-1 border-b border-border/30 flex flex-col items-center"
+                      style={!inRange ? { height: `${placeholderHeight}px` } : undefined}
                     >
                       {inRange ? (
                         <Page
                           pageNumber={pageNum}
-                          width={containerWidth ? containerWidth - 8 : undefined}
+                          width={pageWidth}
                           renderTextLayer={true}
                           renderAnnotationLayer={false}
                         />

@@ -5,18 +5,22 @@ const API_BASE = import.meta.env['VITE_API_URL'] as string || '/api';
 export const apiClient = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
 });
 
-// Request interceptor: attach access token
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+// Prevent multiple simultaneous refresh attempts
+let refreshPromise: Promise<void> | null = null;
+
+function doRefresh(): Promise<void> {
+  if (!refreshPromise) {
+    refreshPromise = axios.post(`${API_BASE}/auth/refresh`, {}, { withCredentials: true })
+      .then(() => {})
+      .finally(() => { refreshPromise = null; });
   }
-  return config;
-});
+  return refreshPromise;
+}
 
-// Response interceptor: handle 401 with token refresh
+// Response interceptor: handle 401 with cookie-based token refresh
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -25,23 +29,11 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (!refreshToken) {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        window.location.href = '/';
-        return Promise.reject(error);
-      }
-
       try {
-        const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken });
-        localStorage.setItem('accessToken', data.accessToken);
-        if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        await doRefresh();
         return apiClient(originalRequest);
       } catch {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
         window.location.href = '/';
         return Promise.reject(error);
       }

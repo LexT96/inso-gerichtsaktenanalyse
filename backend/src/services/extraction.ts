@@ -1,8 +1,9 @@
-import fs from 'fs';
 import Anthropic from '@anthropic-ai/sdk';
 import { extractFromPdfBuffer, extractFromPageTexts } from './anthropic';
 import { extractTextPerPage } from './pdfProcessor';
 import { getDb } from '../db/database';
+import { writeResultJson } from '../db/resultJson';
+import { config } from '../config';
 import { logger } from '../utils/logger';
 import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
 import { analyzeDocumentStructure } from '../utils/documentAnalyzer';
@@ -11,8 +12,11 @@ import type { ExtractionResult } from '../types/extraction';
 
 const PDF_DOCUMENT_PAGE_LIMIT = 100;
 
-function isAnthropicApiError(err: unknown): boolean {
-  return err instanceof Anthropic.APIError;
+function isUnrecoverableApiError(err: unknown): boolean {
+  return (
+    err instanceof Anthropic.RateLimitError ||
+    err instanceof Anthropic.AuthenticationError
+  );
 }
 
 interface ExtractionStats {
@@ -58,12 +62,16 @@ function computeStats(result: ExtractionResult): ExtractionStats {
   return { found, missing, lettersReady };
 }
 
+export type ProgressCallback = (message: string, percent: number) => void;
+
 export async function processExtraction(
-  filePath: string,
+  pdfBuffer: Buffer,
   filename: string,
   fileSize: number,
-  userId: number
+  userId: number,
+  onProgress?: ProgressCallback
 ): Promise<{ id: number; result: ExtractionResult; stats: ExtractionStats; processingTimeMs: number }> {
+  const report = onProgress ?? (() => {});
   const db = getDb();
   const startTime = Date.now();
 
@@ -74,41 +82,56 @@ export async function processExtraction(
   const extractionId = Number(insertResult.lastInsertRowid);
 
   try {
-    const pdfBuffer = fs.readFileSync(filePath);
+    report('Seitentext wird extrahiert…', 8);
 
     // Always extract text per page — needed for analysis and verification
     const pageTexts = await extractTextPerPage(pdfBuffer);
     const pageCount = pageTexts.length;
     logger.info('PDF Seitenanzahl ermittelt', { pageCount });
 
+    report(`${pageCount} Seiten erkannt — Dokumentstruktur wird analysiert… (Stufe 1/3)`, 15);
+
     // Stage 1: Analyze document structure
     const documentMap = await analyzeDocumentStructure(pageTexts);
+
+    report('Daten werden extrahiert… (Stufe 2/3)', 30);
 
     // Stage 2: Extract data with document context
     let result: ExtractionResult;
 
-    if (pageCount > PDF_DOCUMENT_PAGE_LIMIT) {
-      // Large PDF: process in chunks
-      logger.info('Großes PDF — verwende seitenbasiertes Chunking', { pageCount });
+    // Native PDF mode (type: 'document') is only supported by the direct Anthropic API.
+    // Proxies like Langdock or Azure AI don't support it, so we use text-based extraction.
+    const useNativePdf = !config.ANTHROPIC_BASE_URL && pageCount <= PDF_DOCUMENT_PAGE_LIMIT;
+
+    if (!useNativePdf) {
+      if (pageCount > PDF_DOCUMENT_PAGE_LIMIT) {
+        logger.info('Großes PDF — verwende seitenbasiertes Chunking', { pageCount });
+        report(`Großes PDF (${pageCount} S.) — Chunked Extraktion… (Stufe 2/3)`, 35);
+      } else if (config.ANTHROPIC_BASE_URL) {
+        logger.info('Externer API-Endpunkt — verwende textbasierte Extraktion', { pageCount });
+      }
       result = await extractFromPageTexts(pageTexts, documentMap);
     } else {
-      // Small PDF: send as native document for best quality
       try {
         result = await extractFromPdfBuffer(pdfBuffer, documentMap);
       } catch (primaryError) {
-        // Do NOT fall back on rate limit or auth errors — they will fail again
-        if (isAnthropicApiError(primaryError)) {
+        if (isUnrecoverableApiError(primaryError)) {
           throw primaryError;
         }
         logger.warn('PDF-Dokument-Modus fehlgeschlagen, versuche seitenbasierten Text-Fallback', {
           error: primaryError instanceof Error ? primaryError.message : String(primaryError),
         });
+        report('Fallback auf textbasierte Extraktion…', 45);
         result = await extractFromPageTexts(pageTexts, documentMap);
       }
     }
 
+    report('Quellenangaben werden verifiziert… (Stufe 3/3)', 65);
+
     // Stage 3: Verify and correct against actual page texts + document structure
     result = await semanticVerify(result, pageTexts, documentMap);
+
+    report('Standardanschreiben werden geprüft…', 90);
 
     result = validateLettersAgainstChecklists(result);
 
@@ -122,7 +145,7 @@ export async function processExtraction(
         processing_time_ms = ?
       WHERE id = ?`
     ).run(
-      JSON.stringify(result),
+      writeResultJson(result),
       stats.found, stats.missing, stats.lettersReady,
       processingTimeMs,
       extractionId
@@ -147,13 +170,5 @@ export async function processExtraction(
 
     logger.error('Extraktion fehlgeschlagen', { extractionId, error: errorMessage });
     throw error;
-  } finally {
-    // Always delete the uploaded file
-    try {
-      fs.unlinkSync(filePath);
-      logger.info('Upload-Datei gelöscht', { filePath });
-    } catch {
-      logger.warn('Upload-Datei konnte nicht gelöscht werden', { filePath });
-    }
   }
 }

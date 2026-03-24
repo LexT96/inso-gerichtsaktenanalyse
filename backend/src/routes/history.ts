@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/database';
+import { readResultJson } from '../db/resultJson';
+import { encrypt, decrypt } from '../utils/crypto';
+import { logger } from '../utils/logger';
 import type { HistoryItem, ExtractionResponse } from '../types/api';
 
 const router = Router();
@@ -61,11 +64,20 @@ router.get('/:id', authMiddleware, (req: Request, res: Response): void => {
     return;
   }
 
+  // Return 410 Gone for expired/deleted extractions
+  if (!row.result_json && (row.status === 'expired' || row.status === 'deleted_art17')) {
+    const message = row.status === 'expired'
+      ? 'Extraktion abgelaufen — bitte .iae-Datei importieren'
+      : 'Extraktion gelöscht (Art. 17 DSGVO)';
+    res.status(410).json({ error: message, status: row.status });
+    return;
+  }
+
   const response: ExtractionResponse = {
     id: row.id,
     filename: row.filename,
     status: row.status as ExtractionResponse['status'],
-    result: row.result_json ? JSON.parse(row.result_json) : null,
+    result: readResultJson(row.result_json),
     statsFound: row.stats_found,
     statsMissing: row.stats_missing,
     statsLettersReady: row.stats_letters_ready,
@@ -74,6 +86,169 @@ router.get('/:id', authMiddleware, (req: Request, res: Response): void => {
   };
 
   res.json(response);
+});
+
+// Export encrypted extraction result
+router.post('/:id/export', authMiddleware, (req: Request, res: Response): void => {
+  const db = getDb();
+  const userId = req.user!.userId;
+  const idParam = req.params['id'];
+  const id = parseInt(Array.isArray(idParam) ? idParam[0] : idParam ?? '', 10);
+
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'Ungültige ID' });
+    return;
+  }
+
+  const { password } = req.body as { password?: string };
+  if (!password || password.length < 8) {
+    res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen lang sein' });
+    return;
+  }
+
+  const row = db.prepare(
+    `SELECT id, filename, result_json, status, stats_found, stats_missing, stats_letters_ready, created_at
+     FROM extractions WHERE id = ? AND user_id = ?`
+  ).get(id, userId) as {
+    id: number; filename: string; result_json: string | null; status: string;
+    stats_found: number; stats_missing: number; stats_letters_ready: number;
+    created_at: string;
+  } | undefined;
+
+  if (!row) {
+    res.status(404).json({ error: 'Extraktion nicht gefunden' });
+    return;
+  }
+
+  if (!row.result_json) {
+    res.status(410).json({ error: 'Extraktionsdaten nicht mehr verfügbar' });
+    return;
+  }
+
+  const decryptedJson = JSON.stringify(readResultJson(row.result_json));
+  const encrypted = encrypt(decryptedJson, password);
+
+  const exportData = {
+    version: 1,
+    format: 'insolvenz-akte-export',
+    encrypted: true,
+    salt: encrypted.salt,
+    iv: encrypted.iv,
+    authTag: encrypted.authTag,
+    data: encrypted.data,
+    metadata: {
+      filename: row.filename,
+      exportedAt: new Date().toISOString(),
+      statsFound: row.stats_found,
+      statsMissing: row.stats_missing,
+    },
+  };
+
+  // Audit log
+  db.prepare(
+    'INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)'
+  ).run(userId, 'export', JSON.stringify({ extractionId: id, filename: row.filename }), req.ip);
+
+  logger.info('Extraktion exportiert', { extractionId: id, userId });
+
+  const exportFilename = row.filename.replace(/\.pdf$/i, '') + '.iae';
+  res.setHeader('Content-Disposition', `attachment; filename="${exportFilename}"`);
+  res.setHeader('Content-Type', 'application/json');
+  res.json(exportData);
+});
+
+// Import encrypted extraction result
+router.post('/import', authMiddleware, (req: Request, res: Response): void => {
+  const userId = req.user!.userId;
+
+  const { exportData, password } = req.body as {
+    exportData?: {
+      version?: number;
+      format?: string;
+      encrypted?: boolean;
+      salt?: string;
+      iv?: string;
+      authTag?: string;
+      data?: string;
+      metadata?: { filename?: string; exportedAt?: string; statsFound?: number; statsMissing?: number };
+    };
+    password?: string;
+  };
+
+  if (!exportData || !password) {
+    res.status(400).json({ error: 'Export-Daten und Passwort erforderlich' });
+    return;
+  }
+
+  if (exportData.format !== 'insolvenz-akte-export' || exportData.version !== 1) {
+    res.status(400).json({ error: 'Ungültiges Dateiformat' });
+    return;
+  }
+
+  if (!exportData.salt || !exportData.iv || !exportData.authTag || !exportData.data) {
+    res.status(400).json({ error: 'Unvollständige Export-Daten' });
+    return;
+  }
+
+  try {
+    const decryptedJson = decrypt(
+      { salt: exportData.salt, iv: exportData.iv, authTag: exportData.authTag, data: exportData.data },
+      password
+    );
+
+    const result = JSON.parse(decryptedJson);
+
+    // Audit log
+    const db = getDb();
+    db.prepare(
+      'INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)'
+    ).run(userId, 'import', JSON.stringify({ filename: exportData.metadata?.filename }), req.ip);
+
+    logger.info('Extraktion importiert', { userId, filename: exportData.metadata?.filename });
+
+    // Return decrypted result WITHOUT persisting to database
+    res.json({
+      result,
+      metadata: exportData.metadata,
+    });
+  } catch {
+    res.status(400).json({ error: 'Entschlüsselung fehlgeschlagen — falsches Passwort?' });
+  }
+});
+
+// Delete extraction data (DSGVO Art. 17)
+router.delete('/:id', authMiddleware, (req: Request, res: Response): void => {
+  const db = getDb();
+  const userId = req.user!.userId;
+  const idParam = req.params['id'];
+  const id = parseInt(Array.isArray(idParam) ? idParam[0] : idParam ?? '', 10);
+
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'Ungültige ID' });
+    return;
+  }
+
+  const row = db.prepare(
+    'SELECT id, filename FROM extractions WHERE id = ? AND user_id = ?'
+  ).get(id, userId) as { id: number; filename: string } | undefined;
+
+  if (!row) {
+    res.status(404).json({ error: 'Extraktion nicht gefunden' });
+    return;
+  }
+
+  db.prepare(
+    `UPDATE extractions SET result_json = NULL, status = 'deleted_art17' WHERE id = ?`
+  ).run(id);
+
+  // Audit log
+  db.prepare(
+    'INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)'
+  ).run(userId, 'deletion_art17', JSON.stringify({ extractionId: id, filename: row.filename }), req.ip);
+
+  logger.info('Extraktion gelöscht (Art. 17 DSGVO)', { extractionId: id, userId });
+
+  res.status(204).send();
 });
 
 export default router;

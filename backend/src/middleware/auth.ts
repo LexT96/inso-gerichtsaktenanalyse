@@ -12,13 +12,15 @@ declare global {
 }
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) {
+  // Read token from HTTP-only cookie (primary) or Authorization header (fallback for API clients)
+  const token = req.cookies?.accessToken
+    || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : undefined);
+
+  if (!token) {
     res.status(401).json({ error: 'Authentifizierung erforderlich' });
     return;
   }
 
-  const token = header.slice(7);
   try {
     const payload = jwt.verify(token, config.JWT_SECRET) as JwtPayload;
     req.user = payload;

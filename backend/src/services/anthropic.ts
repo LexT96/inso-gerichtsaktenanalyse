@@ -5,7 +5,10 @@ import { extractionResultSchema } from '../utils/validation';
 import { logger } from '../utils/logger';
 import type { ExtractionResult, Standardanschreiben, FehlendInfo } from '../types/extraction';
 
-export const anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
+export const anthropic = new Anthropic({
+  apiKey: config.ANTHROPIC_API_KEY,
+  ...(config.ANTHROPIC_BASE_URL ? { baseURL: config.ANTHROPIC_BASE_URL } : {}),
+});
 
 // 30 pages per chunk → ~7,500 tokens of content + ~2,000 prompt ≈ 9,500 tokens/request
 // Well under the 30k/min limit even for free-tier accounts

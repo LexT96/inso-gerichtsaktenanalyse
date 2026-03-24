@@ -19,6 +19,31 @@
             "date": 1773127218931,
             "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-10.log",
             "hash": "04b430f52d0c2c8bc114bfb8426cc2963f6220cfe704e20b138d612dfd457a3a"
+        },
+        {
+            "date": 1773232853773,
+            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-11.log",
+            "hash": "5aa441efc4cd4eb8dd9d6e7866b2c093d956096aea6b7904ad4ab48e2724eefd"
+        },
+        {
+            "date": 1773307010700,
+            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-12.log",
+            "hash": "98c84eb6fe5978883b72d7d33f7802b452be1376830a2ff7f9af76960042bc7b"
+        },
+        {
+            "date": 1773385065914,
+            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-13.log",
+            "hash": "91fb71239f7dae7392d7dc2829e24361f4591c36a4cde3013a1568f168d06ec5"
+        },
+        {
+            "date": 1773669078443,
+            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-16.log",
+            "hash": "997d20c17535945b31841cc06c33a9e08c401c9eba1e2ee05f2ddc3383e9cbe5"
+        },
+        {
+            "date": 1774364406638,
+            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-24.log",
+            "hash": "0a0a55fa75eb0fc762e00cccf10e90bf962104b66f52f2e16535866f521081bc"
         }
     ],
     "hashType": "sha256"

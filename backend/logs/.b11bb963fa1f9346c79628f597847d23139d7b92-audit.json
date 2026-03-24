@@ -9,6 +9,16 @@
             "date": 1773002269578,
             "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/logs/insolvenz-2026-03-08.log",
             "hash": "0b157b12a0d9e2fa3221d79d42e9c9596b451abf1abf0d8ad38499af15100765"
+        },
+        {
+            "date": 1773311685645,
+            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/logs/insolvenz-2026-03-12.log",
+            "hash": "51731d8b43100c91f28f386064bf531993c256eafa13bf6e7cc3ad10cc4369e2"
+        },
+        {
+            "date": 1773668830925,
+            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/logs/insolvenz-2026-03-16.log",
+            "hash": "2b9dfc045efc659230477d17077bfea0aa6de8c356e6d4ee90b7c4443a577db7"
         }
     ],
     "hashType": "sha256"

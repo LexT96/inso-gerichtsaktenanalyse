@@ -5,9 +5,7 @@ import { recomputeLetterStatuses } from '../utils/checklistValidator';
 import mockResult from '../data/mock-result.json';
 import demoPdfUrl from '../assets/demo/test-pdf.pdf?url';
 
-const PROGRESS_CAP = 88;
-const PROGRESS_INTERVAL_MS = 2500;
-const PROGRESS_STEP = 4;
+const API_BASE = import.meta.env['VITE_API_URL'] as string || '/api';
 
 interface ExtractionState {
   loading: boolean;
@@ -36,74 +34,93 @@ export function useExtraction() {
     processingTimeMs: null,
   });
 
-  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const clearProgressInterval = useCallback(() => {
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = null;
-    }
-  }, []);
-
-  // Cleanup interval on unmount to prevent setState on unmounted component
-  useEffect(() => {
-    return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-    };
-  }, []);
+  const abortRef = useRef<AbortController | null>(null);
 
   const extract = useCallback(async (file: File) => {
-    clearProgressInterval();
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setState(s => ({
       ...s,
       loading: true,
       error: null,
       progress: 'PDF wird hochgeladen…',
-      progressPercent: 5,
+      progressPercent: 3,
     }));
-
-    progressIntervalRef.current = setInterval(() => {
-      setState(s => {
-        if (!s.loading || s.progressPercent >= PROGRESS_CAP) return s;
-        return { ...s, progressPercent: Math.min(PROGRESS_CAP, s.progressPercent + PROGRESS_STEP) };
-      });
-    }, PROGRESS_INTERVAL_MS);
 
     try {
       const formData = new FormData();
       formData.append('pdf', file);
 
-      setState(s => ({ ...s, progress: 'KI-Analyse läuft — Extraktion mit Quellenangaben…' }));
-
-      const { data } = await apiClient.post('/extract', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 1_200_000, // 20 min — large PDFs: 3-stage pipeline + chunking + rate limit retries
+      const response = await fetch(`${API_BASE}/extract`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+        signal: controller.signal,
       });
 
-      clearProgressInterval();
-      setState({
-        loading: false,
-        progress: '',
-        progressPercent: 100,
-        result: data.result,
-        error: null,
-        extractionId: data.id,
-        statsFound: data.statsFound,
-        statsMissing: data.statsMissing,
-        statsLettersReady: data.statsLettersReady,
-        processingTimeMs: data.processingTimeMs,
-      });
-    } catch (err: unknown) {
-      clearProgressInterval();
-      let message = 'Unbekannter Fehler';
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { error?: string } } };
-        message = axiosErr.response?.data?.error || message;
-      } else if (err instanceof Error) {
-        message = err.message;
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => null);
+        throw new Error(errBody?.error || `HTTP ${response.status}`);
       }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Streaming nicht unterstützt');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const json = line.slice(6);
+          try {
+            const event = JSON.parse(json);
+            if (event.type === 'progress') {
+              setState(s => ({
+                ...s,
+                progress: event.message,
+                progressPercent: event.percent,
+              }));
+            } else if (event.type === 'result') {
+              setState({
+                loading: false,
+                progress: '',
+                progressPercent: 100,
+                result: event.result,
+                error: null,
+                extractionId: event.id,
+                statsFound: event.statsFound,
+                statsMissing: event.statsMissing,
+                statsLettersReady: event.statsLettersReady,
+                processingTimeMs: event.processingTimeMs,
+              });
+            } else if (event.type === 'error') {
+              setState(s => ({
+                ...s,
+                loading: false,
+                progress: '',
+                progressPercent: 0,
+                error: `Fehler: ${event.error}`,
+              }));
+            }
+          } catch {
+            // skip malformed lines
+          }
+        }
+      }
+    } catch (err: unknown) {
+      if (controller.signal.aborted) return;
+      let message = 'Unbekannter Fehler';
+      if (err instanceof Error) message = err.message;
       setState(s => ({
         ...s,
         loading: false,
@@ -112,10 +129,10 @@ export function useExtraction() {
         error: `Fehler: ${message}`,
       }));
     }
-  }, [clearProgressInterval]);
+  }, []);
 
   const reset = useCallback(() => {
-    clearProgressInterval();
+    abortRef.current?.abort();
     setState({
       loading: false,
       progress: '',
@@ -128,7 +145,7 @@ export function useExtraction() {
       statsLettersReady: 0,
       processingTimeMs: null,
     });
-  }, [clearProgressInterval]);
+  }, []);
 
   const loadFromHistory = useCallback(async (id: number) => {
     setState(s => ({ ...s, loading: true, error: null, progress: 'Lade Verlauf…', progressPercent: 50 }));
@@ -155,14 +172,24 @@ export function useExtraction() {
         statsLettersReady: data.statsLettersReady,
         processingTimeMs: data.processingTimeMs,
       });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Fehler beim Laden des Verlaufs';
+    } catch (err: unknown) {
+      let msg = 'Fehler beim Laden des Verlaufs';
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosErr = err as { response?: { status?: number; data?: { error?: string } } };
+        if (axiosErr.response?.status === 410) {
+          msg = axiosErr.response.data?.error || 'Extraktion abgelaufen oder gelöscht';
+        } else if (axiosErr.response?.data?.error) {
+          msg = axiosErr.response.data.error;
+        }
+      } else if (err instanceof Error) {
+        msg = err.message;
+      }
       setState(s => ({ ...s, loading: false, error: msg, progress: '' }));
     }
   }, []);
 
   const loadDemo = useCallback(async () => {
-    clearProgressInterval();
+    abortRef.current?.abort();
     setState(s => ({ ...s, loading: true, error: null, progress: 'Demo wird geladen…', progressPercent: 10 }));
     try {
       let pdfBlob: Blob;
@@ -203,7 +230,22 @@ export function useExtraction() {
       }));
       return null;
     }
-  }, [clearProgressInterval]);
+  }, []);
+
+  const loadFromImport = useCallback((result: ExtractionResult) => {
+    setState({
+      loading: false,
+      progress: '',
+      progressPercent: 100,
+      result,
+      error: null,
+      extractionId: null, // Not persisted — import is view-only
+      statsFound: 0,
+      statsMissing: 0,
+      statsLettersReady: 0,
+      processingTimeMs: null,
+    });
+  }, []);
 
   const updateField = useCallback(async (fieldPath: string, wert: string | null, pruefstatus: Pruefstatus) => {
     if (!state.result) return;
@@ -239,5 +281,5 @@ export function useExtraction() {
     }
   }, [state.result, state.extractionId]);
 
-  return { ...state, extract, reset, loadDemo, loadFromHistory, updateField };
+  return { ...state, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField };
 }

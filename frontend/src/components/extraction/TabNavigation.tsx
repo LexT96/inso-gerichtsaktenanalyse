@@ -10,9 +10,10 @@ interface TabNavigationProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onNewFile: () => void;
+  onExport?: () => void;
 }
 
-export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile }: TabNavigationProps) {
+export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile, onExport }: TabNavigationProps) {
   return (
     <div className="flex gap-0.5 mb-3.5 overflow-x-auto border-b border-border pb-0">
       {tabs.map(t => (
@@ -34,6 +35,14 @@ export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile }: TabNa
         </button>
       ))}
       <div className="flex-1" />
+      {onExport && (
+        <button
+          onClick={onExport}
+          className="px-3 py-1.5 border border-border rounded-sm bg-transparent text-text-muted text-[9px] cursor-pointer font-mono self-center mb-1 hover:border-accent hover:text-accent transition-colors"
+        >
+          EXPORTIEREN
+        </button>
+      )}
       <button
         onClick={onNewFile}
         className="px-3 py-1.5 border border-border rounded-sm bg-transparent text-text-muted text-[9px] cursor-pointer font-mono self-center mb-1 hover:border-accent hover:text-accent transition-colors"

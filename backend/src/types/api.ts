@@ -12,8 +12,6 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  accessToken: string;
-  refreshToken: string;
   user: {
     id: number;
     username: string;
@@ -22,19 +20,12 @@ export interface LoginResponse {
   };
 }
 
-export interface RefreshRequest {
-  refreshToken: string;
-}
-
-export interface RefreshResponse {
-  accessToken: string;
-  refreshToken: string;
-}
+export type ExtractionStatus = 'processing' | 'completed' | 'failed' | 'expired' | 'deleted_art17';
 
 export interface ExtractionResponse {
   id: number;
   filename: string;
-  status: 'processing' | 'completed' | 'failed';
+  status: ExtractionStatus;
   result: ExtractionResult | null;
   statsFound: number;
   statsMissing: number;
@@ -47,7 +38,7 @@ export interface HistoryItem {
   id: number;
   filename: string;
   fileSize: number;
-  status: 'processing' | 'completed' | 'failed';
+  status: ExtractionStatus;
   statsFound: number;
   statsMissing: number;
   statsLettersReady: number;

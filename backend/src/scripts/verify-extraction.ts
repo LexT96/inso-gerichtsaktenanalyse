@@ -247,7 +247,8 @@ async function main(): Promise<void> {
       console.error('Extraktion nicht gefunden:', id);
       process.exit(1);
     }
-    const result = JSON.parse(row.result_json) as ExtractionResult;
+    const { readResultJson } = await import('../db/resultJson');
+    const result = readResultJson<ExtractionResult>(row.result_json)!;
     console.log(`\nVerifiziere Extraktion #${id}...`);
     printReport(result);
     return;
@@ -263,14 +264,12 @@ async function main(): Promise<void> {
     const dbPath = process.env.DATABASE_PATH || './data/insolvenz.db';
     initDatabase(dbPath);
     const { processExtraction } = await import('../services/extraction');
-    const tmpPath = path.join(process.cwd(), 'uploads', `verify-${Date.now()}.pdf`);
-    fs.mkdirSync(path.dirname(tmpPath), { recursive: true });
-    fs.copyFileSync(pdfPath, tmpPath);
+    const pdfBuffer = fs.readFileSync(pdfPath);
     try {
       const { result } = await processExtraction(
-        tmpPath,
+        pdfBuffer,
         path.basename(pdfPath),
-        fs.statSync(pdfPath).size,
+        pdfBuffer.length,
         1
       );
       // Dump raw JSON for analysis

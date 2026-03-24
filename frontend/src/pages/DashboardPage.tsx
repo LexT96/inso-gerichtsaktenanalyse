@@ -6,6 +6,8 @@ import { PdfViewer } from '../components/pdf/PdfViewer';
 import { TabNavigation } from '../components/extraction/TabNavigation';
 import { ExtractionProgressBar } from '../components/common/ExtractionProgressBar';
 import { ErrorDisplay } from '../components/common/ErrorDisplay';
+import { ExportDialog } from '../components/common/ExportDialog';
+import { ImportDialog } from '../components/common/ImportDialog';
 import { OverviewTab } from '../components/extraction/tabs/OverviewTab';
 import { QuellenTab } from '../components/extraction/tabs/QuellenTab';
 import { BeteiligteTab } from '../components/extraction/tabs/BeteiligteTab';
@@ -49,7 +51,10 @@ function computeStats(result: ExtractionResult): { found: number; missing: numbe
 export function DashboardPage() {
   const [file, setFile] = useState<File | null>(null);
   const [tab, setTab] = useState('overview');
-  const { loading, progress, progressPercent, result, error, extractionId, extract, reset, loadDemo, loadFromHistory, updateField } = useExtraction();
+  const { loading, progress, progressPercent, result, error, extractionId, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField } = useExtraction();
+  const [showExport, setShowExport] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importedFilename, setImportedFilename] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const historyId = searchParams.get('id');
@@ -137,6 +142,7 @@ export function DashboardPage() {
         activeTab={tab}
         onTabChange={setTab}
         onNewFile={handleNewFile}
+        onExport={extractionId ? () => setShowExport(true) : undefined}
       />
 
       {tab === 'overview' && (
@@ -167,7 +173,7 @@ export function DashboardPage() {
       {/* Footer */}
       <div className="mt-4 p-3 px-4 bg-surface border border-border rounded-sm text-[9px] text-text-muted leading-relaxed">
         <span className="text-text-dim font-bold">INSOLVENZ-EXTRAKTOR</span> · Alle extrahierten Daten
-        müssen vor Verwendung manuell geprüft werden. § 43a BRAO, § 2 BORA, Art. 28 DSGVO.
+        müssen vor Verwendung manuell geprüft werden.
         <span className="text-ie-blue"> [S.X]</span>-Buttons zeigen die Quellenreferenz und navigieren zur Seite im PDF.
       </div>
     </div>
@@ -197,7 +203,15 @@ export function DashboardPage() {
         <div className="max-w-[1050px] mx-auto p-5 px-6">
           <div className="mb-3 p-2 px-3 bg-surface border border-border rounded-sm text-[10px] text-text-muted flex items-center gap-2">
             <span className="text-ie-amber">⚠</span>
-            Verlaufs-Ansicht · PDF nicht verfügbar (wurde nach Extraktion gelöscht)
+            {importedFilename ? `Import: ${importedFilename}` : 'Verlaufs-Ansicht · PDF nicht verfügbar (wurde nach Extraktion gelöscht)'}
+            {extractionId && (
+              <button
+                onClick={() => setShowExport(true)}
+                className="px-2 py-0.5 border border-border rounded-sm hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
+              >
+                EXPORTIEREN
+              </button>
+            )}
             <button
               onClick={handleNewFile}
               className="ml-auto px-2 py-0.5 border border-border rounded-sm hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
@@ -230,7 +244,7 @@ export function DashboardPage() {
                 currentId={historyId ? parseInt(historyId, 10) : extractionId}
               />
               </div>
-              <div className="mt-6 flex flex-wrap gap-6 text-[11px] text-text-muted font-sans">
+              <div className="mt-6 flex flex-wrap items-center gap-6 text-[11px] text-text-muted font-sans">
                 <span className="flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[9px] font-bold">1</span>
                   PDF hochladen
@@ -243,6 +257,12 @@ export function DashboardPage() {
                   <span className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[9px] font-bold">3</span>
                   Standardanschreiben & Quellen
                 </span>
+                <button
+                  onClick={() => setShowImport(true)}
+                  className="ml-auto px-3 py-1.5 border border-border rounded-sm text-[10px] font-mono text-text-muted hover:border-accent hover:text-accent transition-colors"
+                >
+                  .iae IMPORTIEREN
+                </button>
               </div>
             </>
           )}
@@ -252,6 +272,26 @@ export function DashboardPage() {
           )}
           {error && <ErrorDisplay message={error} />}
         </div>
+      )}
+
+      {showExport && extractionId && (
+        <ExportDialog
+          extractionId={extractionId}
+          filename={file?.name || importedFilename || 'extraktion'}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {showImport && (
+        <ImportDialog
+          onImport={(importedResult, fname) => {
+            loadFromImport(importedResult);
+            setImportedFilename(fname);
+            setFile(null);
+            navigate('/dashboard');
+          }}
+          onClose={() => setShowImport(false)}
+        />
       )}
     </div>
   );

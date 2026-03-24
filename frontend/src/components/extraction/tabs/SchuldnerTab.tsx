@@ -28,11 +28,26 @@ export function SchuldnerTab({ schuldner: s }: SchuldnerTabProps) {
       </Section>
       {s?.fruehere_adressen?.length > 0 && (
         <Section title="Frühere Adressen" icon="◌" count={s.fruehere_adressen.length} defaultOpen={false}>
-          {s.fruehere_adressen.map((a, i) => (
-            <div key={i} className="py-1.5 border-b border-border text-[11px] text-text-dim">
-              {typeof a === 'string' ? a : (a && typeof a === 'object' && 'wert' in a ? String(a.wert) : JSON.stringify(a))}
-            </div>
-          ))}
+          {s.fruehere_adressen.map((a, i) => {
+            if (typeof a === 'string') {
+              return <div key={i} className="py-1.5 border-b border-border text-[11px] text-text-dim">{a}</div>;
+            }
+            if (a && typeof a === 'object' && 'wert' in a) {
+              return <DataField key={i} label={`Adresse ${i + 1}`} field={a} />;
+            }
+            if (a && typeof a === 'object' && 'adresse' in a) {
+              const addr = a as { adresse?: string; einzug?: string; auszug?: string; zeitraum?: string; quelle?: string };
+              const period = addr.zeitraum || (addr.einzug && addr.auszug ? `${addr.einzug} – ${addr.auszug}` : '');
+              return (
+                <DataField
+                  key={i}
+                  label={period || `Adresse ${i + 1}`}
+                  field={{ wert: addr.adresse ?? '', quelle: addr.quelle ?? '' }}
+                />
+              );
+            }
+            return <div key={i} className="py-1.5 border-b border-border text-[11px] text-text-dim">{JSON.stringify(a)}</div>;
+          })}
         </Section>
       )}
     </>

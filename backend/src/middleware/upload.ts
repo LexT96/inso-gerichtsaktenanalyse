@@ -1,14 +1,7 @@
 import multer from 'multer';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 
-const storage = multer.diskStorage({
-  destination: path.resolve(__dirname, '../../uploads'),
-  filename: (_req, _file, cb) => {
-    cb(null, `${uuidv4()}.pdf`);
-  },
-});
+const storage = multer.memoryStorage();
 
 function fileFilter(
   _req: Express.Request,

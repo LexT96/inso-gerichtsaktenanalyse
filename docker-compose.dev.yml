@@ -4,6 +4,11 @@
 # Oder besser: Lokal ohne Docker (schneller, Debugger nutzbar):
 #   cd backend && npm run dev
 #   cd frontend && npm run dev
+#
+# Hinweis: TLS/HTTPS ist nur in docker-compose.yml (Produktion) via Traefik
+# konfiguriert. Für lokale HTTPS-Tests ggf. selbstsignierte Zertifikate
+# verwenden (z.B. mkcert) und den Vite/Express Dev-Server entsprechend
+# konfigurieren.
 
 services:
   backend:
@@ -15,6 +20,9 @@ services:
     environment:
       - NODE_ENV=development
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
+      - EXTRACTION_MODEL=${EXTRACTION_MODEL:-claude-sonnet-4-6}
+      - UTILITY_MODEL=${UTILITY_MODEL:-claude-haiku-4-5-20251001}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ACCESS_EXPIRY=${JWT_ACCESS_EXPIRY:-15m}
       - JWT_REFRESH_EXPIRY=${JWT_REFRESH_EXPIRY:-7d}
@@ -26,6 +34,7 @@ services:
       - CORS_ORIGIN=http://localhost:3005
       - PORT=3004
       - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - DB_ENCRYPTION_KEY=${DB_ENCRYPTION_KEY}
     volumes:
       - ./backend/src:/app/src
       - ./standardschreiben:/app/standardschreiben

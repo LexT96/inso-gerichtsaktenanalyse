@@ -33,12 +33,13 @@ FROM nginx:alpine
 COPY --from=builder /workspace/frontend/dist /usr/share/nginx/html
 RUN chmod -R 755 /usr/share/nginx/html
 
+# Nginx config template — BACKEND_URL is resolved at container startup
 RUN printf 'server {\n\
     listen 80;\n\
     root /usr/share/nginx/html;\n\
     index index.html;\n\
     location /api {\n\
-        proxy_pass http://backend:3004;\n\
+        proxy_pass ${BACKEND_URL};\n\
         proxy_http_version 1.1;\n\
         proxy_set_header Host $host;\n\
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n\
@@ -52,7 +53,9 @@ RUN printf 'server {\n\
     location / {\n\
         try_files $uri $uri/ /index.html;\n\
     }\n\
-}\n' > /etc/nginx/conf.d/default.conf
+}\n' > /etc/nginx/templates/default.conf.template
+
+ENV BACKEND_URL=http://backend:3004
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

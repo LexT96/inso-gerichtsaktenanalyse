@@ -1,0 +1,1219 @@
+{
+  "verfahrensdaten": {
+    "aktenzeichen": {
+      "wert": "40 094 - 25",
+      "quelle": "Seite 1, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "gericht": {
+      "wert": "Amtsgericht Wittlich - Insolvenzgericht -, Kurfürstenstraße 63, 54516 Wittlich",
+      "quelle": "Seite 1, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "richter": {
+      "wert": null,
+      "quelle": ""
+    },
+    "antragsdatum": {
+      "wert": "22.10.2025",
+      "quelle": "Seite 1, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "beschlussdatum": {
+      "wert": null,
+      "quelle": ""
+    },
+    "antragsart": {
+      "wert": "Eigenantrag auf Eröffnung des Insolvenzverfahrens (Schuldnerantrag)",
+      "quelle": "Seite 1, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "eroeffnungsgrund": {
+      "wert": "Zahlungsunfähigkeit gemäß § 17 Abs. 1 InsO seit 20.10.2025, 0:00 Uhr",
+      "quelle": "Seite 11, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "zustellungsdatum_schuldner": {
+      "wert": null,
+      "quelle": ""
+    }
+  },
+  "schuldner": {
+    "name": {
+      "wert": "coboworx GmbH",
+      "quelle": "Seite 1, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "vorname": {
+      "wert": null,
+      "quelle": ""
+    },
+    "geburtsdatum": {
+      "wert": null,
+      "quelle": ""
+    },
+    "geburtsort": {
+      "wert": null,
+      "quelle": ""
+    },
+    "geburtsland": {
+      "wert": null,
+      "quelle": ""
+    },
+    "staatsangehoerigkeit": {
+      "wert": null,
+      "quelle": ""
+    },
+    "familienstand": {
+      "wert": null,
+      "quelle": ""
+    },
+    "geschlecht": {
+      "wert": null,
+      "quelle": ""
+    },
+    "aktuelle_adresse": {
+      "wert": "Neuer Bahnhof 6, 54528 Salmtal",
+      "quelle": "Seite 1, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "fruehere_adressen": [
+      {
+        "wert": "Forstweg 1, 54518 Osann-Monzel",
+        "quelle": "Seite 18, Handelsregisterauszug HRB 44791",
+        "verifiziert": true
+      },
+      {
+        "wert": "Raiffeisenstraße 2, 54518 Osann-Monzel",
+        "quelle": "Seite 19, Handelsregisterauszug HRB 44791",
+        "verifiziert": true
+      }
+    ],
+    "firma": {
+      "wert": "coboworx GmbH",
+      "quelle": "Seite 3, Insolvenzantrag",
+      "verifiziert": true
+    },
+    "rechtsform": {
+      "wert": "Gesellschaft mit beschränkter Haftung (GmbH)",
+      "quelle": "Seite 3, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "betriebsstaette_adresse": {
+      "wert": "Neuer Bahnhof 6, 54528 Salmtal",
+      "quelle": "Seite 1, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "handelsregisternummer": {
+      "wert": "HRB 44791, Amtsgericht Wittlich",
+      "quelle": "Seite 1, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "kinder": []
+  },
+  "antragsteller": {
+    "name": {
+      "wert": "Seitz Rechtsanwälte Steuerberater PartG mbB",
+      "quelle": "Seite 1, Insolvenzantrag",
+      "verifiziert": true
+    },
+    "adresse": {
+      "wert": "Breite Straße 29/31, 40213 Düsseldorf",
+      "quelle": "Seite 1, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "ansprechpartner": {
+      "wert": "Dr. Jochen Markgraf (Rechtsanwalt, Partner), Fabian von Lübken (Rechtsanwalt, Counsel)",
+      "quelle": "Seite 7, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "telefon": {
+      "wert": "0211 15979 612",
+      "quelle": "Seite 7, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "fax": {
+      "wert": "0211 15979 61",
+      "quelle": "Seite 7, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "email": {
+      "wert": "j.markgraf@seitzpartner.de; f.von-luebken@seitzpartner.de",
+      "quelle": "Seite 7, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "betriebsnummer": {
+      "wert": null,
+      "quelle": ""
+    },
+    "bankverbindung_iban": {
+      "wert": null,
+      "quelle": ""
+    },
+    "bankverbindung_bic": {
+      "wert": null,
+      "quelle": ""
+    }
+  },
+  "forderungen": {
+    "hauptforderung_beitraege": {
+      "wert": null,
+      "quelle": ""
+    },
+    "saeumniszuschlaege": {
+      "wert": null,
+      "quelle": ""
+    },
+    "mahngebuehren": {
+      "wert": null,
+      "quelle": ""
+    },
+    "vollstreckungskosten": {
+      "wert": null,
+      "quelle": ""
+    },
+    "antragskosten": {
+      "wert": null,
+      "quelle": ""
+    },
+    "gesamtforderung": {
+      "wert": 575506.48,
+      "quelle": "Seite 8, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "zeitraum_von": {
+      "wert": null,
+      "quelle": ""
+    },
+    "zeitraum_bis": {
+      "wert": "16.10.2025",
+      "quelle": "Seite 8, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "laufende_monatliche_beitraege": {
+      "wert": null,
+      "quelle": ""
+    },
+    "betroffene_arbeitnehmer": [
+      {
+        "anzahl": 44,
+        "typ": "Arbeitnehmer insgesamt (inkl. geringfügig Beschäftigte und Werkstudenten)",
+        "quelle": "Seite 7, Insolvenzantrag vom 22.10.2025"
+      },
+      {
+        "anzahl": 6,
+        "typ": "Arbeitnehmer mit Austritt bis 31.12.2025",
+        "quelle": "Seite 7, Insolvenzantrag vom 22.10.2025"
+      }
+    ]
+  },
+  "gutachterbestellung": {
+    "gutachter_name": {
+      "wert": "Ingo Grünewald",
+      "quelle": "Seite 2, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "gutachter_kanzlei": {
+      "wert": "Prof. Dr. Dr. Thomas B. Schmidt Insolvenzverwalter Rechtsanwälte Partnerschaft mbB",
+      "quelle": "Seite 2, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "gutachter_adresse": {
+      "wert": "Kornmarkt 4, 54290 Trier",
+      "quelle": "Seite 2, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "gutachter_telefon": {
+      "wert": "+49 (651) 170830 - 0",
+      "quelle": "Seite 2, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "gutachter_email": {
+      "wert": "ingo.gruenewald@tbs-insolvenzverwalter.de",
+      "quelle": "Seite 2, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    "abgabefrist": {
+      "wert": null,
+      "quelle": ""
+    },
+    "befugnisse": []
+  },
+  "ermittlungsergebnisse": {
+    "grundbuch": {
+      "ergebnis": {
+        "wert": "Kein Grundvermögen vorhanden",
+        "quelle": "Seite 8, Insolvenzantrag vom 22.10.2025",
+        "verifiziert": true
+      },
+      "grundbesitz_vorhanden": {
+        "wert": false,
+        "quelle": "Seite 8, Insolvenzantrag vom 22.10.2025",
+        "verifiziert": true
+      },
+      "datum": {
+        "wert": null,
+        "quelle": ""
+      }
+    },
+    "gerichtsvollzieher": {
+      "name": {
+        "wert": null,
+        "quelle": ""
+      },
+      "betriebsstaette_bekannt": {
+        "wert": null,
+        "quelle": ""
+      },
+      "vollstreckungen": {
+        "wert": null,
+        "quelle": ""
+      },
+      "masse_deckend": {
+        "wert": null,
+        "quelle": ""
+      },
+      "vermoegensauskunft_abgegeben": {
+        "wert": null,
+        "quelle": ""
+      },
+      "haftbefehle": {
+        "wert": null,
+        "quelle": ""
+      },
+      "datum": {
+        "wert": null,
+        "quelle": ""
+      }
+    },
+    "vollstreckungsportal": {
+      "schuldnerverzeichnis_eintrag": {
+        "wert": null,
+        "quelle": ""
+      },
+      "vermoegensverzeichnis_eintrag": {
+        "wert": null,
+        "quelle": ""
+      }
+    },
+    "meldeauskunft": {
+      "meldestatus": {
+        "wert": null,
+        "quelle": ""
+      },
+      "datum": {
+        "wert": null,
+        "quelle": ""
+      }
+    }
+  },
+  "fristen": [
+    {
+      "bezeichnung": "Fälligkeit Löhne/Gehälter und Sozialversicherungsbeiträge Oktober 2025",
+      "datum": "27.10.2025",
+      "status": "offen",
+      "quelle": "Seite 11, Insolvenzantrag vom 22.10.2025"
+    },
+    {
+      "bezeichnung": "Fälligkeit weitere Verbindlichkeiten aus Kreditorenliste (nächste 3 Wochen ab Antragsdatum)",
+      "datum": "",
+      "status": "offen - ca. EUR 75.013,34",
+      "quelle": "Seite 11, Insolvenzantrag vom 22.10.2025"
+    },
+    {
+      "bezeichnung": "Zahlungseinstellung durch Schuldnerin",
+      "datum": "20.10.2025",
+      "status": "eingetreten",
+      "quelle": "Seite 12, Insolvenzantrag vom 22.10.2025"
+    },
+    {
+      "bezeichnung": "Anfechtungsfrist Gesellschafterbeschluss (anwesender Gesellschafter)",
+      "datum": "",
+      "status": "",
+      "quelle": "Seite 35, Gesellschaftsvertrag § 8.12"
+    },
+    {
+      "bezeichnung": "Anfechtungsfrist Gesellschafterbeschluss (nicht anwesender Gesellschafter)",
+      "datum": "",
+      "status": "",
+      "quelle": "Seite 35, Gesellschaftsvertrag § 8.12"
+    },
+    {
+      "bezeichnung": "Mitteilung Erbübergang an Gesellschaft",
+      "datum": "",
+      "status": "",
+      "quelle": "Seite 42, Gesellschaftsvertrag § 15.1"
+    },
+    {
+      "bezeichnung": "Andienungsfrist Erben nach Aufforderung",
+      "datum": "",
+      "status": "",
+      "quelle": "Seite 42-43, Gesellschaftsvertrag § 15.1"
+    },
+    {
+      "bezeichnung": "Erbnachweis durch Erbschein nach Todesfall",
+      "datum": "",
+      "status": "",
+      "quelle": "Seite 45, Gesellschaftsvertrag § 16.2.5"
+    },
+    {
+      "bezeichnung": "Aufhebung Vollstreckungsmaßnahmen in Geschäftsanteil (Einziehungsschutz)",
+      "datum": "",
+      "status": "",
+      "quelle": "Seite 44, Gesellschaftsvertrag § 16.2.1"
+    },
+    {
+      "bezeichnung": "Nachweis Erfüllung ehevertraglicher Pflichten nach Aufforderung",
+      "datum": "",
+      "status": "",
+      "quelle": "Seite 51, Gesellschaftsvertrag § 19.2"
+    },
+    {
+      "bezeichnung": "Einigung auf Schiedsgutachter (Verkehrswert Geschäftsanteil)",
+      "datum": "",
+      "status": "",
+      "quelle": "Seite 48, Gesellschaftsvertrag § 17.3.2"
+    },
+    {
+      "bezeichnung": "Einberufungsfrist Beiratssitzung",
+      "datum": "",
+      "status": "",
+      "quelle": "Seite 39-40, Gesellschaftsvertrag § 12.2"
+    },
+    {
+      "bezeichnung": "Aufforderungsfrist übrige Gesellschafter zur Andienung (Erbfall)",
+      "datum": "",
+      "status": "",
+      "quelle": "Seite 42, Gesellschaftsvertrag § 15.1"
+    }
+  ],
+  "standardanschreiben": [
+    {
+      "typ": "Bankenauskunft",
+      "empfaenger": "Hausbank der coboworx GmbH (unbekannt)",
+      "status": "bereit",
+      "begruendung": "Flüssige Mittel per 31.12.2022 TEUR 2.729 vorhanden; Bankguthaben wurden durch Bankbestätigungen nachgewiesen; Kontoverbindungen zu ermitteln",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "Bausparkassen-Anfrage",
+      "empfaenger": "Zuständige Bausparkasse(n)",
+      "status": "fehlt",
+      "begruendung": "Kein Grundvermögen vorhanden laut Antrag; ob Bausparverträge als GmbH bestehen, ist nicht bekannt.",
+      "fehlende_daten": [
+        "Angaben zu etwaigen Bausparverträgen der coboworx GmbH"
+      ]
+    },
+    {
+      "typ": "Steuerberater-Kontakt",
+      "empfaenger": "Dr. Schmitz & Donell Steuerberater PartG mbB, Zum Rollkopf 1, 54516 Wittlich",
+      "status": "bereit",
+      "begruendung": "Buchhaltungskosten TEUR 41 und Jahresabschlusserstellungskosten in 2022 ausgewiesen; externer Steuerberater vorhanden; Finanzamt Wittlich zuständig für Forschungszulagenantrag",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "Strafakte-Akteneinsicht",
+      "empfaenger": "Staatsanwaltschaft zuständig für Amtsgericht Wittlich",
+      "status": "bereit",
+      "begruendung": "Vollmacht der Schuldnerin umfasst ausdrücklich Vertretung in Strafsachen; Anfrage auf etwaige Strafakten gegen Geschäftsführer Olaf Christian Gehrels und die Gesellschaft ist möglich.",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "KFZ-Halteranfrage Zulassungsstelle",
+      "empfaenger": "Zulassungsstelle des Landkreises Bernkastel-Wittlich",
+      "status": "bereit",
+      "begruendung": "Fahrzeugkosten TEUR 52 in 2022 (Mietleasing, Betriebskosten); KFZ-Nutzung privat als Ertrag ausgewiesen; Fahrzeugbestand unklar",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "Gewerbeauskunft",
+      "empfaenger": "Verbandsgemeindeverwaltung Wittlich-Land (zuständig für Salmtal)",
+      "status": "bereit",
+      "begruendung": "Schuldnerin ist GmbH mit Sitz in Osann-Monzel; Gewerberegisterdaten zur Verifikation einzuholen",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "Finanzamt-Anfrage",
+      "empfaenger": "Finanzamt Wittlich, Abteilung Körperschaften, Steuernummer 43/658/14660",
+      "status": "bereit",
+      "begruendung": "Finanzamt Wittlich zuständig; offener Einspruch gegen Forschungszulagen-Festsetzungsbescheid 2020 vom 13.02.2023; Festsetzungsbescheid 2021 noch ausstehend; Lohnsteuerverbindlichkeiten TEUR 28 per 31.12.2022",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "KFZ-Halteranfrage KBA",
+      "empfaenger": "Kraftfahrt-Bundesamt (KBA), Fördestraße 16, 24944 Flensburg",
+      "status": "bereit",
+      "begruendung": "Fahrzeugkosten TEUR 52 in 2022; KFZ-Nutzung privat erwähnt; Fahrzeugbestand beim KBA zu prüfen",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "Versicherungsanfrage",
+      "empfaenger": "Zuständige Versicherungsgesellschaft(en) der coboworx GmbH (unbekannt)",
+      "status": "bereit",
+      "begruendung": "Versicherungen, Beiträge und Abgaben TEUR 7 in 2022 ausgewiesen; bestehende Versicherungsverträge zu ermitteln",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "Gerichtsvollzieher-Anfrage",
+      "empfaenger": "Gerichtsvollzieher beim Amtsgericht Wittlich",
+      "status": "bereit",
+      "begruendung": "Zuständiger Gerichtsvollzieher am Amtsgericht Wittlich (Geschäftssitz der Schuldnerin) bekannt; Anfrage zu laufenden Vollstreckungen möglich.",
+      "fehlende_daten": []
+    }
+  ],
+  "fehlende_informationen": [
+    {
+      "information": "Beschlussdatum des Insolvenzgerichts (Eröffnungsbeschluss)",
+      "grund": "Aus den vorliegenden Seiten 1-30 ist kein Gerichtsbeschluss enthalten; nur der Antrag liegt vor.",
+      "ermittlung_ueber": "Amtsgericht Wittlich - Insolvenzgericht, Kurfürstenstraße 63, 54516 Wittlich"
+    },
+    {
+      "information": "Zuständiger Richter am Insolvenzgericht Wittlich",
+      "grund": "Nicht aus den vorliegenden Unterlagen (Seiten 1-30) ersichtlich.",
+      "ermittlung_ueber": "Amtsgericht Wittlich - Insolvenzgericht"
+    },
+    {
+      "information": "Bankverbindungen der coboworx GmbH (kontoführende Banken, IBAN)",
+      "grund": "Keine Bankdaten der Schuldnerin in den vorliegenden Unterlagen genannt.",
+      "ermittlung_ueber": "Geschäftsführer Olaf Christian Gehrels, Steuerberater Dr. Schmitz & Donell, Jahresabschlüsse (Seiten 68ff.)"
+    },
+    {
+      "information": "Versicherungsgesellschaften der coboworx GmbH",
+      "grund": "Keine Versicherungsangaben in den vorliegenden Unterlagen enthalten.",
+      "ermittlung_ueber": "Geschäftsführer, Steuerberater Dr. Schmitz & Donell"
+    },
+    {
+      "information": "Fahrzeugbestand der coboworx GmbH",
+      "grund": "Keine Angaben zu Fahrzeugen in den vorliegenden Unterlagen.",
+      "ermittlung_ueber": "KBA-Anfrage, Zulassungsstelle Landkreis Bernkastel-Wittlich"
+    },
+    {
+      "information": "Eintrag im Schuldnerverzeichnis / Vollstreckungsportal",
+      "grund": "Keine Abfrage des Vollstreckungsportals in den vorliegenden Unterlagen dokumentiert.",
+      "ermittlung_ueber": "Vollstreckungsportal der Länder (www.vollstreckungsportal.de)"
+    },
+    {
+      "information": "Laufende Zwangsvollstreckungsmaßnahmen gegen coboworx GmbH",
+      "grund": "Keine Mitteilung eines Gerichtsvollziehers in den vorliegenden Unterlagen.",
+      "ermittlung_ueber": "Gerichtsvollzieher beim Amtsgericht Wittlich"
+    },
+    {
+      "information": "Gesamtbetrag der offenen Lieferantenrechnungen (vollständige Seite 169)",
+      "grund": "Laut Dokumentstruktur sind Gesamtbeträge der Lieferantenliste nur auf Seite 169 lesbar, diese liegt außerhalb des übermittelten Akteninhalts (Seiten 1-30).",
+      "ermittlung_ueber": "Anlage Seitz 9 (Kreditorenliste, Seiten 168-169 der Akte)"
+    },
+    {
+      "information": "Persönliche Daten des Geschäftsführers Olaf Christian Gehrels (Privatadresse vollständig)",
+      "grund": "Adresse teilweise aus Darlehensvertrag bekannt (Gloucester-Straße 13, 54296 Trier, laut Dokumentstruktur Seite 175-176), liegt außerhalb der übermittelten Seiten 1-30.",
+      "ermittlung_ueber": "Darlehensvertrag Anlage Seitz 12 (Seiten 175-176 der Akte), Handelsregisterauszug"
+    },
+    {
+      "information": "Zustellungsdatum des Insolvenzantrags an Schuldnerin",
+      "grund": "Eigenantrag - Zustellung an sich selbst; formaler Zustellungsnachweis nicht in Seiten 1-30 enthalten.",
+      "ermittlung_ueber": "Amtsgericht Wittlich - Insolvenzgericht"
+    },
+    {
+      "information": "Arbeitnehmerdetails (Gehaltshöhen, Eintrittsdaten) aus der Arbeitnehmerliste",
+      "grund": "Arbeitnehmerliste (Anlage Seitz 5) liegt auf Seiten 65-66 der Akte, außerhalb der übermittelten Seiten 1-30.",
+      "ermittlung_ueber": "Anlage Seitz 5 der Akte (Seiten 65-66)"
+    },
+    {
+      "information": "Offene Kundenforderungen (Debitorenliste, vollständige Details)",
+      "grund": "Debitorenliste (Anlage Seitz 10) liegt auf Seite 171 der Akte, außerhalb der übermittelten Seiten 1-30.",
+      "ermittlung_ueber": "Anlage Seitz 10 der Akte (Seite 171)"
+    },
+    {
+      "information": "Geschäftsführer der coboworx GmbH",
+      "grund": "Im vorliegenden Aktenabschnitt nicht genannt; für Insolvenzverfahren und Haftungsfragen relevant",
+      "ermittlung_ueber": "Handelsregisterauszug, Gesellschaftsvertrag"
+    },
+    {
+      "information": "Aktuelle Anschrift der Geschäftsführer",
+      "grund": "Für Zustellungen, Anhörungen und Haftungsprüfung notwendig",
+      "ermittlung_ueber": "Handelsregister, Einwohnermeldeamt"
+    },
+    {
+      "information": "Stammkapital exakter Gesamtbetrag nach Kapitalerhöhung",
+      "grund": "Liste zeigt Nennbeträge je Gesellschafter, Gesamtsumme ist aus Einzelpositionen errechenbar, aber nicht explizit ausgewiesen; Seiten 57-60 enthalten nur Seite 1-4 von 7 der Gesellschafterliste",
+      "ermittlung_ueber": "Vollständige Gesellschafterliste (Seiten 5-7 fehlen), Handelsregisterauszug"
+    },
+    {
+      "information": "Vollständige Gesellschafterliste (Seiten 5-7 von 7)",
+      "grund": "Vorliegende Akte enthält nur Seiten 1-4 von 7 der Gesellschafterliste; weitere Gesellschafter könnten vorhanden sein",
+      "ermittlung_ueber": "Notarielle Urkunde UVZ-Nr. 69/2024 SH, Handelsregister AG Wittlich"
+    },
+    {
+      "information": "Anteil und Identität von Northstar Family Holdings C, LLC in der Gesellschafterliste",
+      "grund": "Im Gesellschaftsvertrag als beiratsentsendendes Mitglied genannt (§ 10.2.4), aber in den vorliegenden 4 Seiten der Gesellschafterliste nicht aufgeführt",
+      "ermittlung_ueber": "Vollständige Gesellschafterliste (fehlende Seiten 5-7), Handelsregister"
+    },
+    {
+      "information": "Jahresabschlüsse der coboworx GmbH",
+      "grund": "Für Insolvenzmasse-Bewertung, Überschuldungsprüfung und ggf. Einziehungsvergütungsberechnung (Buchwert) erforderlich",
+      "ermittlung_ueber": "Bundesanzeiger, Steuerberater, Geschäftsführung"
+    },
+    {
+      "information": "Bankkontodaten der coboworx GmbH",
+      "grund": "Für Masseermittlung und Sicherung erforderlich",
+      "ermittlung_ueber": "Bankenauskunft, Schuldnerauskunft"
+    },
+    {
+      "information": "Bestehende Verbindlichkeiten und Gläubigerstruktur",
+      "grund": "In den Seiten 31-60 nicht enthalten; für Forderungsanmeldungen und Masseberechnung erforderlich",
+      "ermittlung_ueber": "Schuldnerauskunft, Buchhaltungsunterlagen, Finanzamt-Anfrage"
+    },
+    {
+      "information": "Steuerberater der coboworx GmbH",
+      "grund": "Für Kontaktaufnahme zwecks Jahresabschlüsse und steuerlicher Verbindlichkeiten notwendig",
+      "ermittlung_ueber": "Steuerberater-Kontakt, Schuldnerauskunft"
+    },
+    {
+      "information": "Anstellungsverträge und Vergütung der Geschäftsführer",
+      "grund": "Gesellschaftsvertrag § 8.5.8 sieht Zustimmungspflicht der Gesellschafterversammlung vor; relevant für Insolvenzanfechtung und Masseansprüche",
+      "ermittlung_ueber": "Geschäftsführung, Unternehmensunterlagen"
+    },
+    {
+      "information": "Ob Beirat tatsächlich besetzt war und wer die Beiratsmitglieder sind",
+      "grund": "Gesellschaftsvertrag sieht Beirat mit bis zu 5 Mitgliedern vor, entsandt von bestimmten Gesellschaftern; relevant für Governance-Analyse und mögliche Haftung",
+      "ermittlung_ueber": "Schuldnerauskunft, Gesellschafterauskunft, interne Unterlagen"
+    },
+    {
+      "information": "Ob Geschäftsanteile der coboworx GmbH (Eigenbestand 9,3581%) wirtschaftlich sinnvoll verwertet werden können",
+      "grund": "coboworx GmbH hält eigene Geschäftsanteile (§ 33 GmbHG-Problematik); im Insolvenzverfahren zu klären",
+      "ermittlung_ueber": "Rechtliche Prüfung, Handelsregister, Gesellschafterbeschlüsse"
+    },
+    {
+      "information": "Festsetzungsbescheid Forschungszulage 2021",
+      "grund": "Bescheid für 2021 war zum Prüfungszeitpunkt noch nicht erlassen; ausstehende Forderung gegen Finanzamt in Höhe von bilanziell ausgewiesenen TEUR 268 (156+112)",
+      "ermittlung_ueber": "Finanzamt Wittlich"
+    },
+    {
+      "information": "Rückzahlungsverpflichtung GRW-Förderung (Details)",
+      "grund": "Rückzahlungsverpflichtung GRW-Förderung i.H.v. TEUR 128 als sonstige Verbindlichkeit ausgewiesen; Hintergrund und aktueller Stand unbekannt",
+      "ermittlung_ueber": "Zuständige Förderbehörde / Geschäftsführung"
+    },
+    {
+      "information": "Aktueller Bestand und Verwertbarkeit der Vorräte (2.593.278,56 EUR per 31.12.2024)",
+      "grund": "Hoher Vorratsbestand im Verhältnis zum Umsatz; nach Geschäftsmodelländerung Risiko weiterer Wertminderungen",
+      "ermittlung_ueber": "Inventur vor Ort, Geschäftsführung"
+    },
+    {
+      "information": "Verwertbarkeit und aktueller Status der Palettierzellen (Sachanlagen)",
+      "grund": "Palettierzellen werden vermietet; Mietverhältnisse und Rückgabemodalitäten im Insolvenzfall unklar",
+      "ermittlung_ueber": "Geschäftsführung, Vertragsunterlagen Mietverträge"
+    },
+    {
+      "information": "Wandeldarlehen: Konvertierungsstatus und Rangrücktrittsvereinbarungen",
+      "grund": "Zahlreiche Wandeldarlehen (Gesellschafter und Dritte); im Insolvenzfall relevant ob Rangrücktritt vereinbart wurde oder Forderungen als Insolvenzforderungen angemeldet werden",
+      "ermittlung_ueber": "Vertragsunterlagen (Convertible Loan Agreements), Geschäftsführung"
+    },
+    {
+      "information": "Offene Forderungen aus Lieferungen und Leistungen (1.299.370,35 EUR per 31.12.2024) - Einzelaufstellung und Einbringlichkeit",
+      "grund": "Erheblicher Forderungsbestand; Einbringlichkeit und etwaige Abtretungen zu prüfen",
+      "ermittlung_ueber": "Debitorenliste der Schuldnerin, Saldenbestätigung"
+    },
+    {
+      "information": "Gesellschafterbeziehung Paula Gehrels zu Geschäftsführer Olaf Gehrels",
+      "grund": "Namensgleichheit Gehrels deutet auf familiäre Nähe hin; mögliche Anfechtungsrisiken bei Vergütung oder Einstellung",
+      "ermittlung_ueber": "Geschäftsführung, Personalunterlagen"
+    },
+    {
+      "information": "Insolvenzrechtliche Einordnung Kapitalerhöhung Mai 2024 (11.603.913 EUR)",
+      "grund": "Kapitalerhöhung kurz vor Insolvenzantrag; Anfechtungsrelevanz und tatsächlicher Mittelzufluss zu prüfen",
+      "ermittlung_ueber": "Notarielle Unterlagen, Bankkontobewegungen, Handelsregister"
+    },
+    {
+      "information": "Aktueller Kassenbestand und Kontoguthaben",
+      "grund": "Per 31.12.2024 waren 297.764,62 EUR ausgewiesen; aktueller Stand zum Insolvenzantragsdatum unbekannt",
+      "ermittlung_ueber": "Bankenauskunft, Kontoauszüge"
+    },
+    {
+      "information": "KFZ-Bestand (Fahrzeugkosten 2024: 199.452,20 EUR)",
+      "grund": "Erhebliche Fahrzeugkosten deuten auf Fuhrpark hin; Eigentumsverhältnisse und Leasingverträge unklar",
+      "ermittlung_ueber": "KFZ-Halteranfrage KBA / Zulassungsstelle, Leasingverträge"
+    },
+    {
+      "information": "Steuerverbindlichkeiten aktuell (Lohnsteuer, Umsatzsteuer)",
+      "grund": "Per 31.12.2023: Lohnsteuer TEUR 29, Umsatzsteuer TEUR 11; aktuelle Verbindlichkeiten gegenüber Finanzamt unklar",
+      "ermittlung_ueber": "Finanzamt-Anfrage Wittlich"
+    },
+    {
+      "information": "Versicherungsverträge der Schuldnerin",
+      "grund": "Versicherungen, Beiträge und Abgaben 2024: 34.727,03 EUR; Art und Umfang der Versicherungen unbekannt",
+      "ermittlung_ueber": "Versicherungsanfrage, Geschäftsführung"
+    },
+    {
+      "information": "Aktueller Kontostand / Bankverbindungen",
+      "grund": "Keine Bankkontodaten im vorliegenden Aktenabschnitt; für Massefeststellung und Bankenauskunft erforderlich",
+      "ermittlung_ueber": "Bankenauskunft, Schuldner/Geschäftsführer"
+    },
+    {
+      "information": "Steuerliche Verhältnisse / offene Steuerforderungen",
+      "grund": "Keine Angaben zu Steuerforderungen des Finanzamts oder laufenden Steuerverbindlichkeiten",
+      "ermittlung_ueber": "Finanzamt-Anfrage, Steuerberater"
+    },
+    {
+      "information": "Name und Kontakt des Steuerberaters der Gesellschaft",
+      "grund": "Steuerberater nicht namentlich im Aktenabschnitt genannt; für laufende Zusammenarbeit im Verfahren benötigt",
+      "ermittlung_ueber": "Geschäftsführer Olaf Gehrels, Unterlagen der Gesellschaft"
+    },
+    {
+      "information": "Identität und Höhe der Gläubigerforderungen",
+      "grund": "Keine Gläubigerliste oder Verbindlichkeitsübersicht im vorliegenden Abschnitt; Verbindlichkeiten aus Bilanz nur summarisch",
+      "ermittlung_ueber": "Schuldner/Geschäftsführer, Buchhaltung, Gläubigeranmeldungen"
+    },
+    {
+      "information": "Kfz-Bestand der Gesellschaft",
+      "grund": "Fahrzeugkosten im Jahresabschluss ausgewiesen (97 TEUR), aber keine Angaben zu Fahrzeugen im Eigentum der Gesellschaft",
+      "ermittlung_ueber": "KFZ-Halteranfrage KBA, KFZ-Halteranfrage Zulassungsstelle"
+    },
+    {
+      "information": "Versicherungsverträge der Gesellschaft",
+      "grund": "Versicherungskosten im Jahresabschluss enthalten (20 TEUR), Versicherungsverträge nicht aufgelistet",
+      "ermittlung_ueber": "Versicherungsanfrage, Unterlagen der Gesellschaft"
+    },
+    {
+      "information": "Details zu den Wandeldarlehensverträgen und deren Gläubigern",
+      "grund": "Im Anhang werden Wandeldarlehen erwähnt (1.200.000 EUR neue Wandeldarlehen 2024), aber keine Liste der Darlehensgeber",
+      "ermittlung_ueber": "Geschäftsführer, Buchhaltung, Vertragsunterlagen"
+    },
+    {
+      "information": "Aktueller Stand der Betriebsstättenauflösung Dresden und Rückzahlung Fördermittel",
+      "grund": "Aufwendungen aus Rückzahlung Fördermittel Dresden von 128 TEUR im GJ 2023 verbucht; Klärung ob vollständig abgewickelt",
+      "ermittlung_ueber": "Geschäftsführer, zuständige Förderbehörde"
+    },
+    {
+      "information": "Gewerberegistereintragungen / Betriebsstätten",
+      "grund": "Neben Salmtal bestand Betriebsstätte in Dresden (aufgelöst); weitere Betriebsstätten unklar",
+      "ermittlung_ueber": "Gewerbeauskunft, Geschäftsführer"
+    },
+    {
+      "information": "Antragsdatum und Eröffnungsdatum des Insolvenzverfahrens",
+      "grund": "Weder Antragsdatum noch Eröffnungsbeschluss im vorliegenden Aktenabschnitt enthalten",
+      "ermittlung_ueber": "Gerichtsakten, Amtsgericht Wittlich"
+    },
+    {
+      "information": "Aktueller Bankkontostand und Kreditinstitute",
+      "grund": "Im Prüfungsbericht sind Bankguthaben per 31.12.2022 von TEUR 2.729 ausgewiesen, aktuelle Kontostände und Kreditinstitute für das Insolvenzverfahren nicht bekannt",
+      "ermittlung_ueber": "Bankenauskunft bei allen relevanten Kreditinstituten"
+    },
+    {
+      "information": "Handelsregisterdaten (HRB-Nummer, Registergericht)",
+      "grund": "Im vorliegenden Aktenabschnitt nicht enthalten; für Identifikation und Korrespondenz erforderlich",
+      "ermittlung_ueber": "Handelsregisterauszug beim zuständigen Registergericht"
+    },
+    {
+      "information": "Offener Einspruch Forschungszulage 2020 - Verfahrensstand",
+      "grund": "Einspruch vom 13.02.2023 gegen Kürzungsbescheid (ursprünglich beantragt höher als festgesetzte 107.346 EUR); Ausgang unbekannt; mögliche Forderung gegen Finanzamt",
+      "ermittlung_ueber": "Finanzamt Wittlich, ggf. Steuerberater"
+    },
+    {
+      "information": "Gesellschafterstruktur und aktuelle Gesellschafter",
+      "grund": "Im Aktenabschnitt werden mehrere Gesellschafter aus Wandeldarlehensverträgen genannt (Gehrels Beteiligungsgesellschaft mbH, Henrik Schunk Beteiligungen GmbH, Paua Ventures, Picus Capital, Luktev GmbH), vollständige aktuelle Gesellschafterliste fehlt",
+      "ermittlung_ueber": "Handelsregister, Gesellschaftsvertrag, Gesellschafterliste"
+    },
+    {
+      "information": "Verbleib der flüssigen Mittel (TEUR 2.729 per 31.12.2022)",
+      "grund": "Hoher Kassenbestand per 31.12.2022; aktueller Verbleib und Verwendung dieser Mittel bis zur Insolvenzantragstellung ungeklärt",
+      "ermittlung_ueber": "Bankenauskunft, Kontoauszüge, Geschäftsführerbefragung"
+    },
+    {
+      "information": "Noch nicht eingezahlte Tranche Henrik Schunk Beteiligungen GmbH (100.000 EUR)",
+      "grund": "Nennbetrag Wandeldarlehen gesamt 500.000 EUR, in 2022 erst 400.000 EUR eingezahlt; Restbetrag 100.000 EUR offen",
+      "ermittlung_ueber": "Korrespondenz mit Henrik Schunk Beteiligungen GmbH, Wandeldarlehensvertrag"
+    },
+    {
+      "information": "Immaterielle Vermögensgegenstände - aktueller Wert und Verwertbarkeit",
+      "grund": "Aktivierte Entwicklungskosten TEUR 3.255 (Prototyp, Software, Patente); Verwertbarkeit in der Insolvenz und tatsächlicher Marktwert unklar; Aktivierung als Wahlrecht nach § 248 Abs. 2 HGB",
+      "ermittlung_ueber": "Sachverständigengutachten, Marktrecherche, Gespräch mit Geschäftsführung"
+    },
+    {
+      "information": "Eigentumsverhältnisse Prototyp (kollaborierender Roboter)",
+      "grund": "Prototyp als immaterieller Vermögensgegenstand aktiviert (TEUR 2.079); trotz physischer Substanz als immateriell behandelt; Verwertbarkeit als Sachanlage zu prüfen",
+      "ermittlung_ueber": "Begehung, Sachverständigengutachten, Inventarliste"
+    },
+    {
+      "information": "Vorräte - aktueller Bestand und Verwertbarkeit",
+      "grund": "Vorräte TEUR 1.206 per 31.12.2022 (Roh-/Hilfs-/Betriebsstoffe TEUR 601, Fertige Erzeugnisse TEUR 177, geleistete Anzahlungen TEUR 428); aktueller Bestand und Verwertbarkeit für Insolvenzmasse relevant",
+      "ermittlung_ueber": "Inventur, Sachverständigengutachten"
+    },
+    {
+      "information": "KFZ-Bestand und Leasingverträge",
+      "grund": "Fahrzeugkosten TEUR 52 in 2022, Mietleasingaufwendungen vorhanden; konkrete Fahrzeuge und Leasingverträge nicht aufgeführt",
+      "ermittlung_ueber": "KFZ-Halteranfrage KBA und Zulassungsstelle, Leasinggesellschaften"
+    },
+    {
+      "information": "Fremdleistungen Matheus Service GmbH - Art und Umfang der Rechtsbeziehung",
+      "grund": "Fremdleistungen Matheus Service GmbH, Osann-Monzel EUR 158.674 in 2022; Verflechtung mit Schuldnerin (gleicher Ort) und mögliche Insolvenzanfechtung zu prüfen",
+      "ermittlung_ueber": "Vertragsunterlagen, Geschäftsführerbefragung, ggf. Gesellschafterliste Matheus Service GmbH"
+    },
+    {
+      "information": "Jahresabschluss 2023 und aktuelle Vermögenslage",
+      "grund": "Nur Jahresabschluss 2022 vorgelegt; aktuelle Vermögens- und Schuldenlage für das Insolvenzverfahren maßgeblich",
+      "ermittlung_ueber": "Steuerberater, Buchhaltungsunterlagen, Geschäftsführerbefragung"
+    },
+    {
+      "information": "Kaution TEUR 13 - Mietverhältnis und Vermieter",
+      "grund": "Kaution als sonstiger Vermögensgegenstand per 31.12.2022 ausgewiesen; Mietverhältnis und Rückforderungsanspruch für Insolvenzmasse relevant",
+      "ermittlung_ueber": "Mietvertrag, Vermieter"
+    },
+    {
+      "information": "Projektförderung Stadt Dresden (digitaler Zwilling) TEUR 25",
+      "grund": "Forderung gegenüber Stadt Dresden aus Projektförderung ausgewiesen; aktueller Status und Eingang zu klären",
+      "ermittlung_ueber": "Stadt Dresden, Förderbescheid, Geschäftsführerbefragung"
+    },
+    {
+      "information": "Vollständige Adresse der Schuldnerin coboworx GmbH",
+      "grund": "Adresse nicht im vorliegenden Aktenabschnitt (Seiten 181–182) enthalten",
+      "ermittlung_ueber": "Handelsregister, vorherige Aktenteile"
+    },
+    {
+      "information": "Bilanzsumme des letzten Geschäftsjahres",
+      "grund": "Zwar bestätigt als korrekt angegeben, konkreter Betrag aber nicht auf Seiten 181–182 ausgewiesen",
+      "ermittlung_ueber": "Jahresabschluss, Gläubigerverzeichnis / Kreditorenliste in anderen Aktenteilen"
+    },
+    {
+      "information": "Umsatzerlöse des letzten Geschäftsjahres",
+      "grund": "Zwar bestätigt als korrekt angegeben, konkreter Betrag aber nicht auf Seiten 181–182 ausgewiesen",
+      "ermittlung_ueber": "Jahresabschluss, Gläubigerverzeichnis / Kreditorenliste in anderen Aktenteilen"
+    },
+    {
+      "information": "Handelsregisternummer der coboworx GmbH",
+      "grund": "Nicht im vorliegenden Aktenabschnitt enthalten",
+      "ermittlung_ueber": "Handelsregisterauszug (www.handelsregister.de)"
+    },
+    {
+      "information": "Insolvenzgrund (Zahlungsunfähigkeit, Überschuldung, drohende Zahlungsunfähigkeit)",
+      "grund": "Nicht im vorliegenden Aktenabschnitt benannt",
+      "ermittlung_ueber": "Insolvenzantrag, Gutachten, Bilanzanalyse"
+    },
+    {
+      "information": "Gesamtbetrag der angemeldeten Forderungen und Gläubigeranzahl",
+      "grund": "Kreditorenliste referenziert, aber Beträge und Anzahl nicht auf Seiten 181–182 ausgewiesen",
+      "ermittlung_ueber": "Gläubigerverzeichnis / Kreditorenliste in anderen Aktenteilen"
+    }
+  ],
+  "zusammenfassung": [
+    {
+      "wert": "Eigenantrag der coboworx GmbH (GmbH, HRB 44791 AG Wittlich) auf Eröffnung des Insolvenzverfahrens, gestellt am 22.10.2025 durch Verfahrensbevollmächtigte Seitz Rechtsanwälte Steuerberater PartG mbB, Düsseldorf.",
+      "quelle": "Seite 1, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "Insolvenzgrund ist Zahlungsunfähigkeit gemäß § 17 Abs. 1 InsO; Schuldnerin hat seit 20.10.2025, 0:00 Uhr, alle Zahlungen eingestellt.",
+      "quelle": "Seite 11, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "Ursache der Insolvenz: Verlust mehrerer großvolumiger Aufträge im Frühjahr 2025; Sanierungsverhandlungen mit Hauptgesellschafter NorthStar Family Holdings C, LLC am 21.10.2025 gescheitert.",
+      "quelle": "Seite 9, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "Fällige Verbindlichkeiten zum Antragsdatum 22.10.2025: EUR 500.493,14; Gesamtverbindlichkeiten laut Kreditorenliste: EUR 575.506,48; Forderungen der Schuldnerin (Debitoren): EUR 387.811,38.",
+      "quelle": "Seite 8, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "Löhne/Gehälter und Sozialversicherungsbeiträge für Oktober 2025 i.H.v. ca. EUR 271.000,00 sind ab 27.10.2025 (44. KW 2025) fällig und können nicht bedient werden.",
+      "quelle": "Seite 11, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "44 Arbeitnehmer (inkl. geringfügig Beschäftigte und Werkstudenten); 6 Arbeitnehmer scheiden bis 31.12.2025 aus.",
+      "quelle": "Seite 7, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "Schuldnerin verfügt über kein Grundvermögen; drei Mietverträge mit monatlichen Gesamtmietzahlungen von EUR 6.065,60 (inkl. Nebenkosten).",
+      "quelle": "Seite 8, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "Als vorläufiger Insolvenzverwalter wird Rechtsanwalt Ingo Grünewald, Prof. Dr. Dr. Thomas B. Schmidt Insolvenzverwalter Rechtsanwälte Partnerschaft mbB, Kornmarkt 4, 54290 Trier, vorgeschlagen.",
+      "quelle": "Seite 2, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "Stammkapital EUR 66.573,00; 39 Gesellschafter; Hauptgesellschafter: Northstar Family Holdings C, LLC (12,86%), SquareOne Fonds 2 GmbH & Co. KG (15,35%), Gehrels Beteiligungsgesellschaft mbH (10,51%).",
+      "quelle": "Seite 4, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "Bilanzsumme 2024 (vorläufig): EUR 4.918.423,45; Umsatzerlöse 2024: EUR 1.678.776,52; Gesellschaft erfüllt Schwellenwerte für vorläufigen Gläubigerausschuss nach § 22a Abs. 1 InsO nicht.",
+      "quelle": "Seite 7, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "Steuerliche Führung beim Finanzamt Wittlich, Abteilung Körperschaften, Steuernummer 43/658/14660; Steuerberater: Dr. Schmitz & Donell Steuerberater PartG mbB, Zum Rollkopf 1, 54516 Wittlich.",
+      "quelle": "Seite 6, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "Geschäftsführer und alleinvertretungsberechtigter Vertreter der Schuldnerin: Olaf Christian Gehrels; er gewährte der GmbH am 05.03.2025 ein Darlehen i.H.v. EUR 300.000,00.",
+      "quelle": "Seite 9, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "Bei der coboworx GmbH handelt es sich um eine GmbH mit 39 Gesellschaftern nach einer Kapitalerhöhung vom 16. Mai 2024.",
+      "quelle": "Seite 4, Insolvenzantrag (Ziffer 15) und Seite 57, Gesellschafterliste",
+      "verifiziert": true
+    },
+    {
+      "wert": "Größter Einzelgesellschafter nach der Kapitalerhöhung vom 16. Mai 2024 ist Northstar Family Holdings C, LLC (Delaware, USA) mit 12,8566 % (8.559,00 EUR Nennbetrag); SquareOne Fonds 2 GmbH & Co. KG hält 15,3546 % (10.222,00 EUR Nennbetrag).",
+      "quelle": "Seite 57-62, Liste der Gesellschafter der COBOWORX GmbH",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die Gesellschaft hält eigene Anteile (9,3581 %, 6.230,00 EUR Nennbetrag); dies ist im Insolvenzverfahren rechtlich zu würdigen.",
+      "quelle": "Seite 57, Liste der Gesellschafter der COBOWORX GmbH",
+      "verifiziert": true
+    },
+    {
+      "wert": "Der Gesellschaftsvertrag wurde zuletzt am 24. April 2024 geändert und am 17. Mai 2024 durch Notar Dr. Sebastian Hoefling (Berlin) beurkundet.",
+      "quelle": "Seite 54-55, Bescheinigung gemäß § 54 GmbHG",
+      "verifiziert": true
+    },
+    {
+      "wert": "Laut § 16.2.2 des Gesellschaftsvertrags berechtigt die Eröffnung eines Insolvenzverfahrens über das Vermögen eines Gesellschafters zur Einziehung dessen Geschäftsanteile ohne dessen Zustimmung.",
+      "quelle": "Seite 44, Gesellschaftsvertrag § 16.2.2",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die Einziehungsvergütung ist in 5 gleichen Halbjahresraten zu zahlen, verzinst mit 3 Prozentpunkten über EZB-Leitzins; Zahlungen gegen § 30 Abs. 1 GmbHG sind gestundet.",
+      "quelle": "Seite 49, Gesellschaftsvertrag § 17.5-17.6",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die Gesellschafterliste umfasst laut Dokument 7 Seiten; im vorliegenden Aktenteil (Seiten 57-60) sind nur die ersten 4 Seiten enthalten. Weitere Gesellschafter können vorhanden sein.",
+      "quelle": "Seite 57-60, Liste der Gesellschafter der COBOWORX GmbH (Dok-ID 413612, Akte 24-00477 N)",
+      "verifiziert": true
+    },
+    {
+      "wert": "Der Beirat besteht aus bis zu 5 Mitgliedern, die von Picus Capital GmbH, Luktev GmbH, SquareOne Fonds 2 GmbH & Co. KG, Northstar Family Holdings C, LLC und Catatumbo Capital GmbH entsandt werden.",
+      "quelle": "Seite 37, Gesellschaftsvertrag § 10.2",
+      "verifiziert": true
+    },
+    {
+      "wert": "Nur die deutsche Fassung des Gesellschaftsvertrags ist rechtsverbindlich; es gilt deutsches Recht.",
+      "quelle": "Seite 52-53, Gesellschaftsvertrag § 22.3-22.4",
+      "verifiziert": true
+    },
+    {
+      "wert": "",
+      "quelle": ""
+    },
+    {
+      "wert": "Die coboworx GmbH (HRB 44791, AG Wittlich) ist eine kleine Kapitalgesellschaft mit Sitz in Salmtal (Neuer Bahnhof 6, 54528 Salmtal), tätig im Bereich Industrierobotik (Herstellung, Vertrieb, Vermietung, Software/Dienstleistungen).",
+      "quelle": "Seite 118-119, Rechtliche Verhältnisse",
+      "verifiziert": true
+    },
+    {
+      "wert": "Der Jahresabschluss zum 31.12.2023 wurde von Dr. Widdau & Partner mit einem uneingeschränkten Bestätigungsvermerk testiert; die Gesellschaft wies zum Bilanzstichtag eine bilanzielle Überschuldung auf.",
+      "quelle": "Seite 95-96, Bestätigungsvermerk",
+      "verifiziert": true
+    },
+    {
+      "wert": "Das Jahresergebnis 2023 beträgt -8.221 TEUR (Vorjahr: -2.521 TEUR); die erhebliche Verschlechterung ist maßgeblich auf außerplanmäßige Abschreibungen von 4.595 TEUR (davon 3.127 TEUR auf den Prototyp) und Abschreibungen auf Vorräte (1.284 TEUR) zurückzuführen.",
+      "quelle": "Seite 92-93, Ertragslage und Abschreibungen",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die Umsatzerlöse stiegen von 90 TEUR (2022) auf 1.415 TEUR (2023), jedoch lag der Materialaufwand bei 85,2% der Gesamtleistung.",
+      "quelle": "Seite 92-93, Ertragslage und Umsatzerlöse",
+      "verifiziert": true
+    },
+    {
+      "wert": "Im April 2024 wurde das Stammkapital von 41.691 EUR auf 66.573 EUR erhöht und alle Wandeldarlehen in Eigenkapital gewandelt; die Kapitalrücklage beträgt danach 11.603.913 EUR und deckt den Fehlbetrag vollständig ab.",
+      "quelle": "Seite 110, Anhang",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die Verbindlichkeiten gegenüber Gesellschaftern betragen 1.525.783,33 EUR; Verbindlichkeiten mit Restlaufzeit 1-5 Jahre sind mit 0 EUR (Vorjahr 3.780.020,41 EUR) ausgewiesen.",
+      "quelle": "Seite 109, Anhang",
+      "verifiziert": true
+    },
+    {
+      "wert": "Geschäftsführer sind Olaf Gehrels (aktiv) und Ralf Zeisberger (bis 01.10.2024 ausgeschieden); Ralf Zeisberger ist gleichzeitig Gesellschafter mit 6.250 EUR Anteil.",
+      "quelle": "Seite 110 und 118, Anhang und Rechtliche Verhältnisse",
+      "verifiziert": true
+    },
+    {
+      "wert": "Im Jahr 2023 wurden Fördermittel aus Dresden in Höhe von 128 TEUR aufgrund der Betriebsstättenauflösung zurückgezahlt.",
+      "quelle": "Seite 94, Sonstige betriebliche Aufwendungen",
+      "verifiziert": true
+    },
+    {
+      "wert": "Dr. Widdau & Partner hat den Jahresabschluss der COBOWORX GmbH zum 31.12.2022 auf Basis eines Prüfungsauftrags vom 11.07.2023 geprüft und einen uneingeschränkten Bestätigungsvermerk erteilt.",
+      "quelle": "Seite 124, Seite 140, Prüfungsbericht Dr. Widdau & Partner",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die Bilanzsumme zum 31.12.2022 beträgt TEUR 7.802 (Vorjahr: TEUR 6.145). Das Eigenkapital ist von TEUR 5.794 (2021) auf TEUR 3.273 (2022) gesunken.",
+      "quelle": "Seite 129, Prüfungsbericht Dr. Widdau & Partner",
+      "verifiziert": true
+    },
+    {
+      "wert": "Der Jahresfehlbetrag 2022 beläuft sich auf TEUR 2.521 (Vorjahr: TEUR 765), was einer erheblichen Verschlechterung der Ertragslage entspricht.",
+      "quelle": "Seite 133, Seite 137, Prüfungsbericht Dr. Widdau & Partner",
+      "verifiziert": true
+    },
+    {
+      "wert": "Das Anlagevermögen wird dominiert von aktivierten Entwicklungskosten (immaterielle Vermögensgegenstände TEUR 3.255), davon TEUR 2.079 für die Entwicklung des Prototypen (Hard- und Software kollaborierender Roboter). Diese Aktivierung basiert auf einem handelsbilanziellen Wahlrecht (§ 248 Abs. 2 HGB).",
+      "quelle": "Seite 130, Prüfungsbericht Dr. Widdau & Partner",
+      "verifiziert": true
+    },
+    {
+      "wert": "Zum 31.12.2022 bestanden Wandeldarlehensverbindlichkeiten von insgesamt rund TEUR 3.780 (Gesellschafter TEUR 953 + sonstige TEUR 2.827), alle auf Basis von Convertible Loan Agreements vom 05.10.2022.",
+      "quelle": "Seite 134, Seite 135, Seite 136, Prüfungsbericht Dr. Widdau & Partner",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die flüssigen Mittel betrugen per 31.12.2022 TEUR 2.729 (Vorjahr: TEUR 3.102) und wurden durch Bankbestätigungen nachgewiesen.",
+      "quelle": "Seite 129, Seite 133, Prüfungsbericht Dr. Widdau & Partner",
+      "verifiziert": true
+    },
+    {
+      "wert": "Der Personalaufwand stieg von TEUR 1.039 (2021) auf TEUR 1.920 (2022) bei gleichzeitigem Anstieg der Mitarbeiterzahl von 17 auf 31. Der Großteil der Entwicklungskosten wurde als aktivierte Eigenleistungen (TEUR 483) bilanziert.",
+      "quelle": "Seite 137, Seite 138, Prüfungsbericht Dr. Widdau & Partner",
+      "verifiziert": true
+    },
+    {
+      "wert": "Gegen den Festsetzungsbescheid für die Forschungszulage 2020 (festgesetzt auf 107.346 EUR) wurde fristgerecht Einspruch eingelegt; der Festsetzungsbescheid für 2021 war zum Prüfungszeitpunkt noch nicht erlassen.",
+      "quelle": "Seite 133, Prüfungsbericht Dr. Widdau & Partner",
+      "verifiziert": true
+    },
+    {
+      "wert": "Fremdleistungen der Matheus Service GmbH, Osann-Monzel in Höhe von EUR 158.674 in 2022 sind als nahestehende Gesellschaft zu prüfen (gleicher Sitz wie Schuldnerin).",
+      "quelle": "Seite 138, Prüfungsbericht Dr. Widdau & Partner",
+      "verifiziert": true
+    },
+    {
+      "wert": "Anlage Seitz 14 enthält die Versicherung der Geschäftsführung gemäß § 13 Abs. 1 S. 7 InsO zur Richtigkeit und Vollständigkeit des mit dem Insolvenzantrag eingereichten Gläubigerverzeichnisses (Kreditorenliste) sowie der Angaben zu Bilanzsumme und Umsatzerlösen.",
+      "quelle": "Seite 182, Anlage Seitz 14",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die Erklärung bestätigt, dass die coboworx GmbH 44 Arbeitnehmer beschäftigt (hat).",
+      "quelle": "Seite 182, Anlage Seitz 14",
+      "verifiziert": true
+    },
+    {
+      "wert": "Unterzeichner der Erklärung ist Olaf Christian Gehrels (Geschäftsführer), Unterzeichnungsort Salmtal, Datum 20.10.2025.",
+      "quelle": "Seite 182, Anlage Seitz 14",
+      "verifiziert": true
+    }
+  ],
+  "risiken_hinweise": [
+    {
+      "wert": "Besondere Eilbedürftigkeit: Löhne und Sozialversicherungsbeiträge für Oktober 2025 (ca. EUR 271.000,00) werden ab 27.10.2025 fällig; Betriebsfortführung gefährdet ohne sofortige Bestellung eines vorläufigen Insolvenzverwalters.",
+      "quelle": "Seite 9-10, Insolvenzantrag",
+      "verifiziert": true
+    },
+    {
+      "wert": "Überschuldung gemäß § 19 Abs. 1 InsO wurde von den Verfahrensbevollmächtigten aufgrund der Kürze der Zeit zwischen Mandatierung und Antragstellung noch nicht abschließend geprüft.",
+      "quelle": "Seite 12, Insolvenzantrag vom 22.10.2025",
+      "verifiziert": true
+    },
+    {
+      "wert": "Darlehen des Geschäftsführers Olaf Christian Gehrels i.H.v. EUR 300.000,00 vom 05.03.2025 an die GmbH: mögliche Anfechtungsrisiken gemäß §§ 129 ff. InsO (gesellschafternahe Finanzierung, Rückzahlungsfrist bis 31.03.2025 bereits überschritten zum Antragsdatum).",
+      "quelle": "Seite 9, Insolvenzantrag",
+      "verifiziert": true
+    },
+    {
+      "wert": "NorthStar Family Holdings C, LLC hat angebotene Finanzierung (EUR 500.000,00 bar + Bürgschaft EUR 1.000.000,00) am 21.10.2025 zurückgezogen; Hauptgesellschafter (12,86%) trägt maßgeblich zur Insolvenzverursachung bei.",
+      "quelle": "Seite 10-11, Insolvenzantrag",
+      "verifiziert": true
+    },
+    {
+      "wert": "Gesamter Liquiditätsbedarf bis 31.12.2026 laut Cashflow-Planung: EUR 5,1 Mio.; weit überschreitend die verfügbaren Mittel - nachhaltige Sanierung fraglich.",
+      "quelle": "Seite 10, Insolvenzantrag",
+      "verifiziert": true
+    },
+    {
+      "wert": "Schuldnerin hat ab 20.10.2025 keine neuen Bestellungen/Aufträge mehr ausgelöst; Geschäftsbetrieb läuft mit Einschränkungen weiter - Risiko der Betriebsunterbrechung und Wertvernichtung.",
+      "quelle": "Seite 12, Insolvenzantrag",
+      "verifiziert": true
+    },
+    {
+      "wert": "Forderungen der Schuldnerin (EUR 387.811,38) stehen Verbindlichkeiten von EUR 575.506,48 gegenüber; Werthaltigkeit der Forderungen nach Eigeneinschätzung der Schuldnerin, aber nicht unabhängig bestätigt.",
+      "quelle": "Seite 8, Insolvenzantrag",
+      "verifiziert": true
+    },
+    {
+      "wert": "39 Gesellschafter mit komplexer Kapitalstruktur (Stammgeschäftsanteile + Vorzugsgeschäftsanteile Serie Seed 1 und Seed 2); mögliche Sonderrechte der Seed-Gesellschafter bei Liquidation zu beachten.",
+      "quelle": "Seite 4-5, Insolvenzantrag",
+      "verifiziert": true
+    },
+    {
+      "wert": "Ehemaliger Geschäftsführer Ralf Zeisberger laut Handelsregister nicht mehr Geschäftsführer ab 17.10.2024; jedoch bereits von außerordentlicher Gesellschafterversammlung am 02.09.2021 beschlossen, dass Wagner, Klaus Ignaz und Matheus, Georg nicht mehr Geschäftsführer sind (ab 04.10.2021). Zeisberger wurde erst 2024 abberufen (ab 17.10.2024).",
+      "quelle": "Seite 19-20, Handelsregisterauszug HRB 44791",
+      "verifiziert": true
+    },
+    {
+      "wert": "Drei Mietverträge laufen weiter (monatlich EUR 6.065,60 inkl. NK); Kündigung oder Vertragsanpassung durch vorläufigen Insolvenzverwalter zeitnah erforderlich.",
+      "quelle": "Seite 8, Insolvenzantrag",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die coboworx GmbH hält eigene Anteile (9,3581 %); im Insolvenzverfahren ist zu prüfen, ob diese zur Masse gehören und wie sie zu behandeln sind (§ 33 GmbHG).",
+      "quelle": "Seite 4-5, Insolvenzantrag; Seite 57-62, Gesellschafterliste",
+      "verifiziert": true
+    },
+    {
+      "wert": "Mehrere Gesellschafter haben im Rahmen der Kapitalerhöhung vom 16. Mai 2024 neue Anteile erworben; Insolvenzanfechtungsrisiko nach §§ 129 ff. InsO ist zu prüfen, da die Kapitalerhöhung kurz vor Insolvenzantragstellung erfolgt sein könnte.",
+      "quelle": "Seite 57-62, Gesellschafterliste mit Notarinnenbeglaubigung vom 16.05.2024",
+      "verifiziert": true
+    },
+    {
+      "wert": "Ralf Zeisberger als natürliche Person hat Wohnsitz in Luxemburg (Ausland); internationale Zustellungen und ggf. grenzüberschreitende Insolvenzrechtsaspekte sind zu beachten.",
+      "quelle": "Seite 58, Gesellschafterliste",
+      "verifiziert": true
+    },
+    {
+      "wert": "Northstar Family Holdings C, LLC ist eine US-amerikanische LLC; ausländische Gesellschaft als Gesellschafterin erfordert besondere rechtliche Behandlung bei Zustellungen und Einziehungsverfahren.",
+      "quelle": "Seite 62, Gesellschafterliste",
+      "verifiziert": true
+    },
+    {
+      "wert": null,
+      "quelle": "Seite 57-60, Liste der Gesellschafter der COBOWORX GmbH (Dok-ID 413612)",
+      "verifiziert": false
+    },
+    {
+      "wert": "Der Gesellschaftsvertrag sieht weitreichende Zustimmungsrechte der Seed-Mehrheit vor (u.a. bei Jahresabschluss, Kapitalmaßnahmen, Auflösung des Beirats); im Insolvenzverfahren ist zu klären, welche Gesellschafter Seed-Anteile halten und ob Insolvenzverwalter diese Rechte ausüben kann.",
+      "quelle": "Seite 35-39, Gesellschaftsvertrag § 9.2, § 9.3, § 11.1-11.2",
+      "verifiziert": true
+    },
+    {
+      "wert": "Verfügungen über Geschäftsanteile bedürfen laut § 14 des Gesellschaftsvertrags der Zustimmung der Gesellschafterversammlung; dies kann die Verwertung von Gesellschaftsanteilen im Insolvenzverfahren erschweren.",
+      "quelle": "Seite 42, Gesellschaftsvertrag § 14",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die Einziehungsvergütung nach § 17.5 ist in 5 Raten über 2,5 Jahre zu zahlen; Liquiditätsrisiko für die Masse bei gleichzeitiger Einziehung mehrerer Anteile.",
+      "quelle": "Seite 48-49, Gesellschaftsvertrag § 17.5",
+      "verifiziert": true
+    },
+    {
+      "wert": "Gesellschafter GMA corporate GmbH (HRB 44776, Osann-Monzel) und Gehrels Beteiligungsgesellschaft mbH (HRB 44783) sind ebenfalls beim AG Wittlich registriert und könnten wirtschaftlich mit der Schuldnerin verbunden sein; Verflechtungen sind zu prüfen.",
+      "quelle": "Seite 57-58, Gesellschafterliste",
+      "verifiziert": true
+    },
+    {
+      "wert": "Bilanzielle Überschuldung zum 31.12.2023: Die Gesellschaft war bilanziell überschuldet. Die Beseitigung erfolgte erst durch die Kapitalerhöhung im April 2024 - Zeitraum zwischen Überschuldung und Beseitigung ist insolvenzrechtlich relevant (§ 19 InsO).",
+      "quelle": "Seite 96, Bestätigungsvermerk; Seite 110, Anhang (Nachtragsberichterstattung)",
+      "verifiziert": true
+    },
+    {
+      "wert": "Massenabschreibung auf den selbstentwickelten Prototyp (3.126.986,37 EUR) wegen dauernder Wertminderung: Hinweis auf gescheiterte Produktentwicklung, die ggf. Anfechtungsrelevanz hat.",
+      "quelle": "Seite 109, Anhang zum Jahresabschluss 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Abschreibung auf Vorräte in Höhe von 1.283.877,40 EUR wegen langer Lagerdauer und drohender Verschrottung: Hinweis auf schwer verwertbare Bestände und mögliche geringe Liquidierbarkeit.",
+      "quelle": "Seite 109, Anhang zum Jahresabschluss 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Materialaufwandsquote von 85,2% der Gesamtleistung: Strukturelles Ertragsproblem, das die Lebensfähigkeit des Geschäftsmodells in Frage stellt.",
+      "quelle": "Seite 92, Ertragslage 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Gesellschafterdarlehen von 1.525.783,33 EUR: Diese könnten gemäß § 39 Abs. 1 Nr. 5 InsO nachrangig sein und/oder Anfechtung nach § 135 InsO unterliegen.",
+      "quelle": "Seite 109, Anhang zum Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Wandeldarlehen in 2024 von 1.200.000 EUR und Wandlung in Eigenkapital: Prüfung, ob Handlungen in der Krise erfolgt sind und ob Anfechtungsansprüche bestehen.",
+      "quelle": "Seite 110, Anhang zum Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Ralf Zeisberger ist sowohl Gesellschafter (6.250 EUR) als auch bis 01.10.2024 Geschäftsführer: Mögliche Interessenkonflikte und Prüfung von Insiderentnahmen oder nahestehenden Transaktionen.",
+      "quelle": "Seite 110, 118-119, Anhang und Rechtliche Verhältnisse zum Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Rückzahlung von Fördermitteln Dresden (128 TEUR) aufgrund Betriebsstättenauflösung: Prüfung, ob die Betriebsstättenauflösung in der Krise erfolgte und ob weitere Fördermittelrückforderungen drohen.",
+      "quelle": "Seite 94, Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Stark gestiegene sonstige betriebliche Aufwendungen (995 TEUR 'Verschiedene betriebliche Kosten' vs. 353 TEUR Vorjahr): Detailprüfung auf unangemessene Zahlungen in der Krise empfohlen.",
+      "quelle": "Seite 94, Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Gesellschaftsvertrag zuletzt geändert am 24. April 2024 (kurz vor oder im Zusammenhang mit dem Insolvenzantrag): Prüfung der Änderungsinhalte auf insolvenzrechtliche Relevanz erforderlich.",
+      "quelle": "Seite 118, Rechtliche Verhältnisse zum Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Erhebliche Verlustakkumulation: Jahresfehlbetrag 2022 TEUR 2.521, Verlustvortrag TEUR 1.735 - insgesamt kumulierte Verluste von über TEUR 4.256 bei Kapitalrücklage von TEUR 7.487. Eigenkapital sinkt rapide; Fortführungsfähigkeit kritisch zu bewerten.",
+      "quelle": "Seite 110, 129-133, Anhang zum Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Hohe immaterielle Aktivposten (TEUR 3.255 = 41,7% der Bilanzsumme) aus Entwicklungskosten nach § 248 Abs. 2 HGB (Wahlrecht). Diese Werte sind in der Insolvenz regelmäßig schwer oder gar nicht verwertbar; der tatsächliche Liquidationswert dürfte erheblich unter dem Buchwert liegen.",
+      "quelle": "Seite 130-131, Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Wandeldarlehen in Höhe von rund EUR 3,78 Mio. wurden am 05.10.2022 abgeschlossen - mögliche Insolvenzanfechtung nach §§ 130 ff. InsO zu prüfen (Kenntnis der Gläubiger von Zahlungsunfähigkeit oder Überschuldung).",
+      "quelle": "Seite 134-136, Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Gesellschafterverbindlichkeiten aus Wandeldarlehen (TEUR 953) gegenüber Gehrels Beteiligungsgesellschaft mbH, Henrik Schunk Beteiligungen GmbH, Paua Ventures Fonds 1 GmbH & Co. KG und Picus Capital GmbH - Nachrangigkeit im Insolvenzverfahren nach § 39 Abs. 1 Nr. 5 InsO zu prüfen.",
+      "quelle": "Seite 134, Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Forschungszulagen-Forderungen (TEUR 423) sind unsicher: Einspruch gegen Kürzungsbescheid 2020 offen, Festsetzung 2021 noch ausständig; tatsächlicher Eingang der Forderungen ungewiss.",
+      "quelle": "Seite 132-133, Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Fremdleistungen der Matheus Service GmbH, Osann-Monzel (EUR 158.674) - gleicher Sitz wie Schuldnerin; mögliche gesellschaftsrechtliche Verflechtung und Anfechtungsrelevanz zu prüfen.",
+      "quelle": "Seite 138, Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Geleistete Anzahlungen TEUR 428 in den Vorräten - Rückforderungsansprüche und tatsächliche Gegenleistung zu prüfen; Ausfallrisiko bei Lieferanten.",
+      "quelle": "Seite 131, Jahresabschlussprüfungsbericht 2023",
+      "verifiziert": true
+    },
+    {
+      "wert": "Erheblicher Anstieg der sonstigen betrieblichen Aufwendungen auf TEUR 975 in 2022 (Vorjahr TEUR 522), insbesondere Werbe- und Reisekosten (+TEUR 303) sowie Personalvermittlungskosten (TEUR 89) und Rechts-/Beratungskosten (TEUR 82) - Mittelabflüsse vor Insolvenz zu prüfen.",
+      "quelle": "Seite 139, Jahresabschlussprüfungsbericht 2022",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die Gesellschaft hat keinen Lagebericht aufgestellt (Verzicht nach § 264 Abs. 1 Satz 5 HGB) - Informationsdefizit hinsichtlich Risikodarstellung der Geschäftsführung.",
+      "quelle": "Seite 125, Jahresabschlussprüfungsbericht 2022",
+      "verifiziert": true
+    },
+    {
+      "wert": "Private KFZ-Nutzung als Ertrag ausgewiesen (TEUR 16) - Hinweis auf Privatnutzung von Betriebsvermögen durch Gesellschafter/Geschäftsführer; Rückforderungsansprüche zu prüfen.",
+      "quelle": "Seite 138, Jahresabschlussprüfungsbericht 2022",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die Versicherung gemäß § 13 Abs. 1 S. 7 InsO ist eine Strafbewehrte Erklärung; inhaltliche Unrichtigkeiten des Gläubigerverzeichnisses könnten strafrechtliche Relevanz haben und sind vom Insolvenzverwalter kritisch zu prüfen.",
+      "quelle": "Seite 182, Eidesstattliche Erklärung der Geschäftsführung",
+      "verifiziert": true
+    },
+    {
+      "wert": "Die Angabe '44 Arbeitnehmer (hat)' deutet auf mögliche Beschäftigungsreduzierung hin; Insolvenzgeldansprüche und Sozialplanpflichten (§§ 111 ff. BetrVG) sind zu prüfen.",
+      "quelle": "Seite 182, Eidesstattliche Erklärung der Geschäftsführung",
+      "verifiziert": true
+    },
+    {
+      "wert": "Konkrete Beträge für Bilanzsumme und Umsatzerlöse sind in diesem Aktenabschnitt nicht ausgewiesen, obwohl deren Richtigkeit versichert wird; eine Plausibilitätsprüfung anhand der vollständigen Kreditorenliste ist erforderlich.",
+      "quelle": "Seite 182, Eidesstattliche Erklärung der Geschäftsführung",
+      "verifiziert": true
+    }
+  ]
+}
