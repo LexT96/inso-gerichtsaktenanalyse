@@ -3,7 +3,6 @@ import { extractFromPdfBuffer, extractFromPageTexts } from './anthropic';
 import { extractTextPerPage } from './pdfProcessor';
 import { getDb } from '../db/database';
 import { writeResultJson } from '../db/resultJson';
-import { config } from '../config';
 import { logger } from '../utils/logger';
 import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
 import { analyzeDocumentStructure } from '../utils/documentAnalyzer';
@@ -99,19 +98,13 @@ export async function processExtraction(
     // Stage 2: Extract data with document context
     let result: ExtractionResult;
 
-    // Native PDF mode (type: 'document') is only supported by the direct Anthropic API.
-    // Proxies like Langdock or Azure AI don't support it, so we use text-based extraction.
-    const useNativePdf = !config.ANTHROPIC_BASE_URL && pageCount <= PDF_DOCUMENT_PAGE_LIMIT;
-
-    if (!useNativePdf) {
-      if (pageCount > PDF_DOCUMENT_PAGE_LIMIT) {
-        logger.info('Großes PDF — verwende seitenbasiertes Chunking', { pageCount });
-        report(`Großes PDF (${pageCount} S.) — Chunked Extraktion… (Stufe 2/3)`, 35);
-      } else if (config.ANTHROPIC_BASE_URL) {
-        logger.info('Externer API-Endpunkt — verwende textbasierte Extraktion', { pageCount });
-      }
+    if (pageCount > PDF_DOCUMENT_PAGE_LIMIT) {
+      logger.info('Großes PDF — verwende seitenbasiertes Chunking', { pageCount });
+      report(`Großes PDF (${pageCount} S.) — Chunked Extraktion… (Stufe 2/3)`, 35);
       result = await extractFromPageTexts(pageTexts, documentMap);
     } else {
+      // Try native PDF mode first (best quality). Falls back to text-based
+      // extraction if the provider doesn't support the 'document' content type.
       try {
         result = await extractFromPdfBuffer(pdfBuffer, documentMap);
       } catch (primaryError) {
