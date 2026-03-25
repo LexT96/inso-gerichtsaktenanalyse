@@ -267,7 +267,7 @@ export function QuellenTab({ result }: QuellenTabProps) {
           <span className="text-ie-green">{'\u2713'} {verifiedCount} verifiziert</span>
         )}
         {unverifiedCount > 0 && (
-          <span className="text-ie-amber">? {unverifiedCount} ungepr\u00fcft</span>
+          <span className="text-ie-amber">? {unverifiedCount} ungeprüft</span>
         )}
       </div>
 

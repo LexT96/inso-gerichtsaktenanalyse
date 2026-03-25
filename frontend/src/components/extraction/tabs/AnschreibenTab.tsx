@@ -19,7 +19,7 @@ function LetterCard({ letter }: { letter: Standardanschreiben }) {
       <div className="flex justify-between items-center">
         <div>
           <div className="text-xs font-semibold text-text font-sans">{letter.typ}</div>
-          <div className="text-[10px] text-text-dim mt-0.5">An: {letter.empfaenger?.trim() || '\u2014'}</div>
+          <div className="text-[10px] text-text-dim mt-0.5">An: {letter.empfaenger?.trim() || '—'}</div>
         </div>
         <Badge type={st} />
       </div>
@@ -69,32 +69,32 @@ export function AnschreibenTab({ letters, missingInfo }: AnschreibenTabProps) {
       <div className="flex gap-2 mb-3.5">
         <StatsCardSmall label="Bereit" value={bereit.length} colorClass="text-ie-green" />
         <StatsCardSmall label="Daten fehlen" value={fehlt.length} colorClass="text-ie-amber" />
-        <StatsCardSmall label="Entf\u00e4llt" value={entfaellt.length} colorClass="text-ie-blue" />
+        <StatsCardSmall label="Entfällt" value={entfaellt.length} colorClass="text-ie-blue" />
       </div>
 
       {bereit.length > 0 && (
-        <Section title="Alle Daten vorhanden" icon={'\u2713'} count={bereit.length}>
+        <Section title="Alle Daten vorhanden" icon="✓" count={bereit.length}>
           {bereit.map((l, i) => <LetterCard key={i} letter={l} />)}
         </Section>
       )}
       {fehlt.length > 0 && (
-        <Section title="Daten unvollst\u00e4ndig" icon={'\u25b3'} count={fehlt.length}>
+        <Section title="Daten unvollständig" icon="△" count={fehlt.length}>
           {fehlt.map((l, i) => <LetterCard key={i} letter={l} />)}
         </Section>
       )}
       {entfaellt.length > 0 && (
-        <Section title="Nicht erforderlich" icon={'\u25cb'} count={entfaellt.length} defaultOpen={false}>
+        <Section title="Nicht erforderlich" icon="○" count={entfaellt.length} defaultOpen={false}>
           {entfaellt.map((l, i) => <LetterCard key={i} letter={l} />)}
         </Section>
       )}
       {letters.length === 0 && (
         <div className="text-center py-10 text-text-muted text-xs">
-          Keine Anschreiben-Analyse verf\u00fcgbar.
+          Keine Anschreiben-Analyse verfügbar.
         </div>
       )}
 
       {missingInfo.length > 0 && (
-        <Section title="Fehlende Informationen" icon={'\u25b3'} count={missingInfo.length} defaultOpen={false}>
+        <Section title="Fehlende Informationen" icon="△" count={missingInfo.length} defaultOpen={false}>
           {missingInfo.map((m, i) => {
             const title = typeof m === 'string' ? m : (m.information || m.grund || m.ermittlung_ueber || 'Fehlende Angabe').trim();
             const titleFromGrund = typeof m === 'object' && !m.information?.trim() && m.grund?.trim() === title;
@@ -105,7 +105,7 @@ export function AnschreibenTab({ letters, missingInfo }: AnschreibenTabProps) {
                   <div className="text-[10px] text-text-dim mt-0.5">Grund: {m.grund}</div>
                 )}
                 {typeof m === 'object' && m.ermittlung_ueber && (
-                  <div className="text-[10px] text-ie-amber mt-0.5">{'\u2192'} Ermittlung \u00fcber: {m.ermittlung_ueber}</div>
+                  <div className="text-[10px] text-ie-amber mt-0.5">→ Ermittlung über: {m.ermittlung_ueber}</div>
                 )}
               </div>
             );

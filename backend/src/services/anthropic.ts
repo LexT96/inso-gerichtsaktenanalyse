@@ -3,6 +3,8 @@ import { jsonrepair } from 'jsonrepair';
 import { config } from '../config';
 import { extractionResultSchema } from '../utils/validation';
 import { logger } from '../utils/logger';
+import { parallelLimitSettled } from '../utils/parallel';
+import type { DocumentSegment } from '../utils/documentAnalyzer';
 import type { ExtractionResult, Standardanschreiben, FehlendInfo } from '../types/extraction';
 
 export const anthropic = new Anthropic({
@@ -10,11 +12,12 @@ export const anthropic = new Anthropic({
   ...(config.ANTHROPIC_BASE_URL ? { baseURL: config.ANTHROPIC_BASE_URL } : {}),
 });
 
-// 30 pages per chunk → ~7,500 tokens of content + ~2,000 prompt ≈ 9,500 tokens/request
-// Well under the 30k/min limit even for free-tier accounts
-const PAGES_PER_CHUNK = 30;
-// 3s pause between chunks for rate-limit stability
-const CHUNK_PAUSE_MS = 3_000;
+// Max pages per document-aware chunk (soft limit — won't split a document)
+const MAX_PAGES_PER_CHUNK = 40;
+// Fallback: 30 pages per chunk when no segments available
+const FALLBACK_PAGES_PER_CHUNK = 30;
+// Concurrency limit for parallel extraction chunks
+const EXTRACTION_CONCURRENCY = 3;
 // 65s wait before retrying after a 429
 const RATE_LIMIT_RETRY_DELAY_MS = 65_000;
 
@@ -179,13 +182,6 @@ ERINNERUNG: Jeder nicht-leere wert braucht eine quelle (Seite X, ...). Keine Aus
 
 WICHTIG für fehlende_informationen: Jeder Eintrag MUSS ein Objekt mit allen drei Feldern sein. Das Feld "information" darf NIEMALS leer sein — trage dort stets eine kurze, prägnante Bezeichnung der fehlenden Information ein (z.B. "Beschlussdatum des Insolvenzgerichts", "Konkrete Bankverbindungen"). Keine Platzhalter wie {"information":"","grund":"..."} ausgeben. Wenn nichts fehlt, leere Liste []. Maximal 15 Einträge — nur die wichtigsten fehlenden Informationen, keine Wiederholungen.`;
 
-// Short prompt for chunks 2+ — schema already established, just extract the content
-const EXTRACTION_PROMPT_CONTINUATION = `Du bist ein KI-Assistent für deutsche Insolvenzverwalter. Extrahiere alle verfügbaren Daten aus diesem Aktenabschnitt und gib das Ergebnis als valides JSON zurück (kein Markdown, keine Backticks). In String-Werten Anführungszeichen mit \\ escapen, keine Zeilenumbrüche in Strings. Verwende exakt dasselbe JSON-Schema — fehlende Felder auf null/""/0 setzen.
-
-PFLICHT: Jeder nicht-leere wert MUSS eine quelle haben ("Seite X, [Dokument]"). Ohne quelle keine gültige Extraktion. Die quelle muss die exakte Fundstelle sein — die Seite, auf der der Wert im vorliegenden Text steht. Bei "=== SEITE X ==="-Markierungen: genau diese X verwenden. Keine generischen oder geschätzten Quellen.
-
-Gleiche Struktur: verfahrensdaten, schuldner, antragsteller, forderungen, gutachterbestellung, ermittlungsergebnisse, fristen[], standardanschreiben[] (10 Typen: Bankenauskunft|Bausparkassen-Anfrage|Steuerberater-Kontakt|Strafakte-Akteneinsicht|KFZ-Halteranfrage Zulassungsstelle|Gewerbeauskunft|Finanzamt-Anfrage|KFZ-Halteranfrage KBA|Versicherungsanfrage|Gerichtsvollzieher-Anfrage mit status bereit|fehlt|entfaellt), fehlende_informationen[] (jeder Eintrag: {"information":"kurze Bezeichnung","grund":"...","ermittlung_ueber":"..."} — "information" nie leer), zusammenfassung[] (Array von {wert,quelle}), risiken_hinweise[] (Array von {wert,quelle}).`;
-
 // ─── Helpers ───
 
 function sleep(ms: number): Promise<void> {
@@ -216,17 +212,6 @@ export async function callWithRetry<T>(fn: () => Promise<T>): Promise<T> {
     }
   }
   throw new Error('callWithRetry: max retries exhausted');
-}
-
-function extractBriefContext(result: ExtractionResult): string {
-  const parts: string[] = [];
-  const { schuldner: sz, verfahrensdaten: vd } = result;
-  const fullName = [sz?.vorname?.wert, sz?.name?.wert].filter(Boolean).join(' ');
-  if (fullName) parts.push(`Schuldner: ${fullName}`);
-  if (vd?.aktenzeichen?.wert) parts.push(`Az: ${vd.aktenzeichen.wert}`);
-  if (vd?.gericht?.wert) parts.push(`Gericht: ${vd.gericht.wert}`);
-  if (result.antragsteller?.name?.wert) parts.push(`Antragsteller: ${result.antragsteller.name.wert}`);
-  return parts.join(' | ');
 }
 
 // ─── Merge ───
@@ -408,6 +393,76 @@ function parseAndValidateResponse(text: string): ExtractionResult {
   return (parsed ?? {}) as ExtractionResult;
 }
 
+// ─── Document-Aware Chunking ───
+
+interface DocumentChunk {
+  /** Segments included in this chunk */
+  segments: DocumentSegment[];
+  /** All page numbers in this chunk (sorted) */
+  pages: number[];
+  /** Human-readable label of document types in this chunk */
+  documentContext: string;
+}
+
+/**
+ * Group document segments into chunks that keep documents together.
+ *
+ * Algorithm:
+ * - Add segments to current chunk until page limit is exceeded
+ * - Never split a single document across chunks
+ * - If a single document exceeds the limit, it gets its own chunk
+ */
+export function buildDocumentAwareChunks(
+  segments: DocumentSegment[],
+  maxPagesPerChunk: number = MAX_PAGES_PER_CHUNK
+): DocumentChunk[] {
+  if (segments.length === 0) return [];
+
+  const chunks: DocumentChunk[] = [];
+  let currentSegments: DocumentSegment[] = [];
+  let currentPages: number[] = [];
+
+  for (const segment of segments) {
+    // If adding this segment would exceed the limit and we already have content, start a new chunk
+    if (currentPages.length + segment.pages.length > maxPagesPerChunk && currentPages.length > 0) {
+      chunks.push(buildChunk(currentSegments));
+      currentSegments = [];
+      currentPages = [];
+    }
+
+    currentSegments.push(segment);
+    currentPages.push(...segment.pages);
+  }
+
+  // Don't forget the last chunk
+  if (currentSegments.length > 0) {
+    chunks.push(buildChunk(currentSegments));
+  }
+
+  return chunks;
+}
+
+function buildChunk(segments: DocumentSegment[]): DocumentChunk {
+  const allPages = segments.flatMap(s => s.pages).sort((a, b) => a - b);
+  // Deduplicate pages (segments might overlap)
+  const uniquePages = [...new Set(allPages)].sort((a, b) => a - b);
+
+  const docLabels = segments
+    .filter(s => s.type !== 'Sonstige Dokumente')
+    .map(s => {
+      const pageRange = s.pages.length === 1
+        ? `Seite ${s.pages[0]}`
+        : `Seiten ${s.pages[0]}-${s.pages[s.pages.length - 1]}`;
+      return `${s.type} (${pageRange})`;
+    });
+
+  return {
+    segments,
+    pages: uniquePages,
+    documentContext: docLabels.length > 0 ? docLabels.join(', ') : '',
+  };
+}
+
 // ─── Claude API call ───
 
 async function callClaudeText(content: string): Promise<ExtractionResult> {
@@ -456,60 +511,99 @@ export async function extractFromPdfBuffer(pdfBuffer: Buffer, documentMap?: stri
 }
 
 /**
- * Extracts from an array of per-page texts using page-based chunking.
- * Sends PAGES_PER_CHUNK pages per request, with context from previous chunks.
+ * Extracts using document-aware chunks that keep related pages together.
+ * Runs chunks in parallel for speed while preserving document coherence.
+ *
+ * Falls back to simple page-based chunking when no segments are available.
  */
-export async function extractFromPageTexts(pageTexts: string[], documentMap?: string): Promise<ExtractionResult> {
+export async function extractFromPageTexts(
+  pageTexts: string[],
+  documentMap?: string,
+  segments?: DocumentSegment[]
+): Promise<ExtractionResult> {
   const totalPages = pageTexts.length;
 
-  // Build page chunks
-  const pageChunks: string[][] = [];
-  for (let i = 0; i < totalPages; i += PAGES_PER_CHUNK) {
-    pageChunks.push(pageTexts.slice(i, i + PAGES_PER_CHUNK));
-  }
+  // If we have segments, use document-aware chunking; otherwise fallback to fixed-size
+  const chunks = segments && segments.length > 0
+    ? buildDocumentAwareChunks(segments)
+    : buildFallbackChunks(totalPages);
 
-  logger.info('Seitenbasiertes Chunking', {
+  logger.info('Extraktion Chunking', {
     totalPages,
-    chunks: pageChunks.length,
-    pagesPerChunk: PAGES_PER_CHUNK,
+    chunks: chunks.length,
+    documentAware: !!(segments && segments.length > 0),
+    pagesPerChunk: chunks.map(c => c.pages.length),
   });
 
-  const results: ExtractionResult[] = [];
-  let prevContext = '';
+  const mapBlock = documentMap
+    ? `\n\n--- STRUKTURÜBERSICHT (nur zur Orientierung, KEINE Seitenzahlen hieraus verwenden) ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---\n`
+    : '';
 
-  for (let i = 0; i < pageChunks.length; i++) {
-    if (i > 0) {
-      await sleep(CHUNK_PAUSE_MS);
-    }
-
-    const startPage = i * PAGES_PER_CHUNK + 1;
-    const endPage = Math.min((i + 1) * PAGES_PER_CHUNK, totalPages);
-    const chunkText = pageChunks[i]
-      .map((text, idx) => `=== SEITE ${startPage + idx} ===\n${text}`)
+  // Build extraction tasks — all use the full prompt + document map
+  const tasks = chunks.map((chunk, i) => () => {
+    const chunkText = chunk.pages
+      .map(p => `=== SEITE ${p} ===\n${pageTexts[p - 1]}`)
       .join('\n\n');
 
-    logger.info(`Chunk ${i + 1}/${pageChunks.length} (Seiten ${startPage}–${endPage})`);
+    const docContext = chunk.documentContext
+      ? `\nDiese Seiten enthalten: ${chunk.documentContext}\n`
+      : '';
 
-    let content: string;
-    const mapBlock = documentMap ? `\n\n--- STRUKTURÜBERSICHT (nur zur Orientierung, KEINE Seitenzahlen hieraus verwenden) ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---\n` : '';
-    if (i === 0) {
-      content = `${EXTRACTION_PROMPT}${mapBlock}\n\n--- AKTENINHALT (Seiten ${startPage}–${endPage} von ${totalPages}) ---\n\n${chunkText}`;
-    } else {
-      const contextLine = prevContext ? `Bereits bekannte Stammdaten: ${prevContext}\n\n` : '';
-      content = `${EXTRACTION_PROMPT_CONTINUATION}\n\n${contextLine}--- AKTENINHALT (Seiten ${startPage}–${endPage} von ${totalPages}) ---\n\n${chunkText}`;
-    }
+    const pageRange = chunk.pages.length === 1
+      ? `Seite ${chunk.pages[0]}`
+      : `Seiten ${chunk.pages[0]}–${chunk.pages[chunk.pages.length - 1]}`;
 
-    const result = await callWithRetry(() => callClaudeText(content));
-    results.push(result);
+    const content = `${EXTRACTION_PROMPT}${mapBlock}${docContext}\n--- AKTENINHALT (${pageRange} von ${totalPages}) ---\n\n${chunkText}`;
 
-    // Pass key context to next chunk so Claude knows who we're talking about
-    if (i === 0) {
-      prevContext = extractBriefContext(result);
-      if (prevContext) logger.info(`Chunk-Kontext: ${prevContext}`);
+    logger.info(`Chunk ${i + 1}/${chunks.length} gestartet (${pageRange}, ${chunk.pages.length} Seiten)`);
+
+    return callWithRetry(() => callClaudeText(content));
+  });
+
+  // Run chunks in parallel with concurrency limit
+  const { results, errors } = await parallelLimitSettled(tasks, EXTRACTION_CONCURRENCY);
+
+  // Log errors but continue with successful results
+  const successfulResults: ExtractionResult[] = [];
+  for (let i = 0; i < results.length; i++) {
+    if (errors[i]) {
+      logger.warn(`Chunk ${i + 1}/${chunks.length} fehlgeschlagen`, {
+        error: errors[i]!.message,
+        pages: chunks[i].pages.length,
+      });
+    } else if (results[i]) {
+      successfulResults.push(results[i]!);
     }
   }
 
-  return mergeExtractionResults(results);
+  if (successfulResults.length === 0) {
+    throw new Error('Alle Extraktions-Chunks sind fehlgeschlagen');
+  }
+
+  if (errors.some(e => e !== undefined)) {
+    logger.warn('Teilweise Extraktion', {
+      successful: successfulResults.length,
+      failed: errors.filter(e => e !== undefined).length,
+    });
+  }
+
+  return mergeExtractionResults(successfulResults);
+}
+
+/**
+ * Fallback chunking when no document segments are available.
+ * Splits pages into fixed-size chunks (same as the old approach).
+ */
+function buildFallbackChunks(totalPages: number): DocumentChunk[] {
+  const chunks: DocumentChunk[] = [];
+  for (let i = 0; i < totalPages; i += FALLBACK_PAGES_PER_CHUNK) {
+    const pages: number[] = [];
+    for (let p = i + 1; p <= Math.min(i + FALLBACK_PAGES_PER_CHUNK, totalPages); p++) {
+      pages.push(p);
+    }
+    chunks.push({ segments: [], pages, documentContext: '' });
+  }
+  return chunks;
 }
 
 /**

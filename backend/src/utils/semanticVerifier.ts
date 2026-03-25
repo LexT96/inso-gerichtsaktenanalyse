@@ -13,6 +13,7 @@ import { jsonrepair } from 'jsonrepair';
 import { anthropic, callWithRetry, extractJsonFromText } from '../services/anthropic';
 import { config } from '../config';
 import { logger } from './logger';
+import { parallelLimitSettled } from './parallel';
 import type { ExtractionResult } from '../types/extraction';
 
 // ─── Types ───
@@ -134,12 +135,12 @@ const TOKEN_BUDGET = 40_000;
 const CHARS_PER_TOKEN = 2.5; // German text with umlauts needs lower estimate (A3)
 // Pages around each referenced page to include for context
 const PAGE_BUFFER = 2;
-// Pause between batch calls to avoid rate limiting
-const BATCH_PAUSE_MS = 3_000;
 // Max fields per verification batch to prevent output truncation (A2)
 const MAX_FIELDS_PER_BATCH = 25;
 // Max tokens for verification response
 const VERIFICATION_MAX_TOKENS = 12_288;
+// Concurrency limit for parallel verification batches
+const VERIFICATION_CONCURRENCY = 3;
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN);
@@ -246,10 +247,6 @@ function parseVerificationResponse(text: string): VerificationEntry[] {
 
 // ─── Batch helpers ───
 
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 interface BatchDef {
   fields: CollectedField[];
   globalOffset: number;
@@ -308,13 +305,11 @@ interface VerifyStats {
 function processEntries(
   entries: VerificationEntry[],
   fields: CollectedField[],
-  globalOffset: number,
   mutations: Mutation[],
   stats: VerifyStats
 ): void {
   for (const entry of entries) {
     const localIdx = entry.nr - 1;
-    const globalIdx = globalOffset + localIdx;
     if (localIdx < 0 || localIdx >= fields.length) continue;
 
     const ref = fields[localIdx].ref;
@@ -382,17 +377,12 @@ export async function semanticVerify(
     pagesPerBatch: batches.map(b => b.pageCount),
   });
 
-  const mutations: Mutation[] = [];
-  const stats: VerifyStats = { verified: 0, sourceCorrected: 0, valueCorrected: 0, removed: 0, failed: 0 };
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
-
-  for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
-    const batch = batches[batchIdx];
-
-    if (batchIdx > 0) {
-      await sleep(BATCH_PAUSE_MS);
-    }
+  // Build verification tasks for each batch
+  const batchTasks = batches.map((batch, batchIdx) => async () => {
+    const batchMutations: Mutation[] = [];
+    const batchStats: VerifyStats = { verified: 0, sourceCorrected: 0, valueCorrected: 0, removed: 0, failed: 0 };
+    let inputTokens = 0;
+    let outputTokens = 0;
 
     const fieldList = buildFieldList(batch.fields);
 
@@ -406,45 +396,40 @@ ${batch.pageBlock}
 
 ${fieldList}`;
 
-    try {
-      const response = await callWithRetry(() =>
-        anthropic.messages.create({
-          model: config.UTILITY_MODEL,
-          max_tokens: VERIFICATION_MAX_TOKENS,
-          messages: [{ role: 'user' as const, content }],
-        })
-      ) as Anthropic.Message;
+    const response = await callWithRetry(() =>
+      anthropic.messages.create({
+        model: config.UTILITY_MODEL,
+        max_tokens: VERIFICATION_MAX_TOKENS,
+        messages: [{ role: 'user' as const, content }],
+      })
+    ) as Anthropic.Message;
 
-      const text = response.content
-        .filter((c): c is Anthropic.TextBlock => c.type === 'text')
-        .map((c: Anthropic.TextBlock) => c.text)
-        .join('');
+    const text = response.content
+      .filter((c): c is Anthropic.TextBlock => c.type === 'text')
+      .map((c: Anthropic.TextBlock) => c.text)
+      .join('');
 
-      const entries = parseVerificationResponse(text);
+    const entries = parseVerificationResponse(text);
 
-      totalInputTokens += response.usage?.input_tokens ?? 0;
-      totalOutputTokens += response.usage?.output_tokens ?? 0;
+    inputTokens += response.usage?.input_tokens ?? 0;
+    outputTokens += response.usage?.output_tokens ?? 0;
 
-      // Truncation retry: if response was cut off and we got fewer entries than fields,
-      // retry once for the remaining fields
-      if (response.stop_reason === 'max_tokens' && entries.length < batch.fields.length) {
-        logger.warn('Verifikations-Antwort abgeschnitten — Retry für verbleibende Felder', {
-          batch: batchIdx + 1,
-          entriesReceived: entries.length,
-          fieldsInBatch: batch.fields.length,
-        });
+    // Truncation retry: if response was cut off, retry remaining fields
+    if (response.stop_reason === 'max_tokens' && entries.length < batch.fields.length) {
+      logger.warn('Verifikations-Antwort abgeschnitten — Retry für verbleibende Felder', {
+        batch: batchIdx + 1,
+        entriesReceived: entries.length,
+        fieldsInBatch: batch.fields.length,
+      });
 
-        // Process the entries we did get
-        processEntries(entries, batch.fields, batch.globalOffset, mutations, stats);
+      processEntries(entries, batch.fields, batchMutations, batchStats);
 
-        // Retry with remaining fields
-        const answeredNrs = new Set(entries.map(e => e.nr));
-        const remainingFields = batch.fields.filter((_, i) => !answeredNrs.has(i + 1));
+      const answeredNrs = new Set(entries.map(e => e.nr));
+      const remainingFields = batch.fields.filter((_, i) => !answeredNrs.has(i + 1));
 
-        if (remainingFields.length > 0) {
-          await sleep(BATCH_PAUSE_MS);
-          const retryFieldList = buildFieldList(remainingFields);
-          const retryContent = `${VERIFICATION_PROMPT}
+      if (remainingFields.length > 0) {
+        const retryFieldList = buildFieldList(remainingFields);
+        const retryContent = `${VERIFICATION_PROMPT}
 ${mapBlock}
 --- AKTENINHALT (${batch.pageCount} relevante Seiten von ${pageTexts.length} gesamt) ---
 
@@ -454,77 +439,73 @@ ${batch.pageBlock}
 
 ${retryFieldList}`;
 
-          const retryResponse = await callWithRetry(() =>
-            anthropic.messages.create({
-              model: config.UTILITY_MODEL,
-              max_tokens: VERIFICATION_MAX_TOKENS,
-              messages: [{ role: 'user' as const, content: retryContent }],
-            })
-          ) as Anthropic.Message;
+        const retryResponse = await callWithRetry(() =>
+          anthropic.messages.create({
+            model: config.UTILITY_MODEL,
+            max_tokens: VERIFICATION_MAX_TOKENS,
+            messages: [{ role: 'user' as const, content: retryContent }],
+          })
+        ) as Anthropic.Message;
 
-          const retryText = retryResponse.content
-            .filter((c): c is Anthropic.TextBlock => c.type === 'text')
-            .map((c: Anthropic.TextBlock) => c.text)
-            .join('');
+        const retryText = retryResponse.content
+          .filter((c): c is Anthropic.TextBlock => c.type === 'text')
+          .map((c: Anthropic.TextBlock) => c.text)
+          .join('');
 
-          const retryEntries = parseVerificationResponse(retryText);
-          // Map retry entries back to original field indices
-          const remainingFieldsWithOrigIdx = batch.fields
-            .map((f, i) => ({ field: f, origIdx: i }))
-            .filter(({ origIdx }) => !answeredNrs.has(origIdx + 1));
+        const retryEntries = parseVerificationResponse(retryText);
 
-          for (const entry of retryEntries) {
-            const localIdx = entry.nr - 1;
-            if (localIdx < 0 || localIdx >= remainingFieldsWithOrigIdx.length) continue;
-            const { field } = remainingFieldsWithOrigIdx[localIdx];
-            const ref = field.ref;
+        processEntries(retryEntries, remainingFields, batchMutations, batchStats);
 
-            if (entry.verifiziert) {
-              if (entry.quelle_korrigiert) {
-                mutations.push({ ref, verifiziert: true, quelle: entry.quelle_korrigiert });
-                stats.sourceCorrected++;
-              } else {
-                mutations.push({ ref, verifiziert: true });
-                stats.verified++;
-              }
-            } else if (entry.aktion === 'korrigieren' && entry.korrekter_wert !== undefined) {
-              mutations.push({ ref, verifiziert: true, setWert: { value: entry.korrekter_wert }, quelle: entry.korrekte_quelle });
-              stats.valueCorrected++;
-            } else if (entry.aktion === 'entfernen') {
-              mutations.push({ ref, verifiziert: false, setWert: { value: null } });
-              stats.removed++;
-            } else {
-              mutations.push({ ref, verifiziert: false });
-              stats.failed++;
-            }
-          }
+        inputTokens += retryResponse.usage?.input_tokens ?? 0;
+        outputTokens += retryResponse.usage?.output_tokens ?? 0;
 
-          totalInputTokens += retryResponse.usage?.input_tokens ?? 0;
-          totalOutputTokens += retryResponse.usage?.output_tokens ?? 0;
-
-          logger.info(`Verifikation Retry für Batch ${batchIdx + 1} abgeschlossen`, {
-            retryFields: remainingFields.length,
-            retryEntries: retryEntries.length,
-          });
-        }
-      } else {
-        processEntries(entries, batch.fields, batch.globalOffset, mutations, stats);
-      }
-
-      if (batches.length > 1) {
-        logger.info(`Verifikation Batch ${batchIdx + 1}/${batches.length} abgeschlossen`, {
-          fieldsInBatch: batch.fields.length,
-          pagesInBatch: batch.pageCount,
-          inputTokens: response.usage?.input_tokens,
+        logger.info(`Verifikation Retry für Batch ${batchIdx + 1} abgeschlossen`, {
+          retryFields: remainingFields.length,
+          retryEntries: retryEntries.length,
         });
       }
-    } catch (err) {
-      logger.warn(`Verifikation Batch ${batchIdx + 1}/${batches.length} fehlgeschlagen — übersprungen`, {
-        error: err instanceof Error ? err.message : String(err),
-        fieldsInBatch: batch.fields.length,
-      });
-      // Continue with remaining batches — partial verification is better than none
+    } else {
+      processEntries(entries, batch.fields, batchMutations, batchStats);
     }
+
+    logger.info(`Verifikation Batch ${batchIdx + 1}/${batches.length} abgeschlossen`, {
+      fieldsInBatch: batch.fields.length,
+      pagesInBatch: batch.pageCount,
+      inputTokens,
+    });
+
+    return { mutations: batchMutations, stats: batchStats, inputTokens, outputTokens };
+  });
+
+  // Run all batches in parallel with concurrency limit
+  const { results: batchResults, errors: batchErrors } = await parallelLimitSettled(
+    batchTasks,
+    VERIFICATION_CONCURRENCY
+  );
+
+  // Aggregate results from all batches
+  const mutations: Mutation[] = [];
+  const stats: VerifyStats = { verified: 0, sourceCorrected: 0, valueCorrected: 0, removed: 0, failed: 0 };
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+
+  for (let i = 0; i < batchResults.length; i++) {
+    if (batchErrors[i]) {
+      logger.warn(`Verifikation Batch ${i + 1}/${batches.length} fehlgeschlagen — übersprungen`, {
+        error: batchErrors[i]!.message,
+        fieldsInBatch: batches[i].fields.length,
+      });
+      continue;
+    }
+    const br = batchResults[i]!;
+    mutations.push(...br.mutations);
+    stats.verified += br.stats.verified;
+    stats.sourceCorrected += br.stats.sourceCorrected;
+    stats.valueCorrected += br.stats.valueCorrected;
+    stats.removed += br.stats.removed;
+    stats.failed += br.stats.failed;
+    totalInputTokens += br.inputTokens;
+    totalOutputTokens += br.outputTokens;
   }
 
   // Apply all mutations atomically

@@ -6,6 +6,7 @@ import { writeResultJson } from '../db/resultJson';
 import { logger } from '../utils/logger';
 import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
 import { analyzeDocumentStructure } from '../utils/documentAnalyzer';
+import type { DocumentAnalysis } from '../utils/documentAnalyzer';
 import { semanticVerify } from '../utils/semanticVerifier';
 import type { ExtractionResult } from '../types/extraction';
 
@@ -90,18 +91,22 @@ export async function processExtraction(
 
     report(`${pageCount} Seiten erkannt — Dokumentstruktur wird analysiert… (Stufe 1/3)`, 15);
 
-    // Stage 1: Analyze document structure
-    const documentMap = await analyzeDocumentStructure(pageTexts);
+    // Stage 1: Analyze document structure → text map + parsed segments
+    const { mapText: documentMap, segments } = await analyzeDocumentStructure(pageTexts);
 
     report('Daten werden extrahiert… (Stufe 2/3)', 30);
 
     // Stage 2: Extract data with document context
+    // Document-aware chunking keeps related pages together and runs in parallel
     let result: ExtractionResult;
 
     if (pageCount > PDF_DOCUMENT_PAGE_LIMIT) {
-      logger.info('Großes PDF — verwende seitenbasiertes Chunking', { pageCount });
-      report(`Großes PDF (${pageCount} S.) — Chunked Extraktion… (Stufe 2/3)`, 35);
-      result = await extractFromPageTexts(pageTexts, documentMap);
+      const chunkInfo = segments.length > 0
+        ? `dokumentbasiertes Chunking (${segments.length} Segmente)`
+        : 'seitenbasiertes Chunking';
+      logger.info(`Großes PDF — verwende ${chunkInfo}`, { pageCount, segments: segments.length });
+      report(`Großes PDF (${pageCount} S.) — Parallele Extraktion… (Stufe 2/3)`, 35);
+      result = await extractFromPageTexts(pageTexts, documentMap, segments);
     } else {
       // Try native PDF mode first (best quality). Falls back to text-based
       // extraction if the provider doesn't support the 'document' content type.
@@ -115,13 +120,14 @@ export async function processExtraction(
           error: primaryError instanceof Error ? primaryError.message : String(primaryError),
         });
         report('Fallback auf textbasierte Extraktion…', 45);
-        result = await extractFromPageTexts(pageTexts, documentMap);
+        result = await extractFromPageTexts(pageTexts, documentMap, segments);
       }
     }
 
     report('Quellenangaben werden verifiziert… (Stufe 3/3)', 65);
 
     // Stage 3: Verify and correct against actual page texts + document structure
+    // Verification batches also run in parallel
     result = await semanticVerify(result, pageTexts, documentMap);
 
     report('Standardanschreiben werden geprüft…', 90);

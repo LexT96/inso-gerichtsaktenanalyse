@@ -106,7 +106,7 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
                       : 'border-border text-text-muted hover:border-accent hover:text-accent'
                 }`}
             >
-              {showSrc ? '\u00d7' : isUnverified ? '?' : pageNum ? `S.${pageNum}` : 'Q'}
+              {showSrc ? '×' : isUnverified ? '?' : pageNum ? `S.${pageNum}` : 'Q'}
             </button>
           )}
         </div>
