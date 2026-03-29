@@ -38,14 +38,16 @@ export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile, onExpor
     let count = 0;
     for (const tab of tabs) {
       const el = tabsRef.current.get(tab.id);
-      if (!el) { count++; continue; }
+      if (!el) break; // Stop at first unmeasured tab (not yet rendered)
       const w = el.getBoundingClientRect().width + 2; // +2 for gap
-      if (totalWidth + w > available && count < tabs.length) break;
+      if (totalWidth + w > available) break;
       totalWidth += w;
       count++;
     }
-    // Always show at least 3
-    setVisibleCount(Math.max(3, count));
+    // Always show at least 3, but never more than what fits
+    if (count > 0) {
+      setVisibleCount(Math.max(3, count));
+    }
   }, [tabs]);
 
   useEffect(() => {
@@ -80,7 +82,7 @@ export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile, onExpor
   }
 
   return (
-    <div ref={containerRef} className="flex items-end gap-0 mb-3.5 pb-0 relative shadow-[0_1px_2px_0_rgba(0,0,0,0.04)] sticky top-0 bg-bg/95 backdrop-blur-sm z-20 -mx-6 px-6 pt-1">
+    <div ref={containerRef} className="flex items-end gap-0 mb-3.5 pb-0 relative shadow-[0_1px_2px_0_rgba(0,0,0,0.04)] sticky top-0 bg-bg/95 backdrop-blur-sm z-20 -mx-6 px-6 pt-1 flex-nowrap">
       {/* Visible tabs */}
       {visibleTabs.map((t, i) => (
         <div key={t.id} className="flex items-end">
