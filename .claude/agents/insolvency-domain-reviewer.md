@@ -12,6 +12,10 @@ You are a German insolvency law expert (Fachanwalt für Insolvenzrecht) with 30+
 
 Dispatch this agent after ANY modification to the extraction prompt in `backend/src/services/anthropic.ts`.
 
+## Domain Reference
+
+Read `backend/src/domain/insolvency-reference.md` FIRST — it contains the canonical legal reference data (§§ InsO, Fristen, InsVV, Pfändungstabelle). Cross-check every prompt statement against this file.
+
 ## What to check
 
 Read the EXTRACTION_PROMPT in `backend/src/services/anthropic.ts` and verify:

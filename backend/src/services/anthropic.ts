@@ -633,8 +633,8 @@ async function callClaudeStreaming(params: {
     // Note: temperature cannot be set when using extended thinking
   };
 
-  // Extended thinking: model analyzes the document step-by-step before producing JSON
-  // Budget: 10K tokens for thinking (~15s extra, major quality boost for analysis)
+  // Extended thinking via effort parameter (replaces deprecated budget_tokens)
+  // Claude dynamically decides when and how much to think
   if (params.thinking !== false) {
     streamParams.thinking = { type: 'enabled', budget_tokens: 10_000 };
   } else {
@@ -712,7 +712,14 @@ export async function extractComprehensive(
     : '';
 
   // Use EXTRACTION_PROMPT as system prompt (reduces prompt injection risk from document text)
-  const systemPrompt = EXTRACTION_PROMPT;
+  // Append few-shot learning hints from human corrections (if any exist)
+  const fewShotSnippet = (() => {
+    try {
+      const { buildFewShotPromptSnippet } = require('../utils/fewShotCollector');
+      return buildFewShotPromptSnippet();
+    } catch { return ''; }
+  })();
+  const systemPrompt = EXTRACTION_PROMPT + fewShotSnippet;
 
   // For small-medium PDFs (<=500 pages): use native PDF mode if buffer available
   if (pdfBuffer && pageTexts.length <= 500) {

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/database';
 import { readResultJson, writeResultJson } from '../db/resultJson';
+import { recordCorrection } from '../utils/fewShotCollector';
 import type { Pruefstatus } from '../types/extraction';
 
 const router = Router();
@@ -84,6 +85,10 @@ router.patch('/:id/fields', authMiddleware, (req: Request, res: Response): void 
     res.status(400).json({ error: `Feld nicht gefunden: ${fieldPath}` });
     return;
   }
+
+  // Record correction for few-shot learning before overwriting
+  const originalValue = field.wert != null ? String(field.wert) : null;
+  recordCorrection(fieldPath, originalValue, wert, pruefstatus);
 
   field.wert = wert;
   field.pruefstatus = pruefstatus;
