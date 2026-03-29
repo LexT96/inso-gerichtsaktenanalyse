@@ -10,6 +10,7 @@ import type { DocumentAnalysis } from '../utils/documentAnalyzer';
 import { semanticVerify } from '../utils/semanticVerifier';
 import { extractAktiva } from '../utils/aktivaExtractor';
 import { analyzeAnfechtung } from '../utils/anfechtungsAnalyzer';
+import { enrichmentReview } from '../utils/enrichmentReview';
 import type { ExtractionResult } from '../types/extraction';
 
 const LARGE_PDF_THRESHOLD = 500; // pages — above this, use chunked fallback
@@ -198,6 +199,16 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
       } catch (reErr) {
         logger.warn('Targeted re-extraction failed', { error: reErr instanceof Error ? reErr.message : String(reErr) });
       }
+    }
+
+    // Stage 4: Enrichment Review — catch inference errors that pure extraction misses
+    // Separates "what does the document literally say?" from "what does it mean?"
+    // Targets specific known error patterns: address disambiguation, date selection, classification
+    report('Plausibilitätsprüfung…', 88);
+    try {
+      result = await enrichmentReview(result, pageTexts);
+    } catch (err) {
+      logger.warn('Enrichment review failed, continuing without', { error: err instanceof Error ? err.message : String(err) });
     }
 
     report('Standardanschreiben werden geprüft…', 90);
