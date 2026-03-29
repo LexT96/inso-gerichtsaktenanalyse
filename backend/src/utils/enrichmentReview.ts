@@ -23,11 +23,13 @@ import type { ExtractionResult } from '../types/extraction';
 const REVIEW_PROMPT = `Du bist ein Qualitätsprüfer für eine Insolvenz-Aktenextraktion. Du erhältst eine bereits durchgeführte Extraktion und den Akteninhalt. Prüfe NUR die folgenden spezifischen Fehlerquellen und korrigiere sie falls nötig.
 
 PRÜFUNG 1 — BETRIEBSSTÄTTE vs. PRIVATANSCHRIFT:
-Wenn der Schuldner ein Einzelunternehmer ist und betriebsstaette_adresse == aktuelle_adresse:
-- Suche im Insolvenzantrag nach einer ANDEREN Adresse unter/neben dem Firmennamen
-- Die Adresse im Antrag (z.B. "Pizza Kebaphaus, Niederstraße 87") ist die Betriebsstätte
-- Die Adresse in der Meldeauskunft ist die Privatanschrift
-- Wenn unterschiedlich: korrigiere betriebsstaette_adresse
+Wenn der Schuldner ein Einzelunternehmer ist und betriebsstaette_adresse die gleiche Straße+Hausnummer hat wie aktuelle_adresse:
+- Suche im Insolvenzantrag nach der Adresse die UNTER oder NEBEN dem Firmennamen steht
+- Diese Adresse im Antrag IST die Betriebsstätte — auch wenn sie sich von der Meldeadresse unterscheidet
+- Die Meldeauskunft zeigt die PRIVATANSCHRIFT, nicht die Betriebsstätte
+- WICHTIG: Wenn der Antrag eine andere Hausnummer nennt als die Meldeauskunft (z.B. Antrag sagt "Niederstraße 87", Meldeauskunft sagt "Niederstraße 118"), dann ist die Antrag-Adresse die Betriebsstätte und MUSS korrigiert werden
+- Dass der GV die Betriebsstätte "nicht kennt" oder "nicht bestätigen kann" ändert NICHTS — der Antrag ist die primäre Quelle
+- Korrigiere betriebsstaette_adresse auf die Adresse aus dem Insolvenzantrag
 
 PRÜFUNG 2 — ZUSTELLUNGSDATUM:
 - Das zustellungsdatum_schuldner muss das Datum der ZUSTELLUNG sein, nicht das Datum des Schreibens
