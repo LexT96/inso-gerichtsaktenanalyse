@@ -13,7 +13,7 @@ function LetterCard({ letter }: { letter: Standardanschreiben }) {
 
   return (
     <div
-      className={`border rounded-sm p-2.5 px-3.5 mb-1.5 cursor-pointer ${bgClass}`}
+      className={`border rounded-lg shadow-card p-2.5 px-3.5 mb-2 cursor-pointer hover:shadow-card-hover transition-shadow ${bgClass}`}
       onClick={() => setExpanded(!expanded)}
     >
       <div className="flex justify-between items-center">
@@ -47,7 +47,7 @@ interface StatsCardSmallProps {
 
 function StatsCardSmall({ label, value, colorClass }: StatsCardSmallProps) {
   return (
-    <div className="bg-surface border border-border rounded-sm py-3.5 px-4 text-center flex-1">
+    <div className="bg-surface border border-border/60 rounded-lg shadow-card py-3.5 px-4 text-center flex-1">
       <div className={`text-2xl font-bold font-mono ${colorClass}`}>{value}</div>
       <div className="text-[9px] text-text-muted mt-0.5 uppercase tracking-wide">{label}</div>
     </div>

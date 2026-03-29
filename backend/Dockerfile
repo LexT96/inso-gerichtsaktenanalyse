@@ -22,6 +22,7 @@ RUN npm install --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY backend/src/db/migrations ./dist/db/migrations
 COPY standardschreiben ./standardschreiben
+COPY gutachtenvorlagen ./gutachtenvorlagen
 
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "dist/index.js"]

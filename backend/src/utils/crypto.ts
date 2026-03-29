@@ -57,8 +57,15 @@ export function decrypt(payload: EncryptedPayload, password: string): string {
 // --- Server-key encryption (for database at-rest encryption of result_json) ---
 
 function deriveDbKey(hexKey: string): Buffer {
-  const raw = Buffer.from(hexKey, 'utf8');
-  return crypto.createHash('sha256').update(raw).digest();
+  // If key is exactly 64 hex chars (256 bits), use directly — no derivation needed
+  if (/^[0-9a-fA-F]{64}$/.test(hexKey)) {
+    return Buffer.from(hexKey, 'hex');
+  }
+  // Otherwise, derive via HKDF with a fixed application salt
+  // (backward-compatible with older shorter keys)
+  return Buffer.from(
+    crypto.hkdfSync('sha256', hexKey, 'tbs-insolvenz-db-encryption', 'aes-256-gcm-key', 32)
+  );
 }
 
 /**
