@@ -60,12 +60,17 @@ router.post(
     try {
       sendProgress('PDF empfangen — Verarbeitung startet…', 5);
 
+      // Pro mode: use Opus for higher accuracy (user-selectable)
+      const proMode = req.query.pro === '1' || req.query.pro === 'true';
+      const modelOverride = proMode ? 'claude-opus-4-6' : undefined;
+
       const { id, result, stats, processingTimeMs } = await processExtraction(
         req.file.buffer,
         req.file.originalname,
         req.file.size,
         userId,
-        sendProgress
+        sendProgress,
+        modelOverride
       );
 
       // Audit log: extraction completed

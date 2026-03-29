@@ -6,9 +6,11 @@ interface PdfUploaderProps {
   onAnalyze: () => void;
   onDemo?: () => void;
   loading: boolean;
+  proMode: boolean;
+  onProModeChange: (enabled: boolean) => void;
 }
 
-export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading }: PdfUploaderProps) {
+export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading, proMode, onProModeChange }: PdfUploaderProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback((e: DragEvent<HTMLDivElement> | ChangeEvent<HTMLInputElement>) => {
@@ -50,8 +52,24 @@ export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading }: 
                 : 'bg-accent text-white cursor-pointer hover:brightness-110 active:scale-[0.98]'
               }`}
           >
-            {loading ? 'ANALYSIERE…' : 'AKTE ANALYSIEREN'}
+            {loading ? 'ANALYSIERE…' : proMode ? 'PRO-ANALYSE STARTEN' : 'AKTE ANALYSIEREN'}
           </button>
+          <div className="mt-3 flex items-center justify-center gap-2" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => onProModeChange(!proMode)}
+              className={`relative w-8 h-[18px] rounded-full transition-colors duration-200 ${proMode ? 'bg-accent' : 'bg-border'}`}
+            >
+              <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform duration-200 ${proMode ? 'left-[16px]' : 'left-[2px]'}`} />
+            </button>
+            <span className={`text-[10px] font-mono ${proMode ? 'text-accent font-semibold' : 'text-text-muted'}`}>
+              PRO
+            </span>
+            {proMode && (
+              <span className="text-[9px] text-text-muted font-mono">
+                Opus · präziser · ~3-5 Min
+              </span>
+            )}
+          </div>
         </>
       ) : (
         <>

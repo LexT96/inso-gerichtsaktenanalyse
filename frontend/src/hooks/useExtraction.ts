@@ -36,7 +36,7 @@ export function useExtraction() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  const extract = useCallback(async (file: File) => {
+  const extract = useCallback(async (file: File, proMode?: boolean) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -53,7 +53,8 @@ export function useExtraction() {
       const formData = new FormData();
       formData.append('pdf', file);
 
-      const response = await fetch(`${API_BASE}/extract`, {
+      const url = proMode ? `${API_BASE}/extract?pro=1` : `${API_BASE}/extract`;
+      const response = await fetch(url, {
         method: 'POST',
         body: formData,
         credentials: 'include',

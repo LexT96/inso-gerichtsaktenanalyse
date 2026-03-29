@@ -101,6 +101,7 @@ function computeStats(result: ExtractionResult): { found: number; missing: numbe
 export function DashboardPage() {
   const [file, setFile] = useState<File | null>(null);
   const [tab, setTab] = useState('overview');
+  const [proMode, setProMode] = useState(false);
   const { loading, progress, progressPercent, result, error, extractionId, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField } = useExtraction();
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -114,8 +115,8 @@ export function DashboardPage() {
   }, [navigate]);
 
   const handleAnalyze = useCallback(() => {
-    if (file) extract(file);
-  }, [file, extract]);
+    if (file) extract(file, proMode);
+  }, [file, extract, proMode]);
 
   const handleDemo = useCallback(async () => {
     const demoFile = await loadDemo();
@@ -303,6 +304,8 @@ export function DashboardPage() {
                 onAnalyze={handleAnalyze}
                 onDemo={handleDemo}
                 loading={loading}
+                proMode={proMode}
+                onProModeChange={setProMode}
               />
               <HistoryPanel
                 onSelect={handleHistorySelect}

@@ -71,8 +71,16 @@ export async function processExtraction(
   filename: string,
   fileSize: number,
   userId: number,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  modelOverride?: string
 ): Promise<{ id: number; result: ExtractionResult; stats: ExtractionStats; processingTimeMs: number }> {
+  // Pro mode: temporarily swap EXTRACTION_MODEL for this call only
+  const originalModel = config.EXTRACTION_MODEL;
+  if (modelOverride) {
+    (config as Record<string, unknown>).EXTRACTION_MODEL = modelOverride;
+    logger.info('Pro-Modus aktiviert', { model: modelOverride });
+  }
+  try {
   const report = onProgress ?? (() => {});
   const db = getDb();
   const startTime = Date.now();
@@ -250,5 +258,11 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
 
     logger.error('Extraktion fehlgeschlagen', { extractionId, error: errorMessage });
     throw error;
+  }
+  } finally {
+    // Restore original model after pro mode
+    if (modelOverride) {
+      (config as Record<string, unknown>).EXTRACTION_MODEL = originalModel;
+    }
   }
 }
