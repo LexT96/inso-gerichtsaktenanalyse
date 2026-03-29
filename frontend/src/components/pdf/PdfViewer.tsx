@@ -280,7 +280,24 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
         });
       }
 
-      // Strategy 3 (NEW): Paragraph scoring — find the best-matching paragraph
+      // Strategy 2b: Stem/prefix match — handles Einzelunternehmen vs Einzelunternehmer,
+      // Schuldnerin vs Schuldner, Zahlungsunfähigkeit vs zahlungsunfähig etc.
+      if (matchCount === 0 && text.length >= 5) {
+        // Try progressively shorter prefixes of the search text
+        const minLen = Math.max(5, Math.floor(text.length * 0.7));
+        for (let len = text.length - 1; len >= minLen && matchCount === 0; len--) {
+          const prefix = text.slice(0, len);
+          try {
+            const escaped = escapeForRegex(prefix);
+            mark.markRegExp(new RegExp(escaped, 'gi'), {
+              className: 'source-highlight',
+              done: (count: number) => { matchCount = count; },
+            });
+          } catch { /* ignore */ }
+        }
+      }
+
+      // Strategy 3: Paragraph scoring — find the best-matching paragraph
       // Uses keywords from both the value AND the quelle description
       if (matchCount === 0) {
         const keywords = [
