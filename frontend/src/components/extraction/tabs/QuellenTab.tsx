@@ -54,15 +54,9 @@ const FIELD_LABELS: Record<string, string> = {
   'antragsteller.betriebsnummer': 'Betriebsnummer',
   'antragsteller.bankverbindung_iban': 'IBAN',
   'antragsteller.bankverbindung_bic': 'BIC',
-  'forderungen.hauptforderung_beitraege': 'Hauptforderung',
-  'forderungen.saeumniszuschlaege': 'Säumniszuschläge',
-  'forderungen.mahngebuehren': 'Mahngebühren',
-  'forderungen.vollstreckungskosten': 'Vollstreckungskosten',
-  'forderungen.antragskosten': 'Antragskosten',
-  'forderungen.gesamtforderung': 'Gesamtforderung',
-  'forderungen.zeitraum_von': 'Zeitraum von',
-  'forderungen.zeitraum_bis': 'Zeitraum bis',
-  'forderungen.laufende_monatliche_beitraege': 'Lfd. Beiträge',
+  'forderungen.gesamtforderungen': 'Gesamtforderungen',
+  'forderungen.gesicherte_forderungen': 'Gesicherte Forderungen',
+  'forderungen.ungesicherte_forderungen': 'Ungesicherte Forderungen',
   'gutachterbestellung.gutachter_name': 'Gutachter Name',
   'gutachterbestellung.gutachter_kanzlei': 'Gutachter Kanzlei',
   'gutachterbestellung.gutachter_adresse': 'Gutachter Adresse',
@@ -83,6 +77,8 @@ const FIELD_LABELS: Record<string, string> = {
   'ermittlungsergebnisse.vollstreckungsportal.vermoegensverzeichnis_eintrag': 'Vermögensverzeichnis',
   'ermittlungsergebnisse.meldeauskunft.meldestatus': 'Meldestatus',
   'ermittlungsergebnisse.meldeauskunft.datum': 'Meldeauskunft Datum',
+  'aktiva.summe_aktiva': 'Summe Aktiva',
+  'aktiva.massekosten_schaetzung': 'Massekosten (Schätzung)',
 };
 
 function parsePageNumber(quelle: string): number | null {
@@ -162,8 +158,14 @@ function collectAllFields(result: ExtractionResult): FieldRef[] {
   walk(result.schuldner, 'schuldner');
   walk(result.antragsteller, 'antragsteller');
   walk(result.forderungen, 'forderungen');
+  if (result.forderungen?.einzelforderungen) {
+    for (let i = 0; i < result.forderungen.einzelforderungen.length; i++) {
+      walk(result.forderungen.einzelforderungen[i], `forderungen.einzelforderungen[${i}]`);
+    }
+  }
   walk(result.gutachterbestellung, 'gutachterbestellung');
   walk(result.ermittlungsergebnisse, 'ermittlungsergebnisse');
+  if (result.aktiva) walk(result.aktiva, 'aktiva');
 
   if (result.zusammenfassung) {
     for (const s of result.zusammenfassung) {
@@ -216,7 +218,7 @@ function groupByDocument(fields: FieldRef[]): DocumentGroup[] {
 }
 
 function formatPageRange(min: number, max: number): string {
-  return min === max ? `S. ${min}` : `S. ${min} \u2013 ${max}`;
+  return min === max ? `S. ${min}` : `S. ${min} – ${max}`;
 }
 
 function FieldRow({ field }: { field: FieldRef }) {
@@ -224,7 +226,7 @@ function FieldRow({ field }: { field: FieldRef }) {
 
   const handleClick = () => {
     if (totalPages > 0) {
-      goToPageAndHighlight(field.page, field.wert);
+      goToPageAndHighlight(field.page, field.wert, field.quelle);
     }
   };
 
@@ -243,7 +245,7 @@ function FieldRow({ field }: { field: FieldRef }) {
         {field.wert}
       </td>
       <td className="py-1.5 px-2 text-center align-top w-[24px]">
-        {field.verifiziert === true && <span className="text-ie-green text-[10px]" title="Verifiziert">{'\u2713'}</span>}
+        {field.verifiziert === true && <span className="text-ie-green text-[10px]" title="Verifiziert">✓</span>}
         {field.verifiziert === false && <span className="text-ie-amber text-[10px]" title="Nicht verifiziert">?</span>}
       </td>
     </tr>
@@ -264,7 +266,7 @@ export function QuellenTab({ result }: QuellenTabProps) {
           <span className="font-bold text-text">{allFields.length}</span> Felder aus <span className="font-bold text-text">{docGroups.length}</span> Dokumenten
         </span>
         {verifiedCount > 0 && (
-          <span className="text-ie-green">{'\u2713'} {verifiedCount} verifiziert</span>
+          <span className="text-ie-green">✓ {verifiedCount} verifiziert</span>
         )}
         {unverifiedCount > 0 && (
           <span className="text-ie-amber">? {unverifiedCount} ungeprüft</span>
@@ -275,7 +277,7 @@ export function QuellenTab({ result }: QuellenTabProps) {
         <Section
           key={`${group.docType}-${group.minPage}`}
           title={`${group.docType} (${formatPageRange(group.minPage, group.maxPage)})`}
-          icon={'\u25a1'}
+          icon="□"
           count={group.fields.length}
         >
           <table className="w-full">

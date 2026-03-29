@@ -11,6 +11,7 @@ import authRoutes from './routes/auth';
 import extractionRoutes from './routes/extraction';
 import historyRoutes from './routes/history';
 import generateLetterRoutes from './routes/generateLetter';
+import generateGutachtenRoutes from './routes/generateGutachten';
 import fieldUpdateRoutes from './routes/fieldUpdate';
 import bcrypt from 'bcrypt';
 
@@ -22,14 +23,15 @@ app.use(cors({ origin: config.CORS_ORIGIN, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
-// Trust proxy for rate limiter behind Docker/nginx
-app.set('trust proxy', 1);
+// Trust only loopback proxies (Docker/Traefik) — prevents X-Forwarded-For spoofing
+app.set('trust proxy', 'loopback');
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/extract', extractionRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/generate-letter', generateLetterRoutes);
+app.use('/api/generate-gutachten', generateGutachtenRoutes);
 app.use('/api/extractions', fieldUpdateRoutes);
 
 // Health check

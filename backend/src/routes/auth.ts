@@ -80,6 +80,13 @@ router.post('/login', authRateLimit, async (req: Request, res: Response): Promis
       'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)'
     ).run(user.id, refreshToken, refreshExpiresAt);
 
+    // Limit active sessions per user (keep newest 5, purge old)
+    db.prepare(
+      `DELETE FROM refresh_tokens WHERE user_id = ? AND id NOT IN (
+        SELECT id FROM refresh_tokens WHERE user_id = ? ORDER BY id DESC LIMIT 5
+      )`
+    ).run(user.id, user.id);
+
     // Audit log
     db.prepare(
       'INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)'

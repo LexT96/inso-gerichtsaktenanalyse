@@ -15,6 +15,9 @@ import { ForderungenTab } from '../components/extraction/tabs/ForderungenTab';
 import { ErmittlungTab } from '../components/extraction/tabs/ErmittlungTab';
 import { PrueflisteTab } from '../components/extraction/tabs/PrueflisteTab';
 import { AnschreibenTab } from '../components/extraction/tabs/AnschreibenTab';
+import { AktivaTab } from '../components/extraction/tabs/AktivaTab';
+import { AnfechtungTab } from '../components/extraction/tabs/AnfechtungTab';
+import { GutachtenTab } from '../components/extraction/tabs/GutachtenTab';
 import { useExtraction } from '../hooks/useExtraction';
 import { HistoryPanel } from '../components/dashboard/HistoryPanel';
 import type { ExtractionResult } from '../types/extraction';
@@ -24,12 +27,17 @@ function isFieldEmpty(field: { wert?: unknown; quelle?: unknown }): boolean {
   return w === null || w === undefined || w === '';
 }
 
+/**
+ * Count only CORE identification fields (fixed scalar fields on the case).
+ * Dynamic arrays (einzelforderungen, aktiva.positionen, anfechtung.vorgaenge)
+ * are NOT counted — their subfields being empty is normal, not "missing".
+ */
 function computeStats(result: ExtractionResult): { found: number; missing: number; total: number } {
   let found = 0, missing = 0;
   const walkObj = (obj: Record<string, unknown>): void => {
     if (!obj) return;
     for (const value of Object.values(obj)) {
-      if (Array.isArray(value)) continue;
+      if (Array.isArray(value)) continue; // Skip arrays entirely
       if (value && typeof value === 'object') {
         const v = value as Record<string, unknown>;
         if ('wert' in v || 'quelle' in v) {
@@ -40,11 +48,53 @@ function computeStats(result: ExtractionResult): { found: number; missing: numbe
       }
     }
   };
+  // Detect entity type to skip irrelevant person fields
+  const rf = String(result.schuldner?.rechtsform?.wert ?? '').toLowerCase();
+  const isEntity = /gmbh|ug\b|ag\b|se\b|kg\b|ohg|gbr|e\.?\s?v|partg|stiftung|verein|genossenschaft|kgaa/i.test(rf)
+    || rf.includes('juristische') || rf.includes('gesellschaft');
+
+  // Only count fixed scalar sections — NOT dynamic arrays
   walkObj(result.verfahrensdaten as unknown as Record<string, unknown>);
-  walkObj(result.schuldner as unknown as Record<string, unknown>);
+
+  if (isEntity) {
+    // For entities: only count firma, rechtsform, name, HRB, addresses
+    const entityFields = {
+      firma: result.schuldner?.firma,
+      rechtsform: result.schuldner?.rechtsform,
+      name: result.schuldner?.name,
+      handelsregisternummer: result.schuldner?.handelsregisternummer,
+      aktuelle_adresse: result.schuldner?.aktuelle_adresse,
+      betriebsstaette_adresse: result.schuldner?.betriebsstaette_adresse,
+    };
+    walkObj(entityFields as unknown as Record<string, unknown>);
+  } else {
+    walkObj(result.schuldner as unknown as Record<string, unknown>);
+  }
+
   walkObj(result.antragsteller as unknown as Record<string, unknown>);
-  walkObj(result.forderungen as unknown as Record<string, unknown>);
   walkObj(result.gutachterbestellung as unknown as Record<string, unknown>);
+  // Forderungen: only summary fields, not einzelforderungen array
+  const fSummary = {
+    gesamtforderungen: result.forderungen?.gesamtforderungen,
+    gesicherte_forderungen: result.forderungen?.gesicherte_forderungen,
+    ungesicherte_forderungen: result.forderungen?.ungesicherte_forderungen,
+  };
+  walkObj(fSummary as unknown as Record<string, unknown>);
+  // Aktiva: only summary fields, not positionen array
+  if (result.aktiva) {
+    const aSummary = {
+      summe_aktiva: result.aktiva.summe_aktiva,
+      massekosten_schaetzung: result.aktiva.massekosten_schaetzung,
+    };
+    walkObj(aSummary as unknown as Record<string, unknown>);
+  }
+  // Anfechtung: only gesamtpotenzial, not vorgaenge array
+  if (result.anfechtung) {
+    const anSummary = { gesamtpotenzial: result.anfechtung.gesamtpotenzial };
+    walkObj(anSummary as unknown as Record<string, unknown>);
+  }
+  // Ermittlungsergebnisse: fixed structure, walk fully
+  walkObj(result.ermittlungsergebnisse as unknown as Record<string, unknown>);
   return { found, missing, total: found + missing };
 }
 
@@ -125,13 +175,16 @@ export function DashboardPage() {
   const anschreibenBadge = missingInfo.length > 0 ? missingInfo.length : bereit > 0 ? bereit : undefined;
 
   const tabs = useMemo(() => [
-    { id: 'overview', label: 'Übersicht', icon: '\u25ce' },
-    { id: 'quellen', label: 'Quellen', icon: '\u25a1' },
-    { id: 'beteiligte', label: 'Beteiligte', icon: '\u25cf' },
-    { id: 'forderungen', label: 'Forderungen', icon: '\u20ac' },
-    { id: 'ermittlung', label: 'Ermittlung', icon: '\u25d0' },
-    { id: 'pruefliste', label: 'Prüfliste', icon: '\u2713', badge: unconfirmedCount },
-    { id: 'briefe', label: 'Anschreiben', icon: '\u2709', badge: anschreibenBadge },
+    { id: 'overview', label: 'Übersicht', icon: '◎', group: 'akte' },
+    { id: 'quellen', label: 'Quellen', icon: '□', group: 'akte' },
+    { id: 'beteiligte', label: 'Beteiligte', icon: '●', group: 'parteien' },
+    { id: 'forderungen', label: 'Forderungen', icon: '€', group: 'parteien' },
+    { id: 'aktiva', label: 'Aktiva', icon: '▣', group: 'parteien' },
+    { id: 'anfechtung', label: 'Anfechtung', icon: '⚡', group: 'analyse' },
+    { id: 'ermittlung', label: 'Ermittlung', icon: '◐', group: 'analyse' },
+    { id: 'pruefliste', label: 'Prüfliste', icon: '✓', badge: unconfirmedCount, group: 'analyse' },
+    { id: 'briefe', label: 'Anschreiben', icon: '✉', badge: anschreibenBadge, group: 'ausgabe' },
+    { id: 'gutachten', label: 'Gutachten', icon: '◇', group: 'ausgabe' },
   ], [anschreibenBadge, unconfirmedCount]);
 
   // ─── Results content (used in both layouts) ───
@@ -157,10 +210,18 @@ export function DashboardPage() {
       {tab === 'quellen' && <QuellenTab result={result} />}
       {tab === 'beteiligte' && <BeteiligteTab schuldner={result.schuldner} antragsteller={result.antragsteller} />}
       {tab === 'forderungen' && <ForderungenTab forderungen={result.forderungen} />}
+      {tab === 'aktiva' && (
+        <AktivaTab aktiva={result.aktiva} forderungen={result.forderungen} schuldner={result.schuldner} />
+      )}
+      {tab === 'anfechtung' && (
+        <AnfechtungTab anfechtung={result.anfechtung} verfahrensdaten={result.verfahrensdaten} />
+      )}
       {tab === 'ermittlung' && (
         <ErmittlungTab
           ermittlungsergebnisse={result.ermittlungsergebnisse}
           gutachterbestellung={result.gutachterbestellung}
+          letters={letters}
+          missingInfo={missingInfo}
         />
       )}
       {tab === 'pruefliste' && (
@@ -169,10 +230,14 @@ export function DashboardPage() {
       {tab === 'briefe' && (
         <AnschreibenTab letters={letters} missingInfo={missingInfo} />
       )}
+      {tab === 'gutachten' && (
+        <GutachtenTab result={result} extractionId={extractionId} />
+      )}
 
       {/* Footer */}
-      <div className="mt-4 p-3 px-4 bg-surface border border-border rounded-sm text-[9px] text-text-muted leading-relaxed">
-        <span className="text-text-dim font-bold">INSOLVENZ-EXTRAKTOR</span> · Alle extrahierten Daten
+      <div className="mt-4 p-3 px-4 bg-surface border border-border/60 rounded-lg shadow-card text-[8px] text-text-muted leading-relaxed font-mono">
+        <span className="text-accent font-bold tracking-wider">TBS</span>
+        <span className="text-text-dim"> AKTENANALYSE</span> · Alle extrahierten Daten
         müssen vor Verwendung manuell geprüft werden.
         <span className="text-ie-blue"> [S.X]</span>-Buttons zeigen die Quellenreferenz und navigieren zur Seite im PDF.
       </div>
@@ -201,20 +266,20 @@ export function DashboardPage() {
         </PdfViewer>
       ) : result && !file ? (
         <div className="max-w-[1050px] mx-auto p-5 px-6">
-          <div className="mb-3 p-2 px-3 bg-surface border border-border rounded-sm text-[10px] text-text-muted flex items-center gap-2">
+          <div className="mb-3 p-2 px-3 bg-surface border border-border/60 rounded-lg text-[10px] text-text-muted flex items-center gap-2">
             <span className="text-ie-amber">⚠</span>
             {importedFilename ? `Import: ${importedFilename}` : 'Verlaufs-Ansicht · PDF nicht verfügbar (wurde nach Extraktion gelöscht)'}
             {extractionId && (
               <button
                 onClick={() => setShowExport(true)}
-                className="px-2 py-0.5 border border-border rounded-sm hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
+                className="px-2 py-0.5 border border-border rounded-md hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
               >
                 EXPORTIEREN
               </button>
             )}
             <button
               onClick={handleNewFile}
-              className="ml-auto px-2 py-0.5 border border-border rounded-sm hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
+              className="ml-auto px-2 py-0.5 border border-border rounded-md hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
             >
               NEUE ANALYSE
             </button>
@@ -259,7 +324,7 @@ export function DashboardPage() {
                 </span>
                 <button
                   onClick={() => setShowImport(true)}
-                  className="ml-auto px-3 py-1.5 border border-border rounded-sm text-[10px] font-mono text-text-muted hover:border-accent hover:text-accent transition-colors"
+                  className="ml-auto px-3 py-1.5 border border-border rounded-md text-[10px] font-mono text-text-muted hover:border-accent hover:text-accent transition-colors"
                 >
                   .iae IMPORTIEREN
                 </button>

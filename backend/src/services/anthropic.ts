@@ -34,8 +34,11 @@ const RATE_LIMIT_RETRY_DELAY_MS = 65_000;
 const EXTRACTION_PROMPT = `Du bist ein spezialisierter KI-Assistent für deutsche Insolvenzverwalter. Analysiere die hochgeladene Gerichtsakte und extrahiere ALLE relevanten Informationen strukturiert.
 
 PFLICHT: Jedes Feld mit ausgefülltem "wert" MUSS eine "quelle" haben. Ohne Quelle ist die Extraktion unbrauchbar. Die quelle MUSS die exakte Fundstelle angeben: die Seite, auf der du den Wert im vorliegenden Akteninhalt gefunden hast. Format: "Seite X, [Dokument/Abschnitt]". Beispiele: "Seite 1, Beschluss vom 18.12.2025", "Seite 3, Insolvenzantrag der HEK", "Seite 7, Mitteilung des Gerichtsvollziehers". Regel: wert nicht leer → quelle nicht leer.
+WICHTIG — zustellungsdatum_schuldner: Das Zustellungsdatum ist das Datum auf der POSTZUSTELLUNGSURKUNDE (PZU, gelbe Zustellungsurkunde) oder dem Zustellvermerk — NICHT das Datum des zugestellten Schreibens. Suche nach dem Stempel "Datum" auf der PZU, dem handschriftlichen Datum im Zustellvermerk, oder "Erledigt... Datum:" auf der Zustellungsurkunde. Beispiel: Schreiben datiert 27.11.2025, PZU-Stempel zeigt 03.12.2025 → zustellungsdatum = 03.12.2025.
 WICHTIG: Die quelle muss die tatsächliche Fundstelle sein — die Seite, auf der du den Wert im vorliegenden Dokument gefunden hast. Bei textbasiertem Akteninhalt mit "=== SEITE X ===": genau diese X verwenden. Bei PDF: die Seitenzahl der Seite, auf der der Wert erscheint. Keine generischen oder geschätzten Quellen (z.B. nicht "Seite 1, Insolvenzantrag" für Werte, die auf einer anderen Seite stehen).
 Datumsformat: TT.MM.JJJJ (z.B. 18.12.2025). Beträge: deutsche Schreibweise mit Komma (1.234,56) oder Zahl.
+
+WASSERZEICHEN: Viele Gerichtsakten enthalten diagonale Wasserzeichen (z.B. Name + Datum schräg über die Seite). IGNORIERE diese komplett — sie sind KEIN Akteninhalt. Extrahiere NUR den eigentlichen Dokumenttext.
 
 Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICHTIG: In allen String-Werten Anführungszeichen mit \\ escapen, keine Zeilenumbrüche innerhalb von Strings. Bei Zahlen: Nur 0 setzen, wenn der Wert tatsächlich 0 in der Akte steht — sonst null und quelle leer lassen. Verwende folgende Struktur:
 
@@ -48,7 +51,9 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICH
     "beschlussdatum": {"wert": "", "quelle": ""},
     "antragsart": {"wert": "", "quelle": ""},
     "eroeffnungsgrund": {"wert": "", "quelle": ""},
-    "zustellungsdatum_schuldner": {"wert": "", "quelle": ""}
+    "zustellungsdatum_schuldner": {"wert": "", "quelle": ""},
+    "verfahrensstadium": {"wert": "", "quelle": ""},
+    "verfahrensart": {"wert": "", "quelle": ""}
   },
   "schuldner": {
     "name": {"wert": "", "quelle": ""},
@@ -65,7 +70,25 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICH
     "rechtsform": {"wert": "", "quelle": ""},
     "betriebsstaette_adresse": {"wert": "", "quelle": ""},
     "handelsregisternummer": {"wert": "", "quelle": ""},
-    "kinder": []
+    "kinder": [],
+    "ehegatte": {
+      "name": {"wert": "", "quelle": ""},
+      "geburtsdatum": {"wert": "", "quelle": ""},
+      "gueterstand": "zugewinngemeinschaft|guetertrennung|guetergemeinschaft|unbekannt",
+      "gemeinsames_eigentum": {"wert": "", "quelle": ""}
+    },
+    "beschaeftigung": {
+      "arbeitgeber": {"wert": "", "quelle": ""},
+      "arbeitgeber_adresse": {"wert": "", "quelle": ""},
+      "nettoeinkommen": {"wert": 0, "quelle": ""},
+      "beschaeftigt_seit": {"wert": "", "quelle": ""},
+      "art": {"wert": "", "quelle": ""}
+    },
+    "pfaendungsberechnung": {
+      "nettoeinkommen": {"wert": 0, "quelle": ""},
+      "unterhaltspflichten": {"wert": 0, "quelle": ""},
+      "pfaendbarer_betrag": {"wert": 0, "quelle": ""}
+    }
   },
   "antragsteller": {
     "name": {"wert": "", "quelle": ""},
@@ -79,15 +102,27 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICH
     "bankverbindung_bic": {"wert": "", "quelle": ""}
   },
   "forderungen": {
-    "hauptforderung_beitraege": {"wert": 0, "quelle": ""},
-    "saeumniszuschlaege": {"wert": 0, "quelle": ""},
-    "mahngebuehren": {"wert": 0, "quelle": ""},
-    "vollstreckungskosten": {"wert": 0, "quelle": ""},
-    "antragskosten": {"wert": 0, "quelle": ""},
-    "gesamtforderung": {"wert": 0, "quelle": ""},
-    "zeitraum_von": {"wert": "", "quelle": ""},
-    "zeitraum_bis": {"wert": "", "quelle": ""},
-    "laufende_monatliche_beitraege": {"wert": 0, "quelle": ""},
+    "einzelforderungen": [
+      {
+        "glaeubiger": {"wert": "Name des Gläubigers", "quelle": ""},
+        "art": "sozialversicherung|steuer|bank|lieferant|arbeitnehmer|miete|sonstige",
+        "rang": "§38 Insolvenzforderung|§39 Nachrangig|Masseforderung §55",
+        "betrag": {"wert": 0, "quelle": ""},
+        "zeitraum_von": {"wert": "", "quelle": ""},
+        "zeitraum_bis": {"wert": "", "quelle": ""},
+        "titel": {"wert": "Beschreibung der Forderung", "quelle": ""},
+        "sicherheit": {
+          "art": "grundschuld|sicherungsuebereignung|eigentumsvorbehalt|pfandrecht|buergschaft|sonstige",
+          "gegenstand": {"wert": "Beschreibung des gesicherten Gegenstands", "quelle": ""},
+          "geschaetzter_wert": {"wert": 0, "quelle": ""},
+          "absonderungsberechtigt": true
+        },
+        "ist_antragsteller": false
+      }
+    ],
+    "gesamtforderungen": {"wert": 0, "quelle": ""},
+    "gesicherte_forderungen": {"wert": 0, "quelle": ""},
+    "ungesicherte_forderungen": {"wert": 0, "quelle": ""},
     "betroffene_arbeitnehmer": []
   },
   "gutachterbestellung": {
@@ -139,7 +174,42 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICH
     {"information": "", "grund": "", "ermittlung_ueber": ""}
   ],
   "zusammenfassung": [{"wert": "Kernpunkt der Zusammenfassung", "quelle": "Seite X, Abschnitt"}],
-  "risiken_hinweise": [{"wert": "Risiko oder Hinweis", "quelle": "Seite X, Abschnitt"}]
+  "risiken_hinweise": [{"wert": "Risiko oder Hinweis", "quelle": "Seite X, Abschnitt"}],
+  "aktiva": {
+    "positionen": [
+      {
+        "beschreibung": {"wert": "Beschreibung des Vermögenswerts", "quelle": "Seite X"},
+        "geschaetzter_wert": {"wert": 0, "quelle": "Seite X"},
+        "kategorie": "immobilien|fahrzeuge|bankguthaben|lebensversicherungen|wertpapiere_beteiligungen|forderungen_schuldner|bewegliches_vermoegen|geschaeftsausstattung|steuererstattungen|einkommen"
+      }
+    ],
+    "summe_aktiva": {"wert": 0, "quelle": ""},
+    "massekosten_schaetzung": {"wert": 0, "quelle": ""},
+    "insolvenzanalyse": {
+      "zahlungsunfaehigkeit_17": {"status": "ja|nein|offen", "begruendung": ""},
+      "drohende_zahlungsunfaehigkeit_18": {"status": "ja|nein|offen", "begruendung": ""},
+      "ueberschuldung_19": {"status": "ja|nein|offen", "begruendung": ""},
+      "massekostendeckung_26": {"status": "ja|nein|offen", "begruendung": ""},
+      "gesamtbewertung": ""
+    }
+  },
+  "anfechtung": {
+    "vorgaenge": [
+      {
+        "beschreibung": {"wert": "", "quelle": ""},
+        "betrag": {"wert": 0, "quelle": ""},
+        "datum": {"wert": "", "quelle": ""},
+        "empfaenger": {"wert": "", "quelle": ""},
+        "grundlage": "§130 Kongruente Deckung|§131 Inkongruente Deckung|§133 Vorsätzliche Benachteiligung|§134 Unentgeltliche Leistung|§135 Gesellschafterdarlehen",
+        "risiko": "hoch|mittel|gering",
+        "begruendung": "",
+        "anfechtbar_ab": "",
+        "ist_nahestehend": false
+      }
+    ],
+    "gesamtpotenzial": {"wert": 0, "quelle": ""},
+    "zusammenfassung": ""
+  }
 }
 
 Die 10 Standardanschreiben-Typen (je ein Dokument) sind:
@@ -168,6 +238,14 @@ WICHTIG — "nicht bekannt" betrifft NUR das jeweilige Feld:
 Wenn eine DOKUMENTSTRUKTUR mitgegeben wird, nutze sie NUR um zu verstehen welcher Dokumentteil was enthält. Die SEITENZAHLEN in der quelle müssen von der EXAKTEN Seite kommen, auf der du den Wert im Akteninhalt findest — NICHT aus der Dokumentstruktur-Übersicht.
 
 Extrahiere ALLE verfügbaren Daten. Bei fehlenden Informationen setze null/leere Strings und fülle fehlende_informationen mit konkreten Hinweisen, wie die Information ermittelt werden kann.
+Für einzelforderungen: Erstelle für JEDE in der Akte genannte Forderung/Verbindlichkeit ein eigenes Objekt. Der Antragsteller (der den Insolvenzantrag gestellt hat) wird mit ist_antragsteller: true markiert. art: "sozialversicherung" für Krankenkassen/Rentenversicherung/Berufsgenossenschaften, "steuer" für Finanzamt/Zoll, "bank" für Banken/Sparkassen/Kreditinstitute, "lieferant" für Lieferanten/Dienstleister, "arbeitnehmer" für Lohn-/Gehaltsforderungen, "miete" für Miet-/Pachtforderungen, "sonstige" für alles andere. rang: Standard ist "§38 Insolvenzforderung". Wenn nur ein Gesamtbetrag ohne Gläubigeraufschlüsselung vorhanden ist, eine einzelne Forderung mit dem Antragsteller als Gläubiger erstellen. sicherheit: NUR angeben wenn in der Akte eine konkrete Sicherheit für diese Forderung genannt wird (z.B. Grundschuld, Sicherungsübereignung, Eigentumsvorbehalt). art der Sicherheit, Gegenstand, geschätzter Wert und ob absonderungsberechtigt. Wenn keine Sicherheit erwähnt: sicherheit weglassen. gesicherte_forderungen und ungesicherte_forderungen: Summen wenn aus der Akte ableitbar, sonst null.
+WICHTIG — Forderungsdetails im titel-Feld: Wenn eine Forderung aufgeschlüsselt ist (z.B. Hauptforderung, Säumniszuschläge, Mahngebühren, Antragskosten), trage die AUFSCHLÜSSELUNG in das titel-Feld als Text ein. Beispiel: "SV-Beiträge 5.104,34 EUR + Säumniszuschläge 387,50 EUR + Mahngebühren 57,50 EUR + Antragskosten 216,00 EUR". Das betrag-Feld enthält den Gesamtbetrag. Extrahiere auch: zeitraum_von/zeitraum_bis der Forderung (z.B. "01.11.2024" bis "31.08.2025").
+WICHTIG — betroffene_arbeitnehmer: Extrahiere ALLE namentlich oder zahlenmäßig genannten betroffenen Arbeitnehmer. Wenn ein Arbeitnehmer namentlich genannt wird (z.B. "für unser Mitglied Daniela-Adelina Mitache"), erstelle einen Eintrag mit anzahl: 1, typ: "Name des AN" und quelle. Auch "laufende monatliche Beiträge" in Höhe von X EUR sind ein wichtiger Hinweis — trage sie als separate Information in den Titel der Forderung ein.
+Für verfahrensstadium: Erkenne aus dem Beschluss/der Akte: "Eröffnungsverfahren" (vorläufige Verwaltung angeordnet, Verfahren noch nicht eröffnet), "Eröffnetes Verfahren" (Eröffnungsbeschluss ergangen), oder "Unbekannt". Für verfahrensart: "Regelinsolvenz" (Unternehmen/Selbständige), "Verbraucherinsolvenz" (§ 304 InsO, natürliche Person ohne selbständige Tätigkeit), oder "Unbekannt".
+Für ehegatte: Wenn im Insolvenzantrag oder der Vermögensauskunft ein Ehegatte/Lebenspartner genannt wird: Name, Geburtsdatum, Güterstand (oft in Vermögensauskunft oder Ehevertrag). gueterstand: "zugewinngemeinschaft" (gesetzlicher Güterstand, Standard wenn verheiratet und nichts anderes angegeben), "guetertrennung" (wenn Ehevertrag vorhanden), "guetergemeinschaft" (selten), "unbekannt". Wenn kein Ehegatte erwähnt: ehegatte weglassen.
+WICHTIG — betriebsstaette_adresse vs. aktuelle_adresse: Das sind ZWEI VERSCHIEDENE Felder. aktuelle_adresse = Wohnanschrift (aus Meldeauskunft). betriebsstaette_adresse = Geschäftsadresse (aus Insolvenzantrag, Leistungsbescheid, Gewerberegister). Bei Einzelunternehmern stehen oft UNTERSCHIEDLICHE Adressen im Antrag (unter dem Firmennamen) und in der Meldeauskunft (Privatanschrift). Die Adresse im Insolvenzantrag UNTER oder NEBEN dem Firmennamen ist die Betriebsstätte, NICHT die Privatanschrift. NIEMALS die Meldeadresse als betriebsstaette_adresse verwenden wenn eine andere Adresse im Antrag steht. Beispiel: Meldeauskunft sagt "Niederstraße 118", Antrag sagt "Mehmet Bayar, Niederstraße 87, 54293 Trier, handelnd als Einzelunternehmer mit Pizza Kebaphaus" → aktuelle_adresse = Niederstraße 118, betriebsstaette_adresse = Niederstraße 87.
+Für beschaeftigung: Wenn Arbeitgeber, Einkommen oder Beschäftigungsverhältnis erwähnt: Arbeitgeber Name/Adresse, Nettoeinkommen, Art (Vollzeit/Teilzeit/Minijob/Selbständig/Rentner/Arbeitslos). Wenn nicht erwähnt: beschaeftigung weglassen.
+Für pfaendungsberechnung: Wenn Nettoeinkommen UND Unterhaltspflichten bekannt: Trage die Werte ein, aber berechne den pfändbaren Betrag NICHT selbst — setze pfaendbarer_betrag auf null. Die Berechnung nach § 850c ZPO Pfändungstabelle erfolgt im Frontend. Trage nur nettoeinkommen und unterhaltspflichten (Anzahl der Personen mit Unterhaltsanspruch als Zahl) aus der Akte ein. Wenn Daten fehlen: pfaendungsberechnung weglassen.
 Für betroffene_arbeitnehmer: Bei Arbeitnehmerangaben Objekte mit anzahl, typ, quelle (z.B. {"anzahl":44,"typ":"Arbeitnehmer insgesamt","quelle":"Seite 7, Angaben zu Arbeitnehmerverhältnissen"}). Sonst [].
 Für befugnisse: Extrahiere die konkreten Befugnisse aus dem Beschluss als Textstrings (z.B. ["Sicherungsmaßnahmen gem. § 21 InsO", "Einholung von Auskünften"]). Keine leeren Strings. Wenn keine Befugnisse im Dokument stehen, leere Liste [].
 
@@ -180,7 +258,37 @@ WICHTIG — Boolean-Felder (grundbesitz_vorhanden, betriebsstaette_bekannt, mass
 
 ERINNERUNG: Jeder nicht-leere wert braucht eine quelle (Seite X, ...). Keine Ausnahme.
 
-WICHTIG für fehlende_informationen: Jeder Eintrag MUSS ein Objekt mit allen drei Feldern sein. Das Feld "information" darf NIEMALS leer sein — trage dort stets eine kurze, prägnante Bezeichnung der fehlenden Information ein (z.B. "Beschlussdatum des Insolvenzgerichts", "Konkrete Bankverbindungen"). Keine Platzhalter wie {"information":"","grund":"..."} ausgeben. Wenn nichts fehlt, leere Liste []. Maximal 15 Einträge — nur die wichtigsten fehlenden Informationen, keine Wiederholungen.`;
+WICHTIG für fehlende_informationen: Jeder Eintrag MUSS ein Objekt mit allen drei Feldern sein. Das Feld "information" darf NIEMALS leer sein — trage dort stets eine kurze, prägnante Bezeichnung der fehlenden Information ein (z.B. "Beschlussdatum des Insolvenzgerichts", "Konkrete Bankverbindungen"). Keine Platzhalter wie {"information":"","grund":"..."} ausgeben. Wenn nichts fehlt, leere Liste []. Maximal 15 Einträge — nur die wichtigsten fehlenden Informationen, keine Wiederholungen.
+
+REGELN FÜR AKTIVA (Vermögenswerte):
+Identifiziere Vermögenswerte in diesen 10 Kategorien:
+1. immobilien — Grundstücke, Häuser, Wohnungen (Belastungen wie Grundschulden/Hypotheken abziehen!)
+2. fahrzeuge — PKW, LKW, Motorräder (Zeitwert; sicherungsübereignete kennzeichnen)
+3. bankguthaben — Konten, Guthaben (beachte Pfändungsschutzkonto § 850k ZPO)
+4. lebensversicherungen — Lebens-/Rentenversicherungen mit Rückkaufswert
+5. wertpapiere_beteiligungen — Aktien, Fonds, GmbH-Anteile
+6. forderungen_schuldner — Forderungen des Schuldners gegen Dritte
+7. bewegliches_vermoegen — Schmuck, Kunst, Sammlungen (unpfändbare Haushaltsgegenstände § 811 ZPO nicht mitzählen)
+8. geschaeftsausstattung — Büroausstattung, Maschinen, Warenlager
+9. steuererstattungen — erwartete Steuererstattungsansprüche
+10. einkommen — laufendes Einkommen (NUR pfändbarer Anteil nach § 850c ZPO, Pfändungsfreigrenzen berücksichtigen)
+- Belastungen berücksichtigen: Grundschulden, Sicherungsübereignungen bei Wertermittlung abziehen
+- summe_aktiva: Gesamtsumme aller Aktiva. massekosten_schaetzung: geschätzte Verfahrenskosten nach § 54 InsO
+- Wenn keine Vermögenswerte gefunden: leere positionen-Liste zurückgeben
+- Insolvenzanalyse: Bewerte §§ 17, 18, 19, 26 InsO separat mit "ja"/"nein"/"offen" und konkreter Begründung aus der Akte. § 19 (Überschuldung) nur bei juristischen Personen relevant — bei natürlichen Personen status="offen"
+
+REGELN FÜR ANFECHTUNG (§§ 129-147 InsO):
+Identifiziere potenziell anfechtbare Rechtshandlungen:
+- § 130 Kongruente Deckung: Zahlungen auf fällige Forderungen, 3 Monate vor Antrag
+- § 131 Inkongruente Deckung: Sicherungen die der Gläubiger nicht beanspruchen konnte, 3 Monate vor Antrag
+- § 133 Vorsätzliche Benachteiligung: Handlungen mit Benachteiligungsvorsatz, 10 Jahre vor Antrag
+- § 134 Unentgeltliche Leistung: Schenkungen und unentgeltliche Zuwendungen, 4 Jahre vor Antrag
+- § 135 Gesellschafterdarlehen: Rückzahlung von Gesellschafterdarlehen, 1 Jahr vor Antrag
+- § 138 InsO Nahestehende: Ehegatten, Lebenspartner, Verwandte, Gesellschafter >25%
+- anfechtbar_ab: Berechne aus Antragsdatum minus Rückrechnungsfrist der jeweiligen Grundlage
+- risiko: "hoch" (klare Anfechtbarkeit), "mittel" (abhängig von Beweislage), "gering" (fraglich, aber prüfenswert)
+- Wenn keine anfechtbaren Vorgänge erkennbar: leere vorgaenge-Liste zurückgeben
+- gesamtpotenzial: Summe aller potenziell anfechtbaren Beträge`;
 
 // ─── Helpers ───
 
@@ -279,6 +387,37 @@ function mergeField(a: unknown, b: unknown): unknown {
     // Fehlende Informationen: merge by information, filter empty placeholders
     if (firstItem && typeof firstItem === 'object' && 'information' in (firstItem as object)) {
       return mergeFehlendeInformationen(a as FehlendInfo[], b as FehlendInfo[]);
+    }
+    // Einzelforderungen: deduplicate by creditor name + claim amount
+    // Same creditor can have multiple distinct claims (e.g. Finanzamt with KSt + USt)
+    if (firstItem && typeof firstItem === 'object' && 'glaeubiger' in (firstItem as object)) {
+      const byKey = new Map<string, unknown>();
+      for (const item of [...a, ...b]) {
+        const obj = item as Record<string, unknown>;
+        const gl = obj.glaeubiger as { wert?: unknown } | undefined;
+        const name = String(gl?.wert ?? '').toLowerCase().trim();
+        const betrag = (obj.betrag as { wert?: unknown })?.wert;
+        const titel = String((obj.titel as { wert?: unknown })?.wert ?? '').toLowerCase().trim();
+        // Composite key: creditor + amount + title → preserves distinct claims from same creditor
+        const key = name
+          ? `${name}|${betrag ?? ''}|${titel}`
+          : `_anon_${byKey.size}`;
+        if (!byKey.has(key)) {
+          byKey.set(key, item);
+        }
+      }
+      return Array.from(byKey.values());
+    }
+    // Aktiva positionen: deduplicate by description (case-insensitive)
+    if (firstItem && typeof firstItem === 'object' && 'beschreibung' in (firstItem as object) && 'kategorie' in (firstItem as object)) {
+      const byDesc = new Map<string, unknown>();
+      for (const item of [...a, ...b]) {
+        const obj = item as Record<string, unknown>;
+        const desc = (obj.beschreibung as { wert?: unknown })?.wert;
+        const key = String(desc ?? '').toLowerCase().trim() || `_anon_${byDesc.size}`;
+        if (!byDesc.has(key)) byDesc.set(key, item);
+      }
+      return Array.from(byDesc.values());
     }
     // Generic arrays: deduplicate by JSON
     const seen = new Set<string>();
@@ -465,18 +604,71 @@ function buildChunk(segments: DocumentSegment[]): DocumentChunk {
 
 // ─── Claude API call ───
 
-async function callClaudeText(content: string): Promise<ExtractionResult> {
-  const response = await anthropic.messages.create({
-    model: config.EXTRACTION_MODEL,
-    max_tokens: 16_000,
-    messages: [{ role: 'user' as const, content }],
-  }) as Anthropic.Message;
+/**
+ * Call Claude with streaming + extended thinking.
+ * Streaming: required for operations >10 minutes.
+ * Extended thinking: model reasons step-by-step before answering,
+ * significantly improving cross-referencing and legal analysis quality.
+ */
+async function callClaudeStreaming(params: {
+  model: string;
+  max_tokens: number;
+  messages: Anthropic.MessageCreateParams['messages'];
+  system?: string;
+  thinking?: boolean;
+}): Promise<{ text: string; thinkingText?: string; usage: { input_tokens: number; output_tokens: number } }> {
+  const streamParams: Record<string, unknown> = {
+    model: params.model,
+    max_tokens: params.max_tokens,
+    messages: params.messages,
+    // System prompt with cache_control for prompt caching
+    // Cache reads cost 0.1x (90% reduction) — break-even after 2 hits within 5 min
+    ...(params.system ? {
+      system: [{
+        type: 'text',
+        text: params.system,
+        cache_control: { type: 'ephemeral' },
+      }],
+    } : {}),
+    // Note: temperature cannot be set when using extended thinking
+  };
 
-  const text = response.content
+  // Extended thinking: model analyzes the document step-by-step before producing JSON
+  // Budget: 10K tokens for thinking (~15s extra, major quality boost for analysis)
+  if (params.thinking !== false) {
+    streamParams.thinking = { type: 'enabled', budget_tokens: 10_000 };
+  } else {
+    // Without thinking: use temperature 0 for deterministic extraction
+    streamParams.temperature = 0;
+  }
+
+  const stream = anthropic.messages.stream(streamParams as unknown as Anthropic.MessageStreamParams);
+  const finalMessage = await stream.finalMessage();
+
+  const text = finalMessage.content
     .filter((c): c is Anthropic.TextBlock => c.type === 'text')
     .map((c: Anthropic.TextBlock) => c.text)
     .join('');
 
+  // Extract thinking blocks for logging (not used in output)
+  const thinkingText = finalMessage.content
+    .filter((c) => c.type === 'thinking')
+    .map((c) => (c as { type: 'thinking'; thinking: string }).thinking)
+    .join('');
+
+  if (thinkingText) {
+    logger.debug('Extended thinking used', { thinkingTokens: thinkingText.length });
+  }
+
+  return { text, thinkingText: thinkingText || undefined, usage: finalMessage.usage };
+}
+
+async function callClaudeText(content: string): Promise<ExtractionResult> {
+  const { text } = await callClaudeStreaming({
+    model: config.EXTRACTION_MODEL,
+    max_tokens: 32_000,
+    messages: [{ role: 'user' as const, content }],
+  });
   return parseAndValidateResponse(text);
 }
 
@@ -490,9 +682,9 @@ export async function extractFromPdfBuffer(pdfBuffer: Buffer, documentMap?: stri
     ? `${EXTRACTION_PROMPT}\n\n--- STRUKTURÜBERSICHT (nur zur Orientierung, KEINE Seitenzahlen hieraus verwenden) ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---`
     : EXTRACTION_PROMPT;
 
-  const response = await callWithRetry(() => anthropic.messages.create({
+  const { text } = await callWithRetry(() => callClaudeStreaming({
     model: config.EXTRACTION_MODEL,
-    max_tokens: 16_000,
+    max_tokens: 32_000,
     messages: [{
       role: 'user' as const,
       content: [
@@ -500,14 +692,80 @@ export async function extractFromPdfBuffer(pdfBuffer: Buffer, documentMap?: stri
         { type: 'text' as const, text: promptText },
       ],
     }],
-  })) as Anthropic.Message;
-
-  const text = response.content
-    .filter((c): c is Anthropic.TextBlock => c.type === 'text')
-    .map((c: Anthropic.TextBlock) => c.text)
-    .join('');
+  }));
 
   return parseAndValidateResponse(text);
+}
+
+/**
+ * Comprehensive single-call extraction: base data + aktiva + anfechtung.
+ * Used for PDFs up to 500 pages. Sends the entire PDF (native mode) or all
+ * page texts in one API call using the EXTRACTION_MODEL.
+ */
+export async function extractComprehensive(
+  pdfBuffer: Buffer | null,
+  pageTexts: string[],
+  documentMap?: string
+): Promise<ExtractionResult> {
+  const mapBlock = documentMap
+    ? `\n\n--- STRUKTURÜBERSICHT (nur zur Orientierung, KEINE Seitenzahlen hieraus verwenden) ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---\n`
+    : '';
+
+  // Use EXTRACTION_PROMPT as system prompt (reduces prompt injection risk from document text)
+  const systemPrompt = EXTRACTION_PROMPT;
+
+  // For small-medium PDFs (<=500 pages): use native PDF mode if buffer available
+  if (pdfBuffer && pageTexts.length <= 500) {
+    const base64 = pdfBuffer.toString('base64');
+    logger.info('Starte umfassende Extraktion (PDF-Modus)', { pages: pageTexts.length });
+
+    const userContent = mapBlock
+      ? `Analysiere dieses Dokument.${mapBlock}`
+      : 'Analysiere dieses Dokument.';
+
+    const { text, usage } = await callWithRetry(() => callClaudeStreaming({
+      model: config.EXTRACTION_MODEL,
+      max_tokens: 32_000,
+      system: systemPrompt,
+      messages: [{
+        role: 'user' as const,
+        content: [
+          { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+          { type: 'text' as const, text: userContent },
+        ],
+      }],
+    }));
+
+    logger.info('Umfassende Extraktion abgeschlossen', {
+      model: config.EXTRACTION_MODEL,
+      pages: pageTexts.length,
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+    });
+
+    return parseAndValidateResponse(text);
+  }
+
+  // For very large PDFs or no buffer: use text-based with all pages
+  logger.info('Starte umfassende Extraktion (Text-Modus)', { pages: pageTexts.length });
+  const pageBlock = pageTexts.map((t, i) => `=== SEITE ${i + 1} ===\n${t}`).join('\n\n');
+  const content = `${mapBlock}\n--- AKTENINHALT (${pageTexts.length} Seiten) ---\n\n${pageBlock}`;
+
+  const { text: respText, usage: respUsage } = await callWithRetry(() => callClaudeStreaming({
+    model: config.EXTRACTION_MODEL,
+    max_tokens: 32_000,
+    system: systemPrompt,
+    messages: [{ role: 'user' as const, content }],
+  }));
+
+  logger.info('Umfassende Extraktion abgeschlossen', {
+    model: config.EXTRACTION_MODEL,
+    pages: pageTexts.length,
+    inputTokens: respUsage.input_tokens,
+    outputTokens: respUsage.output_tokens,
+  });
+
+  return parseAndValidateResponse(respText);
 }
 
 /**

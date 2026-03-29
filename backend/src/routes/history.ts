@@ -151,8 +151,9 @@ router.post('/:id/export', authMiddleware, (req: Request, res: Response): void =
 
   logger.info('Extraktion exportiert', { extractionId: id, userId });
 
-  const exportFilename = row.filename.replace(/\.pdf$/i, '') + '.iae';
-  res.setHeader('Content-Disposition', `attachment; filename="${exportFilename}"`);
+  const sanitizedName = row.filename.replace(/\.pdf$/i, '').replace(/[^a-zA-Z0-9äöüÄÖÜß_\-. ]/g, '_');
+  const exportFilename = sanitizedName + '.iae';
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(exportFilename)}`);
   res.setHeader('Content-Type', 'application/json');
   res.json(exportData);
 });
@@ -196,7 +197,16 @@ router.post('/import', authMiddleware, (req: Request, res: Response): void => {
       password
     );
 
-    const result = JSON.parse(decryptedJson);
+    const rawResult = JSON.parse(decryptedJson);
+
+    // Validate imported data against schema (prevents deserialization attacks)
+    const { extractionResultSchema } = require('../utils/validation');
+    const parseResult = extractionResultSchema.safeParse(rawResult);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Importierte Daten sind ungültig oder beschädigt.' });
+      return;
+    }
+    const result = parseResult.data;
 
     // Audit log
     const db = getDb();

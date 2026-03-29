@@ -56,13 +56,29 @@ function wertIsEmpty(wert: unknown): boolean {
  * Walk an ExtractionResult and collect all {wert, quelle} fields
  * that have non-empty wert values, along with their dot-notation paths.
  */
+// Fields that should NOT be sent to the semantic verifier:
+// - Computed values that don't exist verbatim in documents
+// - Synthesized text fields (summaries of multiple values, not verbatim quotes)
+const SKIP_VERIFICATION_PATHS = new Set([
+  'schuldner.pfaendungsberechnung.pfaendbarer_betrag',
+]);
+
+// Suffix patterns: fields ending with these within arrays are skipped
+// (the titel of a forderung is a summary like "SV 5.104 + SZ 387 + MG 57",
+//  not a verbatim quote — verifier would incorrectly remove it)
+const SKIP_VERIFICATION_SUFFIXES = [
+  '.titel',          // Forderungstitel = synthesized from sub-amounts
+];
+
 export function collectFields(obj: unknown, prefix: string = ''): CollectedField[] {
   const fields: CollectedField[] = [];
 
   if (obj === null || obj === undefined || typeof obj !== 'object') return fields;
 
   if (isSourcedField(obj)) {
-    if (!wertIsEmpty(obj.wert)) {
+    const shouldSkip = SKIP_VERIFICATION_PATHS.has(prefix)
+      || SKIP_VERIFICATION_SUFFIXES.some(suffix => prefix.endsWith(suffix));
+    if (!wertIsEmpty(obj.wert) && !shouldSkip) {
       fields.push({ ref: obj, path: prefix });
     }
     return fields;
@@ -355,16 +371,21 @@ function processEntries(
  *
  * On API failure: logs warning, returns result unchanged (graceful degradation).
  */
+export interface VerifyResult {
+  result: ExtractionResult;
+  removedPaths: string[];
+}
+
 export async function semanticVerify(
   result: ExtractionResult,
   pageTexts: string[],
   documentMap?: string
-): Promise<ExtractionResult> {
+): Promise<VerifyResult> {
   const allFields = collectFields(result);
 
   if (allFields.length === 0) {
     logger.info('Keine Felder zur Verifikation gefunden');
-    return result;
+    return { result, removedPaths: [] };
   }
 
   const batches = splitIntoBatches(allFields, pageTexts);
@@ -508,6 +529,9 @@ ${retryFieldList}`;
     totalOutputTokens += br.outputTokens;
   }
 
+  // Track which fields were removed (for targeted re-extraction)
+  const removedPaths: string[] = [];
+
   // Apply all mutations atomically
   for (const m of mutations) {
     m.ref.verifiziert = m.verifiziert;
@@ -516,6 +540,11 @@ ${retryFieldList}`;
     }
     if (m.setWert !== undefined) {
       m.ref.wert = m.setWert.value;
+      // Track removed fields for potential re-extraction
+      if (m.setWert.value === null) {
+        const field = allFields.find(f => f.ref === m.ref);
+        if (field) removedPaths.push(field.path);
+      }
     }
   }
 
@@ -525,10 +554,11 @@ ${retryFieldList}`;
     total: allFields.length,
     ...stats,
     skipped,
+    removedPaths: removedPaths.length > 0 ? removedPaths : undefined,
     batches: batches.length,
     inputTokens: totalInputTokens,
     outputTokens: totalOutputTokens,
   });
 
-  return result;
+  return { result, removedPaths };
 }

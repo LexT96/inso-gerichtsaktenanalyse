@@ -91,6 +91,10 @@ function makeResult(): ExtractionResult {
       bankverbindung_bic: sv(null),
     },
     forderungen: {
+      einzelforderungen: [],
+      gesamtforderungen: sn(12345.67),
+      gesicherte_forderungen: sn(null),
+      ungesicherte_forderungen: sn(null),
       hauptforderung_beitraege: sn(null),
       saeumniszuschlaege: sn(null),
       mahngebuehren: sn(null),
@@ -168,7 +172,7 @@ describe('collectFields', () => {
   it('collects all non-empty wert fields — 8 from test fixture', () => {
     const result = makeResult();
     const fields = collectFields(result);
-    expect(fields).toHaveLength(8);
+    expect(fields).toHaveLength(9);
   });
 
   it('skips fields with null wert', () => {
@@ -206,7 +210,7 @@ describe('collectFields', () => {
     ];
     const fields = collectFields(result);
     // 8 base fields + 2 kinder entries = 10
-    expect(fields).toHaveLength(10);
+    expect(fields).toHaveLength(11);
     const kinderPaths = fields.filter(f => f.path.includes('kinder'));
     expect(kinderPaths).toHaveLength(2);
   });
@@ -230,7 +234,7 @@ describe('semanticVerify', () => {
     expect(result.verfahrensdaten.aktenzeichen.verifiziert).toBe(true);
     expect(result.verfahrensdaten.gericht.verifiziert).toBe(true);
     expect(result.schuldner.name.verifiziert).toBe(true);
-    expect(result.forderungen.gesamtforderung.verifiziert).toBe(true);
+    expect(result.forderungen.gesamtforderungen.verifiziert).toBe(true);
   });
 
   it('corrects quelle when quelle_korrigiert is provided', async () => {
@@ -263,15 +267,16 @@ describe('semanticVerify', () => {
 
     expect(result.verfahrensdaten.aktenzeichen.verifiziert).toBe(false);
     expect(result.schuldner.name.verifiziert).toBe(false);
-    expect(result.forderungen.gesamtforderung.verifiziert).toBe(false);
+    expect(result.forderungen.gesamtforderungen.verifiziert).toBe(false);
   });
 
   it('leaves verifiziert undefined on API failure (graceful degradation)', async () => {
     const result = makeResult();
     vi.mocked(anthropic.messages.create).mockRejectedValueOnce(new Error('Network error'));
 
-    // Should not throw
-    await expect(semanticVerify(result, ['page text'])).resolves.toBe(result);
+    // Should not throw — returns { result, removedPaths }
+    const returned = await semanticVerify(result, ['page text']);
+    expect(returned.result).toBe(result);
 
     // Fields should remain untouched (verifiziert still undefined)
     expect(result.verfahrensdaten.aktenzeichen.verifiziert).toBeUndefined();
@@ -287,8 +292,9 @@ describe('semanticVerify', () => {
       usage: { input_tokens: 10, output_tokens: 5 },
     } as never);
 
-    // Should not throw
-    await expect(semanticVerify(result, ['page text'])).resolves.toBe(result);
+    // Should not throw — returns { result, removedPaths }
+    const returned2 = await semanticVerify(result, ['page text']);
+    expect(returned2.result).toBe(result);
 
     // Fields should be left unchanged
     expect(result.verfahrensdaten.aktenzeichen.verifiziert).toBeUndefined();
@@ -302,7 +308,7 @@ describe('semanticVerify', () => {
 
     const returned = await semanticVerify(result, ['page text']);
 
-    expect(returned).toBe(result);
+    expect(returned.result).toBe(result);
   });
 
   it('nulls wert when aktion is entfernen (e.g. document says unknown)', async () => {
@@ -394,7 +400,7 @@ describe('semanticVerify', () => {
     expect(result.verfahrensdaten.aktenzeichen.verifiziert).toBe(true);
     expect(result.verfahrensdaten.gericht.verifiziert).toBe(true);
     expect(result.schuldner.name.verifiziert).toBe(true);
-    expect(result.forderungen.gesamtforderung.verifiziert).toBe(true);
+    expect(result.forderungen.gesamtforderungen.verifiziert).toBe(true);
     // API should have been called twice
     expect(anthropic.messages.create).toHaveBeenCalledTimes(2);
   });
@@ -441,6 +447,10 @@ describe('semanticVerify', () => {
         bankverbindung_bic: sv(null),
       },
       forderungen: {
+        einzelforderungen: [],
+        gesamtforderungen: sn(null),
+        gesicherte_forderungen: sn(null),
+        ungesicherte_forderungen: sn(null),
         hauptforderung_beitraege: sn(null),
         saeumniszuschlaege: sn(null),
         mahngebuehren: sn(null),
@@ -495,7 +505,8 @@ describe('semanticVerify', () => {
     const returned = await semanticVerify(empty, ['page text']);
 
     expect(anthropic.messages.create).not.toHaveBeenCalled();
-    expect(returned).toBe(empty);
+    expect(returned.result).toBe(empty);
+    expect(returned.removedPaths).toEqual([]);
   });
 });
 

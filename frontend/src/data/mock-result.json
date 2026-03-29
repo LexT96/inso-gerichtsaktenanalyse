@@ -38,6 +38,21 @@
     "bankverbindung_bic": {"wert": "COBADEFFXXX", "quelle": "Seite 2, Antragsteller"}
   },
   "forderungen": {
+    "einzelforderungen": [
+      {
+        "glaeubiger": {"wert": "Handelskrankenkasse (HEK)", "quelle": "Seite 2, Forderungsaufstellung"},
+        "art": "sozialversicherung",
+        "rang": "§38 Insolvenzforderung",
+        "betrag": {"wert": 47502.06, "quelle": "Seite 2, Forderungsaufstellung"},
+        "zeitraum_von": {"wert": "01.01.2024", "quelle": "Seite 2, Forderungsaufstellung"},
+        "zeitraum_bis": {"wert": "31.12.2025", "quelle": "Seite 2, Forderungsaufstellung"},
+        "titel": {"wert": "Beitragsrückstände SV", "quelle": "Seite 2, Forderungsaufstellung"},
+        "ist_antragsteller": true
+      }
+    ],
+    "gesamtforderungen": {"wert": 47502.06, "quelle": "Seite 2, Forderungsaufstellung"},
+    "gesicherte_forderungen": {"wert": null, "quelle": ""},
+    "ungesicherte_forderungen": {"wert": 47502.06, "quelle": "Seite 2, Forderungsaufstellung"},
     "hauptforderung_beitraege": {"wert": 45678.5, "quelle": "Seite 2, Forderungsaufstellung"},
     "saeumniszuschlaege": {"wert": 1234.56, "quelle": "Seite 2, Forderungsaufstellung"},
     "mahngebuehren": {"wert": 89, "quelle": "Seite 2, Forderungsaufstellung"},

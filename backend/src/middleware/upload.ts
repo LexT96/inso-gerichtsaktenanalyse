@@ -15,6 +15,14 @@ function fileFilter(
   cb(null, true);
 }
 
+/** Validate PDF magic bytes (%PDF) after multer has loaded the buffer */
+export function validatePdfBuffer(buffer: Buffer): void {
+  const PDF_MAGIC = Buffer.from('%PDF');
+  if (!buffer.subarray(0, 4).equals(PDF_MAGIC)) {
+    throw new Error('Datei ist kein gültiges PDF (ungültiger Dateiheader).');
+  }
+}
+
 export const uploadMiddleware = multer({
   storage,
   fileFilter,

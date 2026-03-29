@@ -4,43 +4,78 @@
 
 @layer base {
   body {
-    @apply bg-bg text-text font-mono m-0;
+    @apply bg-bg text-text font-mono m-0 antialiased;
   }
 
+  /* Scrollbar — thin, modern */
   ::-webkit-scrollbar {
     width: 5px;
+    height: 5px;
   }
   ::-webkit-scrollbar-track {
-    background: #F9FAFB;
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
     background: #D1D5DB;
-    border-radius: 3px;
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9CA3AF;
   }
 
-  /* PDF viewer text layer: make selectable text transparent overlay */
+  /* Header accent line */
+  header {
+    border-bottom: 1px solid #E5E7EB;
+    border-image: linear-gradient(to right, #A52A2A 100px, #E5E7EB 100px) 1;
+  }
+
+  /* PDF viewer */
   .react-pdf__Page__textContent {
     opacity: 0.3;
   }
   .react-pdf__Page__textContent span::selection {
     background: rgba(165, 42, 42, 0.25);
   }
-  /* Quellen-Highlight beim Klick auf [S.X] */
   .react-pdf__Page__textContent mark.source-highlight {
-    background: rgba(165, 42, 42, 0.2);
-    border-radius: 2px;
+    background: rgba(165, 42, 42, 0.18);
+    border-radius: 3px;
     color: inherit;
+    padding: 1px 2px;
+  }
+  .react-pdf__Page__textContent .source-highlight-para {
+    background: rgba(59, 130, 246, 0.10);
+    border-radius: 2px;
   }
   .react-pdf__Page__canvas {
     max-width: 100% !important;
     height: auto !important;
   }
 
-  input::placeholder {
-    color: #6B7280;
+  /* Form inputs — modern feel */
+  input, select, textarea {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  input:focus {
+  input::placeholder {
+    color: #9CA3AF;
+  }
+  input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: #A52A2A !important;
+    box-shadow: 0 0 0 3px rgba(165, 42, 42, 0.08);
+  }
+
+  /* Smooth transitions on interactive elements */
+  button {
+    transition: all 0.15s ease;
+  }
+}
+
+@layer utilities {
+  /* Card utility: combines shadow + border + rounding */
+  .ui-card {
+    @apply bg-surface border border-border rounded-lg shadow-card;
+  }
+  .ui-card-hover {
+    @apply bg-surface border border-border rounded-lg shadow-card hover:shadow-card-hover transition-shadow duration-200;
   }
 }

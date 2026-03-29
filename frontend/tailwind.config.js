@@ -4,21 +4,21 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: '#FFFFFF',
+        bg: '#F8F9FA',
         surface: '#FFFFFF',
-        'surface-high': '#F9FAFB',
-        border: '#D1D5DB',
-        'border-light': '#E5E7EB',
-        text: '#000000',
+        'surface-high': '#F3F4F6',
+        border: '#E5E7EB',
+        'border-light': '#F3F4F6',
+        text: '#111827',
         'text-dim': '#4B5563',
-        'text-muted': '#6B7280',
+        'text-muted': '#9CA3AF',
         accent: '#A52A2A',
         'accent-dim': '#8B2222',
-        'ie-green': '#15803d',
-        'ie-green-bg': '#dcfce7',
-        'ie-green-border': '#86efac',
+        'ie-green': '#16a34a',
+        'ie-green-bg': '#f0fdf4',
+        'ie-green-border': '#bbf7d0',
         'ie-red': '#dc2626',
-        'ie-red-bg': '#fee2e2',
+        'ie-red-bg': '#fef2f2',
         'ie-red-border': '#fecaca',
         'ie-amber': '#d97706',
         'ie-amber-bg': '#fffbeb',
@@ -28,13 +28,26 @@ export default {
         'ie-blue-border': '#bfdbfe',
       },
       fontFamily: {
-        mono: ["'IBM Plex Mono'", "'Fira Code'", "'Cascadia Code'", 'monospace'],
-        sans: ["'IBM Plex Sans'", "'Segoe UI'", 'system-ui', 'sans-serif'],
+        mono: ["'Geist Mono'", "'IBM Plex Mono'", "'Fira Code'", 'monospace'],
+        sans: ["'DM Sans'", "'IBM Plex Sans'", 'system-ui', 'sans-serif'],
+      },
+      boxShadow: {
+        'card': '0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04)',
+        'card-hover': '0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.04)',
+        'elevated': '0 4px 12px -2px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.04)',
+        'dropdown': '0 8px 24px -4px rgb(0 0 0 / 0.12), 0 4px 8px -4px rgb(0 0 0 / 0.06)',
+      },
+      borderRadius: {
+        'card': '8px',
       },
       keyframes: {
         fadeUp: {
-          from: { opacity: '0', transform: 'translateY(12px)' },
+          from: { opacity: '0', transform: 'translateY(8px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        fadeIn: {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
         },
         shake: {
           '0%, 100%': { transform: 'translateX(0)' },
@@ -50,8 +63,9 @@ export default {
         },
       },
       animation: {
-        'fade-up': 'fadeUp 0.5s ease',
-        'fade-up-fast': 'fadeUp 0.4s ease',
+        'fade-up': 'fadeUp 0.4s ease-out',
+        'fade-up-fast': 'fadeUp 0.3s ease-out',
+        'fade-in': 'fadeIn 0.3s ease-out',
         shake: 'shake 0.4s ease',
         'spin-fast': 'spin 0.8s linear infinite',
         pulse: 'pulse 2s ease-in-out infinite',

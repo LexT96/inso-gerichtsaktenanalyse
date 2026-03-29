@@ -33,7 +33,7 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
   const [containerHeight, setContainerHeight] = useState(0);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [highlightRequest, setHighlightRequest] = useState<{ page: number; text: string } | null>(null);
+  const [highlightRequest, setHighlightRequest] = useState<{ page: number; text: string; quelle?: string } | null>(null);
   const [zoom, setZoom] = useState(1.0);
   const [pageAspectRatio, setPageAspectRatio] = useState(DEFAULT_ASPECT);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -162,13 +162,12 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
     scrollToPageStable(clamped);
   }, [totalPages, scrollToPageStable]);
 
-  const goToPageAndHighlight = useCallback((page: number, text?: string) => {
+  const goToPageAndHighlight = useCallback((page: number, text?: string, quelle?: string) => {
     if (totalPages === 0) return;
     const clamped = Math.max(1, Math.min(page, totalPages));
     const trimmed = text?.trim();
     setCurrentPage(clamped);
-    setHighlightRequest(trimmed ? { page: clamped, text: trimmed } : null);
-    // Use 'start' as initial pass; the highlight effect will refine to center on the mark
+    setHighlightRequest(trimmed ? { page: clamped, text: trimmed, quelle } : null);
     scrollToPageStable(clamped, trimmed ? { block: 'start' } : undefined);
   }, [totalPages, scrollToPageStable]);
 
@@ -188,19 +187,80 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
   // Uses MutationObserver to reliably wait for textLayer rendering.
   useEffect(() => {
     if (!highlightRequest?.text) return;
-    const { page, text } = highlightRequest;
+    const { page, text, quelle } = highlightRequest;
 
     let cancelled = false;
     let observer: MutationObserver | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
+    // German stopwords to skip in paragraph scoring
+    const STOPWORDS = new Set([
+      'und', 'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einer', 'einem', 'einen',
+      'ist', 'hat', 'sind', 'war', 'wird', 'für', 'von', 'mit', 'auf', 'aus', 'bei', 'als',
+      'vom', 'zum', 'zur', 'nach', 'über', 'unter', 'vor', 'hinter', 'seit', 'durch', 'gegen',
+      'ohne', 'bis', 'oder', 'aber', 'nicht', 'sich', 'auch', 'nur', 'noch', 'wie', 'kann',
+      'wird', 'wenn', 'wir', 'sie', 'ich', 'ihr', 'sein', 'haben', 'werden', 'dass', 'diese',
+      'dieser', 'dieses', 'einem', 'seinen', 'seiner', 'ihre', 'ihrer',
+    ]);
+
+    /** Group text-layer spans into logical paragraphs by Y-position proximity */
+    function collectParagraphs(textLayer: HTMLElement): { spans: HTMLElement[]; text: string }[] {
+      const allSpans = Array.from(textLayer.querySelectorAll('span')) as HTMLElement[];
+      if (allSpans.length === 0) return [];
+
+      const paragraphs: { spans: HTMLElement[]; text: string }[] = [];
+      let currentPara: HTMLElement[] = [];
+      let lastBottom = -Infinity;
+
+      for (const span of allSpans) {
+        const rect = span.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) continue;
+
+        // Large vertical gap (> 1.5x line height) = new paragraph
+        const gap = rect.top - lastBottom;
+        const lineHeight = rect.height || 12;
+        if (currentPara.length > 0 && gap > lineHeight * 1.5) {
+          const paraText = currentPara.map(s => s.textContent || '').join(' ');
+          if (paraText.trim()) paragraphs.push({ spans: [...currentPara], text: paraText });
+          currentPara = [];
+        }
+        currentPara.push(span);
+        lastBottom = rect.bottom;
+      }
+      if (currentPara.length > 0) {
+        const paraText = currentPara.map(s => s.textContent || '').join(' ');
+        if (paraText.trim()) paragraphs.push({ spans: [...currentPara], text: paraText });
+      }
+      return paragraphs;
+    }
+
+    /** Extract meaningful keywords from text, filtering stopwords and short tokens */
+    function extractKeywords(input: string): string[] {
+      return input
+        .toLowerCase()
+        .replace(/[^\wäöüß]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length >= 3 && !STOPWORDS.has(w));
+    }
+
+    /** Score a paragraph by keyword overlap */
+    function scoreParagraph(paraText: string, keywords: string[]): number {
+      const lower = paraText.toLowerCase();
+      let score = 0;
+      for (const kw of keywords) {
+        if (lower.includes(kw)) score++;
+      }
+      return score;
+    }
+
     const doHighlight = (textLayer: HTMLElement) => {
       const mark = new Mark(textLayer);
       mark.unmark({ className: 'source-highlight' });
+      mark.unmark({ className: 'source-highlight-para' });
 
       let matchCount = 0;
 
-      // Strategy 1: exact regex match
+      // Strategy 1: exact regex match of the value
       try {
         const escaped = escapeForRegex(text);
         mark.markRegExp(new RegExp(escaped, 'gi'), {
@@ -211,7 +271,7 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
         // ignore regex errors
       }
 
-      // Strategy 2: if no match, try mark.js fuzzy (handles span boundaries)
+      // Strategy 2: fuzzy match (handles span boundaries)
       if (matchCount === 0) {
         mark.mark(text, {
           className: 'source-highlight',
@@ -220,23 +280,44 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
         });
       }
 
-      // Strategy 3: if still no match and text has multiple words, try individual words
+      // Strategy 3 (NEW): Paragraph scoring — find the best-matching paragraph
+      // Uses keywords from both the value AND the quelle description
       if (matchCount === 0) {
-        const words = text.split(/\s+/).filter(w => w.length >= 3);
-        if (words.length > 1) {
-          for (const word of words) {
-            mark.mark(word, {
-              className: 'source-highlight',
-              separateWordSearch: false,
-            });
+        const keywords = [
+          ...extractKeywords(text),
+          ...extractKeywords(quelle || ''),
+        ];
+        // Deduplicate
+        const uniqueKeywords = [...new Set(keywords)];
+
+        if (uniqueKeywords.length > 0) {
+          const paragraphs = collectParagraphs(textLayer);
+          let bestScore = 0;
+          let bestPara: { spans: HTMLElement[]; text: string } | null = null;
+
+          for (const para of paragraphs) {
+            const score = scoreParagraph(para.text, uniqueKeywords);
+            if (score > bestScore) {
+              bestScore = score;
+              bestPara = para;
+            }
+          }
+
+          // Only highlight if we have a strong match (at least 3 keywords or 50%+ overlap)
+          // Higher threshold prevents wrong-paragraph highlighting in dense legal documents
+          if (bestPara && (bestScore >= 3 || (uniqueKeywords.length > 0 && bestScore / uniqueKeywords.length >= 0.5))) {
+            for (const span of bestPara.spans) {
+              span.classList.add('source-highlight-para');
+            }
+            matchCount = 1;
           }
         }
       }
 
-      // Page was aligned to top; scroll the actual match into view inside the page.
+      // Scroll the first match into view
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          const first = textLayer.querySelector('mark.source-highlight');
+          const first = textLayer.querySelector('mark.source-highlight, .source-highlight-para');
           if (first instanceof HTMLElement) {
             first.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
           }

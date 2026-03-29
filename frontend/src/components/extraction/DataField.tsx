@@ -55,9 +55,9 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
   const isUnverified = verifiziert === false;
 
   const displayValue = (): string => {
-    if (empty) return '\u2014';
+    if (empty) return '—';
     if (isCurrency && typeof w === 'number') {
-      return `${w.toLocaleString('de-DE', { minimumFractionDigits: 2 })} \u20ac`;
+      return `${w.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`;
     }
     if (typeof w === 'boolean') return w ? 'Ja' : 'Nein';
     if (w === 0) return '0';
@@ -78,10 +78,12 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
   };
 
   const handleQuelleClick = () => {
-    if (pageNum && totalPages > 0) {
-      goToPageAndHighlight(pageNum, rawSearchText());
+    // Always try to jump — goToPageAndHighlight handles the case when PDF isn't loaded
+    if (pageNum) {
+      goToPageAndHighlight(pageNum, rawSearchText(), q);
     }
-    setShowSrc(!showSrc);
+    // Always show source text (toggle off only via × button)
+    if (!showSrc) setShowSrc(true);
   };
 
   return (
@@ -95,32 +97,39 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
           {q && (
             <button
               onClick={handleQuelleClick}
-              title={isUnverified ? 'Quelle nicht verifiziert' : pageNum ? `Seite ${pageNum} anzeigen` : 'Quelle anzeigen'}
-              className={`bg-transparent border rounded-sm text-[8px] px-1.5 py-px cursor-pointer font-mono tracking-wide transition-colors
-                ${showSrc
-                  ? 'border-accent text-accent'
-                  : isUnverified
-                    ? 'border-ie-amber-border text-ie-amber'
-                    : pageNum
-                      ? 'border-ie-blue-border text-ie-blue hover:border-ie-blue hover:text-ie-blue'
-                      : 'border-border text-text-muted hover:border-accent hover:text-accent'
+              title={pageNum ? `Seite ${pageNum} im PDF anzeigen` : 'Quelle anzeigen'}
+              className={`bg-transparent border rounded text-[8px] px-1.5 py-px cursor-pointer font-mono tracking-wide transition-all hover:scale-105 active:scale-95
+                ${isUnverified
+                  ? 'border-ie-amber-border text-ie-amber'
+                  : pageNum
+                    ? 'border-ie-blue-border text-ie-blue hover:border-ie-blue hover:bg-ie-blue/5'
+                    : 'border-border text-text-muted hover:border-accent hover:text-accent'
                 }`}
             >
-              {showSrc ? '×' : isUnverified ? '?' : pageNum ? `S.${pageNum}` : 'Q'}
+              {isUnverified ? '?' : pageNum ? `S.${pageNum}` : 'Q'}
+            </button>
+          )}
+          {showSrc && q && (
+            <button
+              onClick={() => setShowSrc(false)}
+              className="text-[8px] text-text-muted hover:text-accent transition-colors"
+              title="Quelle ausblenden"
+            >
+              ×
             </button>
           )}
         </div>
         {showSrc && q && (
           <div
-            className={`mt-0.5 px-2 py-0.5 bg-bg border rounded-sm text-[10px] italic
-              ${pageNum ? 'border-ie-blue-border text-ie-blue cursor-pointer hover:border-ie-blue' : 'border-border text-accent'}`}
+            className={`mt-0.5 px-2 py-0.5 bg-bg border rounded-md text-[10px] italic transition-colors
+              ${pageNum ? 'border-ie-blue-border text-ie-blue cursor-pointer hover:bg-ie-blue/5' : 'border-border text-accent'}`}
             onClick={() => {
               if (pageNum && totalPages > 0) {
-                goToPageAndHighlight(pageNum, rawSearchText());
+                goToPageAndHighlight(pageNum, rawSearchText(), q);
               }
             }}
           >
-            {'\u21b3'} {q}
+            ↳ {q}
           </div>
         )}
       </div>

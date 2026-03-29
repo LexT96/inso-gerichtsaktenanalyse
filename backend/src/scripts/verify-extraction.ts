@@ -26,7 +26,18 @@ import type { ExtractionResult } from '../types/extraction';
 
 // ─── Feldliste für den Bericht (alle SourcedValue-Felder) ───
 
-const FELD_PFADE: { bereich: string; felder: string[] }[] = [
+// Detect if Schuldner is a juristische Person
+function isJuristischePerson(result: ExtractionResult): boolean {
+  const rf = String(result.schuldner?.rechtsform?.wert ?? '').toLowerCase();
+  if (!rf) return false;
+  return /gmbh|ug\b|ag\b|se\b|kg\b|ohg|gbr|e\.?\s?v|partg|stiftung|verein|genossenschaft|kgaa/i.test(rf)
+    || rf.includes('juristische') || rf.includes('gesellschaft');
+}
+
+function buildFeldPfade(result: ExtractionResult): { bereich: string; felder: string[] }[] {
+  const isEntity = isJuristischePerson(result);
+
+  return [
   {
     bereich: 'Verfahrensdaten',
     felder: [
@@ -41,22 +52,31 @@ const FELD_PFADE: { bereich: string; felder: string[] }[] = [
     ],
   },
   {
-    bereich: 'Schuldner',
-    felder: [
-      'schuldner.name',
-      'schuldner.vorname',
-      'schuldner.geburtsdatum',
-      'schuldner.geburtsort',
-      'schuldner.geburtsland',
-      'schuldner.staatsangehoerigkeit',
-      'schuldner.familienstand',
-      'schuldner.geschlecht',
-      'schuldner.aktuelle_adresse',
-      'schuldner.firma',
-      'schuldner.rechtsform',
-      'schuldner.betriebsstaette_adresse',
-      'schuldner.handelsregisternummer',
-    ],
+    bereich: isEntity ? 'Schuldner (Unternehmen)' : 'Schuldner (Person)',
+    felder: isEntity
+      ? [
+          'schuldner.firma',
+          'schuldner.rechtsform',
+          'schuldner.name',
+          'schuldner.handelsregisternummer',
+          'schuldner.betriebsstaette_adresse',
+          'schuldner.aktuelle_adresse',
+        ]
+      : [
+          'schuldner.name',
+          'schuldner.vorname',
+          'schuldner.geburtsdatum',
+          'schuldner.geburtsort',
+          'schuldner.geburtsland',
+          'schuldner.staatsangehoerigkeit',
+          'schuldner.familienstand',
+          'schuldner.geschlecht',
+          'schuldner.aktuelle_adresse',
+          'schuldner.firma',
+          'schuldner.rechtsform',
+          'schuldner.betriebsstaette_adresse',
+          'schuldner.handelsregisternummer',
+        ],
   },
   {
     bereich: 'Antragsteller',
@@ -75,15 +95,9 @@ const FELD_PFADE: { bereich: string; felder: string[] }[] = [
   {
     bereich: 'Forderungen',
     felder: [
-      'forderungen.hauptforderung_beitraege',
-      'forderungen.saeumniszuschlaege',
-      'forderungen.mahngebuehren',
-      'forderungen.vollstreckungskosten',
-      'forderungen.antragskosten',
-      'forderungen.gesamtforderung',
-      'forderungen.zeitraum_von',
-      'forderungen.zeitraum_bis',
-      'forderungen.laufende_monatliche_beitraege',
+      'forderungen.gesamtforderungen',
+      'forderungen.gesicherte_forderungen',
+      'forderungen.ungesicherte_forderungen',
     ],
   },
   {
@@ -116,7 +130,8 @@ const FELD_PFADE: { bereich: string; felder: string[] }[] = [
       'ermittlungsergebnisse.meldeauskunft.datum',
     ],
   },
-];
+  ];
+}
 
 function getFieldValue(result: ExtractionResult, fieldPath: string): { wert: unknown; quelle?: string } {
   const parts = fieldPath.split('.');
@@ -152,7 +167,7 @@ function printReport(result: ExtractionResult): void {
   let found = 0;
   let total = 0;
 
-  for (const { bereich, felder } of FELD_PFADE) {
+  for (const { bereich, felder } of buildFeldPfade(result)) {
     console.log(`### ${bereich}`);
     for (const field of felder) {
       total++;

@@ -32,11 +32,11 @@ function formatDate(iso: string): string {
 
 function statusIcon(status: ExtractionStatus): { icon: string; classes: string } {
   switch (status) {
-    case 'completed': return { icon: '\u2713', classes: 'bg-ie-green-bg text-ie-green' };
+    case 'completed': return { icon: '✓', classes: 'bg-ie-green-bg text-ie-green' };
     case 'failed': return { icon: '!', classes: 'bg-ie-red-bg text-ie-red' };
-    case 'processing': return { icon: '\u2026', classes: 'bg-ie-amber-bg text-ie-amber' };
-    case 'expired': return { icon: '\u23f3', classes: 'bg-surface text-text-muted' };
-    case 'deleted_art17': return { icon: '\u2715', classes: 'bg-surface text-text-muted' };
+    case 'processing': return { icon: '…', classes: 'bg-ie-amber-bg text-ie-amber' };
+    case 'expired': return { icon: '⏳', classes: 'bg-surface text-text-muted' };
+    case 'deleted_art17': return { icon: '✕', classes: 'bg-surface text-text-muted' };
     default: return { icon: '?', classes: 'bg-surface text-text-muted' };
   }
 }

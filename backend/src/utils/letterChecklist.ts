@@ -96,7 +96,7 @@ function getMissingFields(result: ExtractionResult, item: ChecklistItem): string
   const missing: string[] = [];
   for (const field of item.requiredFields) {
     if (!hasValue(result, field)) {
-      missing.push(field.replace(/\./g, ' \u2192 '));
+      missing.push(field.replace(/\./g, ' → '));
     }
   }
   if (item.requiredFieldsOr && item.requiredFieldsOr.length > 0) {
@@ -107,7 +107,7 @@ function getMissingFields(result: ExtractionResult, item: ChecklistItem): string
       const firstGroup = item.requiredFieldsOr[0];
       for (const field of firstGroup) {
         if (!hasValue(result, field)) {
-          missing.push(field.replace(/\./g, ' \u2192 '));
+          missing.push(field.replace(/\./g, ' → '));
         }
       }
     }

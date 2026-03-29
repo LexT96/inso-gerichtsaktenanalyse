@@ -18,7 +18,10 @@ const envSchema = z.object({
   UTILITY_MODEL: z.string().default('claude-haiku-4-5-20251001'),
   ANTHROPIC_BASE_URL: z.preprocess(
     (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
-    z.string().url().optional()
+    z.string().url().refine(
+      (url) => url.startsWith('https://api.anthropic.com') || url.startsWith('https://'),
+      { message: 'ANTHROPIC_BASE_URL muss HTTPS verwenden' }
+    ).optional()
   ),
   DATA_RETENTION_HOURS: z.coerce.number().default(72),
   DB_ENCRYPTION_KEY: z.string().min(32, 'DB_ENCRYPTION_KEY muss mindestens 32 Zeichen haben (256-bit Hex empfohlen)'),

@@ -3,11 +3,12 @@ import { createContext, useContext } from 'react';
 export interface HighlightRequest {
   page: number;
   text: string;
+  quelle?: string;
 }
 
 interface PdfContextType {
   goToPage: (page: number) => void;
-  goToPageAndHighlight: (page: number, text?: string) => void;
+  goToPageAndHighlight: (page: number, text?: string, quelle?: string) => void;
   currentPage: number;
   totalPages: number;
   highlightRequest: HighlightRequest | null;

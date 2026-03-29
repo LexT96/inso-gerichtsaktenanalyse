@@ -29,76 +29,79 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center font-mono">
-      {/* Grid background */}
+      {/* Subtle grid */}
       <div
-        className="fixed inset-0 opacity-[0.06] pointer-events-none"
+        className="fixed inset-0 opacity-[0.04] pointer-events-none"
         style={{
-          backgroundImage: `repeating-linear-gradient(0deg, #D1D5DB 0px, transparent 1px, transparent 24px),
-            repeating-linear-gradient(90deg, #D1D5DB 0px, transparent 1px, transparent 24px)`,
+          backgroundImage: `repeating-linear-gradient(0deg, #D1D5DB 0px, transparent 1px, transparent 32px),
+            repeating-linear-gradient(90deg, #D1D5DB 0px, transparent 1px, transparent 32px)`,
         }}
       />
 
       <div
-        className={`w-[380px] p-12 px-10 bg-surface border border-border rounded-sm relative
+        className={`w-[400px] bg-surface border border-border/60 rounded-xl shadow-elevated relative
           ${shake ? 'animate-shake' : 'animate-fade-up'}`}
       >
-        <div className="text-center mb-9">
+        {/* Logo area */}
+        <div className="px-10 pt-10 pb-6 text-center border-b border-border">
           <img
             src="/demo/tbsl.png"
-            alt="TBS Logo"
-            className="h-12 mx-auto mb-4 object-contain"
+            alt="Professor Schmidt"
+            className="h-14 mx-auto mb-4 object-contain"
           />
-          <div className="text-[15px] font-semibold text-text tracking-wide">
-            TBS Aktenanalyse
-          </div>
-          <div className="text-[10px] text-text-muted mt-1 tracking-[2px] uppercase">
-            Vertraulich
+          <div className="w-12 h-px bg-accent mx-auto mb-3" />
+          <div className="text-[10px] text-text-muted tracking-[3px] uppercase font-mono">
+            Aktenanalyse
           </div>
         </div>
 
-        <div className="mb-4">
-          <label className="text-[10px] text-text-dim uppercase tracking-[1.5px] block mb-1.5">
-            Benutzer
-          </label>
-          <input
-            value={user}
-            onChange={e => { setUser(e.target.value); setErr(''); }}
-            onKeyDown={e => e.key === 'Enter' && submit()}
-            placeholder="benutzername"
-            className="w-full p-2.5 px-3 bg-bg border border-border rounded-sm text-text text-[13px] font-mono box-border"
-          />
-        </div>
-
-        <div className="mb-6">
-          <label className="text-[10px] text-text-dim uppercase tracking-[1.5px] block mb-1.5">
-            Passwort
-          </label>
-          <input
-            type="password"
-            value={pass}
-            onChange={e => { setPass(e.target.value); setErr(''); }}
-            onKeyDown={e => e.key === 'Enter' && submit()}
-            placeholder="••••••••"
-            className="w-full p-2.5 px-3 bg-bg border border-border rounded-sm text-text text-[13px] font-mono box-border"
-          />
-        </div>
-
-        {err && (
-          <div className="p-2 px-3 mb-4 bg-ie-red-bg border border-ie-red-border rounded-sm text-ie-red text-[11px]">
-            {err}
+        {/* Form */}
+        <div className="px-10 py-8">
+          <div className="mb-4">
+            <label className="text-[9px] text-text-dim uppercase tracking-[2px] block mb-1.5 font-mono">
+              Benutzer
+            </label>
+            <input
+              value={user}
+              onChange={e => { setUser(e.target.value); setErr(''); }}
+              onKeyDown={e => e.key === 'Enter' && submit()}
+              placeholder="benutzername"
+              className="w-full p-2.5 px-3 bg-bg border border-border rounded-md text-text text-[12px] font-mono box-border"
+            />
           </div>
-        )}
 
-        <button
-          onClick={submit}
-          disabled={loading}
-          className="w-full py-2.5 bg-accent border-none rounded-sm text-bg text-xs font-bold font-mono cursor-pointer tracking-wide uppercase hover:brightness-110 disabled:opacity-60"
-        >
-          {loading ? 'Anmelden…' : 'Anmelden'}
-        </button>
+          <div className="mb-6">
+            <label className="text-[9px] text-text-dim uppercase tracking-[2px] block mb-1.5 font-mono">
+              Passwort
+            </label>
+            <input
+              type="password"
+              value={pass}
+              onChange={e => { setPass(e.target.value); setErr(''); }}
+              onKeyDown={e => e.key === 'Enter' && submit()}
+              placeholder="••••••••"
+              className="w-full p-2.5 px-3 bg-bg border border-border rounded-md text-text text-[12px] font-mono box-border"
+            />
+          </div>
 
-        <div className="text-center mt-6 text-[9px] text-text-muted leading-relaxed">
-          § 43a BRAO · § 2 BORA · Art. 28 DSGVO<br />
+          {err && (
+            <div className="p-2 px-3 mb-4 bg-ie-red-bg border border-ie-red-border rounded-md text-ie-red text-[10px] font-mono">
+              {err}
+            </div>
+          )}
+
+          <button
+            onClick={submit}
+            disabled={loading}
+            className="w-full py-2.5 bg-accent border-none rounded-md text-white text-[10px] font-bold font-mono cursor-pointer tracking-[2px] uppercase hover:brightness-110 disabled:opacity-60 transition-all"
+          >
+            {loading ? 'Anmelden…' : 'Anmelden'}
+          </button>
+        </div>
+
+        {/* Legal footer */}
+        <div className="px-10 py-4 border-t border-border text-center text-[8px] text-text-muted leading-relaxed font-mono tracking-wide">
+          § 43a BRAO &middot; § 2 BORA &middot; Art. 28 DSGVO<br />
           Alle Daten verbleiben innerhalb der EU
         </div>
       </div>

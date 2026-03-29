@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authMiddleware } from '../middleware/auth';
-import { uploadMiddleware } from '../middleware/upload';
+import { uploadMiddleware, validatePdfBuffer } from '../middleware/upload';
 import { extractionRateLimit } from '../middleware/rateLimit';
 import { processExtraction } from '../services/extraction';
 import { getDb } from '../db/database';
@@ -21,6 +21,14 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     if (!req.file) {
       res.status(400).json({ error: 'Keine PDF-Datei hochgeladen' });
+      return;
+    }
+
+    // Validate PDF magic bytes (prevents MIME spoofing)
+    try {
+      validatePdfBuffer(req.file.buffer);
+    } catch {
+      res.status(400).json({ error: 'Datei ist kein gültiges PDF.' });
       return;
     }
 
@@ -83,9 +91,13 @@ router.post(
         createdAt: new Date().toISOString(),
       })}\n\n`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.error('Extraktion fehlgeschlagen (SSE)', { error: message });
-      res.write(`data: ${JSON.stringify({ type: 'error', error: message })}\n\n`);
+      const internalMsg = error instanceof Error ? error.message : String(error);
+      logger.error('Extraktion fehlgeschlagen (SSE)', { error: internalMsg });
+      // Never expose internal error details to client (BRAO compliance)
+      const clientMsg = internalMsg.includes('Rate') || internalMsg.includes('429')
+        ? 'API-Ratenlimit erreicht. Bitte versuchen Sie es in einer Minute erneut.'
+        : 'Extraktion fehlgeschlagen. Bitte versuchen Sie es erneut.';
+      res.write(`data: ${JSON.stringify({ type: 'error', error: clientMsg })}\n\n`);
     }
 
     res.end();

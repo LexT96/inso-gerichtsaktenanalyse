@@ -1,0 +1,42 @@
+{
+  "felder": {
+    "FELD_Akte_GerichtAZ": { "path": "verfahrensdaten.aktenzeichen.wert" },
+    "FELD_Akte_Bezeichnung": { "computed": "akte_bezeichnung" },
+    "FELD_Akte_BeschlussDat": { "path": "verfahrensdaten.beschlussdatum.wert" },
+    "FELD_Akte_VorlVerfahrDat": { "path": "verfahrensdaten.antragsdatum.wert" },
+    "FELD_Akte_LastGAVV": { "input": "last_gavv" },
+    "FELD_Gericht_Ort": { "computed": "gericht_ort" },
+    "FELD_Schuldner_Adr": { "computed": "schuldner_adresse" },
+    "FELD_Schuldner_Artikel": { "computed": "schuldner_artikel" },
+    "FELD_Schuldner_Der_Die_Groß": { "computed": "schuldner_der_die_gross" },
+    "FELD_Schuldner_Schuldnerin": { "computed": "schuldner_schuldnerin" },
+    "FELD_Schuldner_der_die": { "computed": "schuldner_der_die" },
+    "FELD_Schuldners_Schuldnerin": { "computed": "schuldners_schuldnerin" },
+    "FELD_SCHULDNER_GESCHAEFTSFUEHRER": { "input": "geschaeftsfuehrer" },
+    "FELD_Verwalter_Name": { "path": "gutachterbestellung.gutachter_name.wert" },
+    "FELD_Verwalter_Adr": { "path": "gutachterbestellung.gutachter_adresse.wert" },
+    "FELD_Verwalter_Diktatzeichen": { "input": "verwalter_diktatzeichen" },
+    "FELD_Verwalter_Unterzeichner": { "path": "gutachterbestellung.gutachter_name.wert" },
+    "FELD_Verwalter_Unterzeichner_Genitiv": { "computed": "verwalter_unterzeichner_genitiv" },
+    "FELD_Verwalter_Der_Die_Groß": { "computed": "verwalter_der_die_gross" },
+    "FELD_Verwalter_der_die": { "computed": "verwalter_der_die" },
+    "FELD_Verwalter_dem_der": { "computed": "verwalter_dem_der" },
+    "FELD_Verwalter_den_die": { "computed": "verwalter_den_die" },
+    "FELD_Verwalter_des_der": { "computed": "verwalter_des_der" },
+    "FELD_Verwalter_des_": { "computed": "verwalter_des" },
+    "FELD_Verwalter_zum_": { "computed": "verwalter_zum" },
+    "FELD_Verwalter_zum_zur": { "computed": "verwalter_zum_zur" },
+    "FELD_ANDERKONTO_IBAN": { "input": "anderkonto_iban" },
+    "FELD_Anderkonto_Bank": { "input": "anderkonto_bank" }
+  },
+  "templates": {
+    "natuerliche_person": "Gutachten Muster natürliche Person.docx",
+    "juristische_person": "Gutachten Muster juristische Person.docx",
+    "personengesellschaft": "Gutachten Muster Personengesellschaft.docx"
+  },
+  "rechtsform_mapping": {
+    "natuerliche_person": ["", "Einzelunternehmen", "Freiberufler"],
+    "juristische_person": ["GmbH", "UG", "AG", "SE", "eG", "gGmbH", "KGaA", "e.V.", "Stiftung"],
+    "personengesellschaft": ["OHG", "KG", "GbR", "PartG", "GmbH & Co. KG", "UG & Co. KG"]
+  }
+}

@@ -18,17 +18,42 @@ const VERFAHRENSDATEN_FIELDS: FieldDef[] = [
   { path: 'verfahrensdaten.gericht', label: 'Gericht' },
 ];
 
+// Natürliche Person: persönliche Daten
 const SCHULDNER_PERSON_FIELDS: FieldDef[] = [
   { path: 'schuldner.name', label: 'Name' },
   { path: 'schuldner.vorname', label: 'Vorname' },
   { path: 'schuldner.geburtsdatum', label: 'Geburtsdatum' },
   { path: 'schuldner.aktuelle_adresse', label: 'Aktuelle Adresse' },
-  { path: 'schuldner.handelsregisternummer', label: 'Handelsregister-Nr.' },
 ];
 
+// Juristische Person / Gesellschaft: Firmendaten
+const SCHULDNER_ENTITY_FIELDS: FieldDef[] = [
+  { path: 'schuldner.firma', label: 'Firma' },
+  { path: 'schuldner.rechtsform', label: 'Rechtsform' },
+  { path: 'schuldner.handelsregisternummer', label: 'Handelsregister-Nr.' },
+  { path: 'schuldner.betriebsstaette_adresse', label: 'Betriebsstätte-Adresse' },
+];
+
+// Shared (nur bei natürlicher Person mit Gewerbebetrieb)
 const SCHULDNER_FIRMA_FIELDS: FieldDef[] = [
   { path: 'schuldner.firma', label: 'Firma' },
   { path: 'schuldner.betriebsstaette_adresse', label: 'Betriebsstätte-Adresse' },
+];
+
+const FORDERUNGEN_FIELDS: FieldDef[] = [
+  { path: 'forderungen.gesamtforderungen', label: 'Gesamtforderungen' },
+  { path: 'forderungen.gesicherte_forderungen', label: 'Gesicherte Forderungen' },
+  { path: 'forderungen.ungesicherte_forderungen', label: 'Ungesicherte Forderungen' },
+];
+
+const AKTIVA_FIELDS: FieldDef[] = [
+  { path: 'aktiva.summe_aktiva', label: 'Summe Aktiva' },
+  { path: 'aktiva.massekosten_schaetzung', label: 'Massekosten (Schätzung)' },
+];
+
+const BESCHAEFTIGUNG_FIELDS: FieldDef[] = [
+  { path: 'schuldner.beschaeftigung.nettoeinkommen', label: 'Nettoeinkommen' },
+  { path: 'schuldner.pfaendungsberechnung.pfaendbarer_betrag', label: 'Pfändbarer Betrag' },
 ];
 
 function getField(result: ExtractionResult, path: string): SourcedValue | null {
@@ -109,12 +134,12 @@ function CheckFieldRow({ def, result, onUpdate }: CheckFieldRowProps) {
   const handleRefClick = () => {
     if (pageNum && totalPages > 0) {
       const searchText = hasVal ? wert : undefined;
-      goToPageAndHighlight(pageNum, searchText);
+      goToPageAndHighlight(pageNum, searchText, quelle);
     }
   };
 
-  const statusIcon = pruefstatus === 'bestaetigt' ? '\u2713'
-    : pruefstatus === 'korrigiert' ? '\u270e'
+  const statusIcon = pruefstatus === 'bestaetigt' ? '✓'
+    : pruefstatus === 'korrigiert' ? '✎'
     : pruefstatus === 'manuell' ? '+'
     : null;
 
@@ -128,7 +153,7 @@ function CheckFieldRow({ def, result, onUpdate }: CheckFieldRowProps) {
     <div className="flex items-center py-2 border-b border-border gap-2">
       {/* Status icon */}
       <span className={`w-5 text-center text-xs font-bold ${statusColor}`}>
-        {statusIcon ?? '\u25cb'}
+        {statusIcon ?? '○'}
       </span>
 
       {/* Label */}
@@ -188,7 +213,7 @@ function CheckFieldRow({ def, result, onUpdate }: CheckFieldRowProps) {
           title="Wert bestätigen"
           className="px-2 py-0.5 border border-border rounded-sm bg-transparent text-text-muted text-[10px] cursor-pointer font-mono hover:border-ie-green hover:text-ie-green transition-colors"
         >
-          {'\u2713'}
+          ✓
         </button>
       )}
 
@@ -218,8 +243,25 @@ function countStats(result: ExtractionResult, fields: FieldDef[][]): { confirmed
   return { confirmed, total };
 }
 
+function isEntitySchuldner(result: ExtractionResult): boolean {
+  const rf = String(result.schuldner?.rechtsform?.wert ?? '').toLowerCase();
+  if (!rf) return false;
+  return /gmbh|ug\b|ag\b|se\b|kg\b|ohg|gbr|e\.?\s?v|partg|stiftung|verein|genossenschaft|kgaa/i.test(rf)
+    || rf.includes('juristische') || rf.includes('gesellschaft');
+}
+
 export function PrueflisteTab({ result, onUpdateField }: PrueflisteTabProps) {
-  const allFields = [VERFAHRENSDATEN_FIELDS, SCHULDNER_PERSON_FIELDS, SCHULDNER_FIRMA_FIELDS];
+  const isEntity = isEntitySchuldner(result);
+
+  // Entity-aware field selection
+  const schuldnerFields = isEntity ? SCHULDNER_ENTITY_FIELDS : SCHULDNER_PERSON_FIELDS;
+  const allFields = [
+    VERFAHRENSDATEN_FIELDS,
+    schuldnerFields,
+    FORDERUNGEN_FIELDS,
+    AKTIVA_FIELDS,
+    ...(isEntity ? [] : [BESCHAEFTIGUNG_FIELDS]),
+  ];
   const { confirmed, total } = countStats(result, allFields);
   const percent = total > 0 ? Math.round((confirmed / total) * 100) : 0;
 
@@ -241,26 +283,57 @@ export function PrueflisteTab({ result, onUpdateField }: PrueflisteTabProps) {
         </div>
       </div>
 
-      <Section title="Verfahrensdaten" icon={'\u25ce'} count={VERFAHRENSDATEN_FIELDS.length}>
+      <Section title="Verfahrensdaten" icon="◎" count={VERFAHRENSDATEN_FIELDS.length}>
         {VERFAHRENSDATEN_FIELDS.map(def => (
           <CheckFieldRow key={def.path} def={def} result={result} onUpdate={onUpdateField} />
         ))}
       </Section>
 
-      <Section title="Schuldner — Person" icon={'\u25cf'} count={SCHULDNER_PERSON_FIELDS.length}>
-        {SCHULDNER_PERSON_FIELDS.map(def => (
+      {isEntity ? (
+        <Section title="Schuldner — Unternehmen" icon="●" count={SCHULDNER_ENTITY_FIELDS.length}>
+          {SCHULDNER_ENTITY_FIELDS.map(def => (
+            <CheckFieldRow key={def.path} def={def} result={result} onUpdate={onUpdateField} />
+          ))}
+        </Section>
+      ) : (
+        <>
+          <Section title="Schuldner — Person" icon="●" count={SCHULDNER_PERSON_FIELDS.length}>
+            {SCHULDNER_PERSON_FIELDS.map(def => (
+              <CheckFieldRow key={def.path} def={def} result={result} onUpdate={onUpdateField} />
+            ))}
+          </Section>
+          {(result.schuldner?.firma?.wert || result.schuldner?.betriebsstaette_adresse?.wert) && (
+            <Section title="Schuldner — Firma" icon="□" count={SCHULDNER_FIRMA_FIELDS.length}>
+              {SCHULDNER_FIRMA_FIELDS.map(def => (
+                <CheckFieldRow key={def.path} def={def} result={result} onUpdate={onUpdateField} />
+              ))}
+            </Section>
+          )}
+        </>
+      )}
+
+      <Section title="Forderungen (EUR-Beträge)" icon="€" count={FORDERUNGEN_FIELDS.length}>
+        {FORDERUNGEN_FIELDS.map(def => (
           <CheckFieldRow key={def.path} def={def} result={result} onUpdate={onUpdateField} />
         ))}
       </Section>
 
-      <Section title="Schuldner — Firma" icon={'\u25a1'} count={SCHULDNER_FIRMA_FIELDS.length}>
-        {SCHULDNER_FIRMA_FIELDS.map(def => (
+      <Section title="Vermögenswerte (EUR-Beträge)" icon="▣" count={AKTIVA_FIELDS.length}>
+        {AKTIVA_FIELDS.map(def => (
           <CheckFieldRow key={def.path} def={def} result={result} onUpdate={onUpdateField} />
         ))}
       </Section>
+
+      {!isEntity && (
+        <Section title="Einkommen & Pfändung" icon="●" count={BESCHAEFTIGUNG_FIELDS.length}>
+          {BESCHAEFTIGUNG_FIELDS.map(def => (
+            <CheckFieldRow key={def.path} def={def} result={result} onUpdate={onUpdateField} />
+          ))}
+        </Section>
+      )}
 
       <div className="mt-2 p-2 px-4 text-[9px] text-text-muted">
-        Diese Felder werden für die Erstellung der Standardanschreiben benötigt.
+        Alle Beträge sollten vor Verwendung in Gutachten und Berechnungen manuell verifiziert werden.
         Bestätigte und korrigierte Werte fließen direkt in die Briefgenerierung ein.
       </div>
     </>
