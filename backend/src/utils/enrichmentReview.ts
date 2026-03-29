@@ -63,10 +63,22 @@ export async function enrichmentReview(
   const zustelldatum = result.verfahrensdaten?.zustellungsdatum_schuldner?.wert;
   const rechtsform = String(result.schuldner?.rechtsform?.wert ?? '').toLowerCase();
 
+  // Extract street name + number for fuzzy address comparison
+  function extractStreetKey(addr: string): string {
+    // Match "Straße/str/weg/platz/gasse + number" pattern
+    const match = addr.match(/([A-Za-zÄÖÜäöüß]+(?:stra[ßs]e|str\.|weg|platz|gasse|allee|ring|damm))\s*(\d+)/i);
+    if (match) return `${match[1].toLowerCase()} ${match[2]}`;
+    // Fallback: first word + first number
+    const words = addr.replace(/[,;()]/g, ' ').split(/\s+/);
+    const num = words.find(w => /^\d+$/.test(w));
+    return `${(words[0] || '').toLowerCase()} ${num || ''}`.trim();
+  }
+
   // Skip if nothing to review
   const isEinzelunternehmer = rechtsform.includes('einzelunternehm') || rechtsform.includes('freiberuf');
-  const betriebsstaetteVerdaechtig = isEinzelunternehmer && betriebsstaette && privatadresse &&
-    String(betriebsstaette).trim() === String(privatadresse).trim();
+  const sameStreet = betriebsstaette && privatadresse &&
+    extractStreetKey(String(betriebsstaette)) === extractStreetKey(String(privatadresse));
+  const betriebsstaetteVerdaechtig = isEinzelunternehmer && !!betriebsstaette && (sameStreet || !betriebsstaette);
   const hatZustelldatum = !!zustelldatum;
 
   if (!betriebsstaetteVerdaechtig && !hatZustelldatum) {
