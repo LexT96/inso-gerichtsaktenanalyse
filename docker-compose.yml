@@ -46,6 +46,7 @@ services:
       - DB_ENCRYPTION_KEY=${DB_ENCRYPTION_KEY}
       - AZURE_TENANT_ID=${AZURE_TENANT_ID:-}
       - AZURE_CLIENT_ID=${AZURE_CLIENT_ID:-}
+      - AZURE_ALLOWED_DOMAINS=${AZURE_ALLOWED_DOMAINS:-}
     volumes:
       - db-data:/data
     restart: unless-stopped

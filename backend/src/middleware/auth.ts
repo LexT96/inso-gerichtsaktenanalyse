@@ -65,6 +65,20 @@ function verifyEntraToken(token: string): Promise<jwt.JwtPayload> {
  * Uses `oid` (Azure Object ID) as the stable user identifier.
  * Returns the local user record with id, username, role.
  */
+/**
+ * Check if the user's email domain is allowed.
+ * AZURE_ALLOWED_DOMAINS in .env: comma-separated list (e.g. "tbs-kanzlei.de,klareprozesse.de")
+ * If not set, all tenant users are allowed.
+ */
+function isDomainAllowed(email: string): boolean {
+  const allowed = process.env.AZURE_ALLOWED_DOMAINS;
+  if (!allowed) return true; // No restriction
+  const domains = allowed.split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
+  if (domains.length === 0) return true;
+  const userDomain = email.split('@')[1]?.toLowerCase();
+  return domains.includes(userDomain);
+}
+
 function upsertEntraUser(claims: jwt.JwtPayload): JwtPayload {
   const db = getDb();
   const oid = claims.oid as string;
@@ -115,6 +129,12 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     // Try Entra ID token validation first
     verifyEntraToken(token)
       .then((claims) => {
+        const email = (claims.preferred_username || claims.email || claims.upn || '') as string;
+        if (!isDomainAllowed(email)) {
+          logger.warn('Zugriff verweigert: Domain nicht erlaubt', { email });
+          res.status(403).json({ error: 'Zugriff nicht erlaubt. Ihre Domain ist nicht freigeschaltet.' });
+          return;
+        }
         req.user = upsertEntraUser(claims);
         next();
       })
