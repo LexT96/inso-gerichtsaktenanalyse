@@ -34,7 +34,10 @@ export async function extractTextPerPage(buffer: Buffer): Promise<string[]> {
   const pageTexts: string[] = [];
 
   try {
-    await pdfParse(buffer, {
+    // Timeout guard: prevent PDF bombs from hanging the server
+    const PDF_PARSE_TIMEOUT_MS = 60_000;
+    await Promise.race([
+      pdfParse(buffer, {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       pagerender: (pageData: any): Promise<string> => {
         return pageData.getTextContent({ normalizeWhitespace: true })
@@ -49,7 +52,11 @@ export async function extractTextPerPage(buffer: Buffer): Promise<string[]> {
             return text;
           });
       },
-    });
+    }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('PDF-Verarbeitung Timeout (60s) — Datei möglicherweise beschädigt')), PDF_PARSE_TIMEOUT_MS)
+      ),
+    ]);
 
     logger.info('PDF: Text pro Seite extrahiert', { pages: pageTexts.length });
 
