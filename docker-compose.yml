@@ -11,6 +11,9 @@ services:
       - caddy-config:/config
     environment:
       - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     depends_on:
       - frontend
       - backend
