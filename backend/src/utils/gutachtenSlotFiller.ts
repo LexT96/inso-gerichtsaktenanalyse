@@ -3,7 +3,7 @@ import { jsonrepair } from 'jsonrepair';
 import { anthropic, callWithRetry, extractJsonFromText } from '../services/anthropic';
 import { config } from '../config';
 import { logger } from './logger';
-import { processDocxParagraphs } from './gutachtenGenerator';
+import { processDocxParagraphs, formatEUR } from './gutachtenGenerator';
 import type { ExtractionResult } from '../types/extraction';
 
 // --- Types ---
@@ -22,7 +22,6 @@ export interface GutachtenSlot extends SlotInfo {
 
 // --- Slot Patterns ---
 
-// Matches: [...], [...], [any text up to 80 chars] (but NOT [TODO:...]), xxxx+
 const SLOT_PATTERN = /\[\u2026\]|\[\.{3}\]|\[(?!TODO:)[^\[\]]{1,80}\]|\bx{4,}\b/gi;
 
 function hasSlotPattern(text: string): boolean {
@@ -50,7 +49,7 @@ export function extractSlots(xml: string): { xml: string; slots: SlotInfo[] } {
     }
   );
 
-  // Second pass: extract context for each slot from the modified XML
+  // Second pass: extract wider context (200 chars) for each slot
   processDocxParagraphs(
     resultXml,
     (text) => text.includes('[[SLOT_'),
@@ -61,8 +60,8 @@ export function extractSlots(xml: string): { xml: string; slots: SlotInfo[] } {
         const idx = parseInt(m[1], 10) - 1;
         if (idx >= 0 && idx < slots.length) {
           const pos = m.index;
-          const start = Math.max(0, pos - 80);
-          const end = Math.min(text.length, pos + m[0].length + 80);
+          const start = Math.max(0, pos - 150);
+          const end = Math.min(text.length, pos + m[0].length + 150);
           slots[idx].context = text.slice(start, end).trim();
         }
       }
@@ -93,8 +92,284 @@ export function applySlots(
   );
 }
 
-// --- Flatten ExtractionResult to .wert values only ---
-// Complete data available for slot filling - includes ALL extracted sections
+// --- Deterministic Pre-Fill ---
+// Maps slot context patterns to extraction data paths.
+// This fills slots BEFORE sending to Claude, ensuring reliable data.
+
+type SlotMatcher = {
+  /** Regex patterns to match against slot context (case-insensitive) */
+  patterns: RegExp[];
+  /** Function that extracts the value from ExtractionResult */
+  extract: (r: ExtractionResult) => string | null;
+  /** Short hint */
+  hint: string;
+};
+
+function sv(v: { wert?: unknown } | undefined | null): string | null {
+  if (!v || v.wert == null || v.wert === '') return null;
+  return String(v.wert);
+}
+
+function sn(v: { wert?: number | null } | undefined | null): number | null {
+  if (!v || v.wert == null) return null;
+  return Number(v.wert);
+}
+
+function buildPreFillMatchers(): SlotMatcher[] {
+  return [
+    // --- Arbeitnehmer ---
+    {
+      patterns: [/anzahl.*arbeitnehmer|arbeitnehmer.*besch.{0,5}ftigt|\bbesch.{0,5}ftigt.*\d/i],
+      extract: (r) => {
+        const an = r.forderungen?.betroffene_arbeitnehmer;
+        if (an?.length) {
+          const total = an.reduce((s, a) => {
+            if (typeof a === 'object' && 'anzahl' in a) return s + ((a as { anzahl: number }).anzahl || 0);
+            return s;
+          }, 0);
+          if (total > 0) return String(total);
+        }
+        // Try ermittlungsergebnisse
+        const erm = r.ermittlungsergebnisse as unknown as Record<string, unknown>;
+        if (erm) {
+          for (const [k, v] of Object.entries(erm)) {
+            if (/arbeitnehmer.*anzahl|anzahl.*arbeitnehmer/i.test(k) && v != null) return String(v);
+          }
+        }
+        return null;
+      },
+      hint: 'Anzahl Arbeitnehmer',
+    },
+    // --- Auszubildende ---
+    {
+      patterns: [/auszubildend|ausbildungsverh/i],
+      extract: () => null, // Typically not extracted separately
+      hint: 'Anzahl Auszubildende',
+    },
+    // --- Lohnrueckstaende ---
+    {
+      patterns: [/lohnr.{0,5}ckst.{0,5}nd|lohn.*aufgelaufen/i],
+      extract: (r) => {
+        const erm = r.ermittlungsergebnisse as unknown as Record<string, unknown>;
+        if (erm) {
+          for (const [k, v] of Object.entries(erm)) {
+            if (/lohn/i.test(k) && v && typeof v === 'object' && 'wert' in v) {
+              const val = (v as { wert: unknown }).wert;
+              if (val != null) return typeof val === 'number' ? formatEUR(val) : String(val);
+            }
+          }
+        }
+        return null;
+      },
+      hint: 'Lohnrueckstaende',
+    },
+    // --- Gesamtforderungen / Verbindlichkeiten ---
+    {
+      patterns: [/gesamtforderung|verbindlichkeiten.*gesamt|gesamt.*verbindlichkeit/i],
+      extract: (r) => {
+        const v = sn(r.forderungen?.gesamtforderungen);
+        return v != null ? formatEUR(v) : null;
+      },
+      hint: 'Gesamtforderungen',
+    },
+    // --- Gesicherte Forderungen ---
+    {
+      patterns: [/gesicherte.*forderung/i],
+      extract: (r) => {
+        const v = sn(r.forderungen?.gesicherte_forderungen);
+        return v != null ? formatEUR(v) : null;
+      },
+      hint: 'Gesicherte Forderungen',
+    },
+    // --- Ungesicherte Forderungen ---
+    {
+      patterns: [/ungesicherte.*forderung|f.{0,3}llige.*verbindlichkeit/i],
+      extract: (r) => {
+        const v = sn(r.forderungen?.ungesicherte_forderungen);
+        return v != null ? formatEUR(v) : null;
+      },
+      hint: 'Ungesicherte Forderungen',
+    },
+    // --- Aktiva Summe ---
+    {
+      patterns: [/summe.*aktiva|aktiva.*summe|freies.*verm.{0,5}gen|massebestand/i],
+      extract: (r) => {
+        const v = sn(r.aktiva?.summe_aktiva);
+        return v != null ? formatEUR(v) : null;
+      },
+      hint: 'Summe Aktiva',
+    },
+    // --- Massekosten ---
+    {
+      patterns: [/massekosten|verfahrenskosten.*gesamt/i],
+      extract: (r) => {
+        const v = sn(r.aktiva?.massekosten_schaetzung);
+        return v != null ? formatEUR(v) : null;
+      },
+      hint: 'Massekosten',
+    },
+    // --- Aktiva Positionen (table) ---
+    {
+      patterns: [/aktiva.{0,5}position|verm.{0,10}gen.{0,5}position|beweglich.*sachanlag/i],
+      extract: (r) => {
+        const pos = r.aktiva?.positionen;
+        if (!pos?.length) return null;
+        return pos.map(p => {
+          const w = sn(p.geschaetzter_wert);
+          return `- ${sv(p.beschreibung) || p.kategorie}: ${w != null ? formatEUR(w) : 'k.A.'}`;
+        }).join('\n');
+      },
+      hint: 'Aktiva-Positionen',
+    },
+    // --- Passiva / Forderungstabelle ---
+    {
+      patterns: [/passiva.{0,5}position|forderungen.*tabelle|tabelle.*forderung|insolvenzforderung/i],
+      extract: (r) => {
+        const ef = r.forderungen?.einzelforderungen;
+        if (!ef?.length) return null;
+        return ef.map(f => {
+          const b = sn(f.betrag);
+          return `- ${sv(f.glaeubiger) || 'k.A.'} (${f.art}): ${b != null ? formatEUR(b) : 'k.A.'} [${f.rang}]`;
+        }).join('\n');
+      },
+      hint: 'Forderungsuebersicht',
+    },
+    // --- Steuerberater ---
+    {
+      patterns: [/steuerberater|steuerrechtlich.*pflicht/i],
+      extract: (r) => {
+        const erm = r.ermittlungsergebnisse as unknown as Record<string, unknown>;
+        if (erm) {
+          for (const [k, v] of Object.entries(erm)) {
+            if (/steuerberater/i.test(k) && v && typeof v === 'object' && 'wert' in v) {
+              return sv(v as { wert: unknown });
+            }
+          }
+        }
+        return null;
+      },
+      hint: 'Steuerberater',
+    },
+    // --- Unterhaltspflichten ---
+    {
+      patterns: [/unterhaltspflicht/i],
+      extract: (r) => {
+        const v = sn(r.schuldner?.pfaendungsberechnung?.unterhaltspflichten);
+        if (v != null) return String(v);
+        // Try kinder
+        const kinder = r.schuldner?.kinder;
+        if (kinder?.length) {
+          return kinder.map(k => typeof k === 'string' ? k : (k as { wert?: string }).wert || '').filter(Boolean).join(', ');
+        }
+        return null;
+      },
+      hint: 'Unterhaltspflichten',
+    },
+    // --- Aussonderung ---
+    {
+      patterns: [/aussonderung.*gesamt|gesamt.*aussonderung/i],
+      extract: (r) => {
+        const ef = r.forderungen?.einzelforderungen?.filter(f =>
+          f.sicherheit?.art === 'eigentumsvorbehalt'
+        );
+        if (!ef?.length) return 'keine';
+        const sum = ef.reduce((s, f) => s + (sn(f.sicherheit?.geschaetzter_wert) || 0), 0);
+        return sum > 0 ? formatEUR(sum) : 'keine';
+      },
+      hint: 'Aussonderungsansprueche',
+    },
+    // --- Absonderung ---
+    {
+      patterns: [/absonderung.*gesamt|gesamt.*absonderung/i],
+      extract: (r) => {
+        const ef = r.forderungen?.einzelforderungen?.filter(f =>
+          f.sicherheit && f.sicherheit.art !== 'eigentumsvorbehalt'
+        );
+        if (!ef?.length) return 'keine';
+        const sum = ef.reduce((s, f) => s + (sn(f.sicherheit?.geschaetzter_wert) || 0), 0);
+        return sum > 0 ? formatEUR(sum) : 'keine';
+      },
+      hint: 'Absonderungsansprueche',
+    },
+    // --- Anfechtungspotenzial ---
+    {
+      patterns: [/anfechtung.*potenzial|potenzial.*anfechtung|insolvenzspezifisch.*anspr/i],
+      extract: (r) => {
+        const v = sn(r.anfechtung?.gesamtpotenzial);
+        return v != null ? formatEUR(v) : null;
+      },
+      hint: 'Anfechtungspotenzial',
+    },
+    // --- Kinder ---
+    {
+      patterns: [/kinder.*geburtsdatum|zusammenleben/i],
+      extract: (r) => {
+        const kinder = r.schuldner?.kinder;
+        if (!kinder?.length) return 'keine';
+        return kinder.map(k => typeof k === 'string' ? k : (k as { wert?: string }).wert || '').filter(Boolean).join('; ');
+      },
+      hint: 'Kinder',
+    },
+    // --- Branche ---
+    {
+      patterns: [/branche|gesch.{0,5}ftst.{0,5}tigkeit|unternehmensgegenstand/i],
+      extract: (r) => {
+        // Try zusammenfassung for business description
+        const zf = r.zusammenfassung;
+        if (zf?.length) {
+          const biz = zf.find(z => /branche|gegenstand|t.{0,3}tigkeit|gesch.{0,3}fts/i.test(z.wert || ''));
+          if (biz?.wert) return biz.wert;
+        }
+        return null;
+      },
+      hint: 'Branche',
+    },
+    // --- Finanzstatus / Bilanz ---
+    {
+      patterns: [/bilanz|finanzstatus|stichtagsbezogen/i],
+      extract: (r) => {
+        const pos = r.aktiva?.positionen;
+        if (!pos?.length) return null;
+        const summe = sn(r.aktiva?.summe_aktiva);
+        const mk = sn(r.aktiva?.massekosten_schaetzung);
+        const lines = pos.map(p => {
+          const w = sn(p.geschaetzter_wert);
+          return `${sv(p.beschreibung) || p.kategorie}: ${w != null ? formatEUR(w) : 'k.A.'}`;
+        });
+        if (summe != null) lines.push(`Summe Aktiva: ${formatEUR(summe)}`);
+        if (mk != null) lines.push(`Massekosten: ${formatEUR(mk)}`);
+        return lines.join('\n');
+      },
+      hint: 'Finanzstatus',
+    },
+  ];
+}
+
+/** Pre-fill slots deterministically from extraction data */
+function preFillSlots(
+  slots: SlotInfo[],
+  result: ExtractionResult
+): Map<string, { value: string; hint: string }> {
+  const matchers = buildPreFillMatchers();
+  const filled = new Map<string, { value: string; hint: string }>();
+
+  for (const slot of slots) {
+    const ctx = (slot.context + ' ' + slot.original).toLowerCase();
+    for (const matcher of matchers) {
+      if (matcher.patterns.some(p => p.test(ctx))) {
+        const value = matcher.extract(result);
+        if (value) {
+          filled.set(slot.id, { value, hint: matcher.hint });
+          break;
+        }
+      }
+    }
+  }
+
+  return filled;
+}
+
+// --- Flatten ExtractionResult ---
 
 function flattenResult(result: ExtractionResult): Record<string, unknown> {
   const flat: Record<string, unknown> = {};
@@ -119,15 +394,13 @@ function flattenResult(result: ExtractionResult): Record<string, unknown> {
     }
   }
 
-  // Core case data
   walk(result.verfahrensdaten, 'verfahrensdaten');
   walk(result.schuldner, 'schuldner');
   walk(result.antragsteller, 'antragsteller');
   walk(result.gutachterbestellung, 'gutachterbestellung');
   walk(result.ermittlungsergebnisse, 'ermittlungsergebnisse');
-
-  // Forderungen (summary + individual claims)
   walk(result.forderungen, 'forderungen');
+
   if (result.forderungen?.einzelforderungen) {
     flat['forderungen.einzelforderungen'] = result.forderungen.einzelforderungen.map(f => ({
       glaeubiger: f.glaeubiger?.wert,
@@ -142,24 +415,26 @@ function flattenResult(result: ExtractionResult): Record<string, unknown> {
         geschaetzter_wert: f.sicherheit.geschaetzter_wert?.wert,
       } : null,
     }));
+    flat['forderungen.anzahl_glaeubiger'] = result.forderungen.einzelforderungen.length;
   }
 
-  // Aktiva
+  if (result.forderungen?.betroffene_arbeitnehmer?.length) {
+    flat['forderungen.arbeitnehmer'] = result.forderungen.betroffene_arbeitnehmer;
+  }
+
   if (result.aktiva) {
-    const aktiva = result.aktiva;
-    flat['aktiva.summe_aktiva'] = aktiva.summe_aktiva?.wert;
-    flat['aktiva.massekosten_schaetzung'] = aktiva.massekosten_schaetzung?.wert;
-    flat['aktiva.positionen'] = aktiva.positionen.map(p => ({
+    flat['aktiva.summe_aktiva'] = result.aktiva.summe_aktiva?.wert;
+    flat['aktiva.massekosten_schaetzung'] = result.aktiva.massekosten_schaetzung?.wert;
+    flat['aktiva.positionen'] = result.aktiva.positionen.map(p => ({
       beschreibung: p.beschreibung?.wert,
       geschaetzter_wert: p.geschaetzter_wert?.wert,
       kategorie: p.kategorie,
     }));
-    if (aktiva.insolvenzanalyse) {
-      flat['aktiva.insolvenzanalyse'] = aktiva.insolvenzanalyse;
+    if (result.aktiva.insolvenzanalyse) {
+      flat['aktiva.insolvenzanalyse'] = result.aktiva.insolvenzanalyse;
     }
   }
 
-  // Anfechtung (previously missing)
   if (result.anfechtung) {
     flat['anfechtung.zusammenfassung'] = result.anfechtung.zusammenfassung;
     flat['anfechtung.gesamtpotenzial'] = result.anfechtung.gesamtpotenzial?.wert;
@@ -174,7 +449,6 @@ function flattenResult(result: ExtractionResult): Record<string, unknown> {
     }));
   }
 
-  // Summary-level intelligence (previously missing)
   if (result.zusammenfassung?.length) {
     flat['zusammenfassung'] = result.zusammenfassung.map(z => z.wert).filter(Boolean);
   }
@@ -198,47 +472,53 @@ function flattenResult(result: ExtractionResult): Record<string, unknown> {
   return flat;
 }
 
-// --- Slot classification for extraction/interpretation split ---
+// --- Slot classification ---
 
-/** Detect if a slot requires narrative/interpretive prose vs. factual data */
 function isNarrativeSlot(slot: SlotInfo): boolean {
   const text = (slot.context + ' ' + slot.original).toLowerCase();
-  return /begr.{0,3}ndung|darstellung|feststellung|ausf.{0,3}hrung|bewertung|ergebnis|zusammenfassung|schlussfolgerung|empfehlung|einsch.{0,3}tzung|analyse|pr.{0,3}fung|w.{0,3}rdigung|stellungnahme/.test(text);
+  return /begr.{0,3}ndung|darstellung|feststellung|ausf.{0,3}hrung|bewertung|ergebnis|zusammenfassung|schlussfolgerung|empfehlung|einsch.{0,3}tzung|analyse|pr.{0,3}fung|w.{0,3}rdigung|stellungnahme|liquidation.*fortf|fortf.*liquidation|investoren|sanierung/i.test(text);
 }
 
-// --- Fill Slots via Claude API ---
-// Architecture: Extraction/Interpretation Split
-// - FACTUAL slots (dates, names, amounts) -> filled from data, Haiku validates
-// - NARRATIVE slots (analysis, conclusions) -> Sonnet generates grounded prose
+// --- Prompts ---
 
 const FACTUAL_PROMPT = `Du bist ein spezialisierter KI-Assistent fuer deutsche Insolvenzverwalter. Du erhaeltst Platzhalter (Slots) aus einer Gutachten-Vorlage mit Kontext und extrahierte Daten aus der Gerichtsakte.
 
-WICHTIG -- EXTRAKTION, NICHT INTERPRETATION:
-- Du fuellst Slots NUR mit Fakten, die direkt in den bereitgestellten Daten stehen.
-- Du INTERPRETIERST NICHT, du ERWEITERST NICHT, du SCHLUSSFOLGERST NICHT.
-- Wenn ein Datum, Name oder Betrag nicht in den Daten steht: "[TODO: ...]"
-- Datumsformat: TT.MM.JJJJ. Betraege: deutsche Schreibweise (1.234,56 EUR).
-- Redaktionelle Anweisungen ([wenn...], [ggf....]): "[TODO: ...]" mit Originaltext als Hinweis
-- "xxxx"-Platzhalter: "[TODO: Datum/Wert eintragen]"
-- "hint" ist IMMER eine kurze Beschreibung (3-8 Woerter) was in dieses Feld gehoert.
+WICHTIG:
+- Fuelle JEDEN Slot, fuer den Daten vorhanden sind. Sei NICHT uebervorsichtig.
+- Suche AKTIV in den Daten nach passenden Werten. Wenn der Slot "Arbeitnehmer" erwaehnt, suche in forderungen.arbeitnehmer, ermittlungsergebnisse, zusammenfassung etc.
+- Wenn der Slot eine Tabelle oder Liste erwartet (Aktiva, Passiva, Forderungen), erstelle eine formatierte Aufstellung aus den Daten.
+- Betraege IMMER im Format 1.234,56 EUR.
+- Daten IMMER als TT.MM.JJJJ.
+- NUR wenn wirklich KEINE passenden Daten existieren: "[TODO: ...]" mit Beschreibung was fehlt.
+- Redaktionelle Anweisungen ([wenn...], [ggf....]): "[TODO: ...]"
+- "xxxx"-Platzhalter ohne Daten: "[TODO: Datum/Wert eintragen]"
+- "hint" ist IMMER 3-8 Woerter: was gehoert in dieses Feld.
+
+BEISPIELE:
+- Slot "Anzahl Arbeitnehmer": Finde in forderungen.arbeitnehmer oder ermittlungsergebnisse → "44"
+- Slot "Lohnrueckstaende aufgelaufen": Finde Betraege → "271.000,00 EUR (Oktober 2025)"
+- Slot "Aktiva-Positionen": Liste alle aktiva.positionen auf mit Betraegen
+- Slot "Verbindlichkeiten": Nutze forderungen.gesamtforderungen → "575.506,48 EUR"
+- Slot "Steuerberater": Suche in ermittlungsergebnisse → "Dr. Schmitz & Donell PartG mbB"
 
 Antworte AUSSCHLIESSLICH mit validem JSON:
 {"SLOT_001": {"value": "18.12.2025", "hint": "Datum Beschluss"}, ...}`;
 
 const NARRATIVE_PROMPT = `Du bist ein erfahrener deutscher Insolvenzverwalter und verfasst Abschnitte fuer ein Gutachten nach Paragraph 5 InsO.
 
-WICHTIG -- INTERPRETATION, ABER QUELLENGEBUNDEN:
-- Du erhaeltst Platzhalter aus dem Gutachten und die vollstaendigen extrahierten Daten aus der Akte.
+AUFGABE:
 - Fuer jeden Slot schreibst du professionelle juristische Prosa auf Deutsch.
 - Jede Aussage MUSS auf den bereitgestellten Daten basieren. Erfinde keine Fakten.
-- Betraege im deutschen Format (1.234,56 EUR), Daten als TT.MM.JJJJ.
-- Verwende die korrekte Fachterminologie (InsO, ZPO, BGB).
-- Fasse dich so knapp wie moeglich -- kein Fuelltext, keine Wiederholungen.
-- Wenn die Datenlage fuer eine fundierte Aussage nicht ausreicht: "[TODO: Angaben ergaenzen -- ...]"
-- "hint" ist IMMER eine kurze Beschreibung (3-8 Woerter) was in dieses Feld gehoert.
+- Betraege: 1.234,56 EUR. Daten: TT.MM.JJJJ.
+- Korrekte Fachterminologie (InsO, ZPO, BGB).
+- Knapp und praezise — kein Fuelltext.
+- Wenn Datenlage ungenuegend: "[TODO: Angaben ergaenzen — ...]"
+- "hint": 3-8 Woerter Beschreibung.
 
 Antworte AUSSCHLIESSLICH mit validem JSON:
 {"SLOT_001": {"value": "Die Zahlungsunfaehigkeit...", "hint": "Begruendung Insolvenzgrund"}, ...}`;
+
+// --- Fill Slots ---
 
 export async function fillSlots(
   slots: SlotInfo[],
@@ -246,19 +526,24 @@ export async function fillSlots(
 ): Promise<GutachtenSlot[]> {
   if (slots.length === 0) return [];
 
+  // Step 1: Deterministic pre-fill from extraction data
+  const preFilled = preFillSlots(slots, result);
+  logger.info('Pre-fill completed', { preFilled: preFilled.size, total: slots.length });
+
+  // Step 2: Send remaining slots to Claude
+  const remainingSlots = slots.filter(s => !preFilled.has(s.id));
   const flatData = flattenResult(result);
 
-  // Split slots by type: factual vs. narrative
-  const factualSlots = slots.filter(s => !isNarrativeSlot(s));
-  const narrativeSlots = slots.filter(s => isNarrativeSlot(s));
+  const factualSlots = remainingSlots.filter(s => !isNarrativeSlot(s));
+  const narrativeSlots = remainingSlots.filter(s => isNarrativeSlot(s));
 
   logger.info('Slot classification', {
     total: slots.length,
+    preFilled: preFilled.size,
     factual: factualSlots.length,
     narrative: narrativeSlots.length,
   });
 
-  // Fill both in parallel
   const [factualResults, narrativeResults] = await Promise.all([
     factualSlots.length > 0
       ? fillSlotBatch(factualSlots, flatData, FACTUAL_PROMPT, config.UTILITY_MODEL || 'claude-haiku-4-5-20251001')
@@ -268,8 +553,8 @@ export async function fillSlots(
       : Promise.resolve(new Map<string, { value: string; hint: string }>()),
   ]);
 
-  // Merge results
-  const allResults = new Map([...factualResults, ...narrativeResults]);
+  // Merge: pre-filled > factual > narrative
+  const allResults = new Map([...factualResults, ...narrativeResults, ...preFilled]);
 
   return slots.map(s => {
     const entry = allResults.get(s.id);

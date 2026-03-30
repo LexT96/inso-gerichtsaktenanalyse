@@ -101,7 +101,7 @@ export function determineTemplateType(rechtsform: string): TemplateType {
 
 // --- Computed fields ---
 
-function formatEUR(value: unknown): string {
+export function formatEUR(value: unknown): string {
   const n = typeof value === 'number' ? value : parseFloat(String(value));
   if (isNaN(n) || value == null) return '';
   return n.toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' EUR';
