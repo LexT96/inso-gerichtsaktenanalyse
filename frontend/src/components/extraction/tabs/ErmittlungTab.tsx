@@ -258,12 +258,12 @@ export function ErmittlungTab({ ermittlungsergebnisse: e, gutachterbestellung: g
 
       {/* ─── Gutachterbestellung ─── */}
       <Section title="Gutachterbestellung" icon="◊">
-        <DataField label="Gutachter" field={g?.gutachter_name} />
-        <DataField label="Kanzlei" field={g?.gutachter_kanzlei} />
-        <DataField label="Adresse" field={g?.gutachter_adresse} />
-        <DataField label="Telefon" field={g?.gutachter_telefon} />
-        <DataField label="E-Mail" field={g?.gutachter_email} />
-        <DataField label="Abgabefrist" field={g?.abgabefrist} />
+        <DataField label="Gutachter" field={g?.gutachter_name} fieldPath="gutachterbestellung.gutachter_name" />
+        <DataField label="Kanzlei" field={g?.gutachter_kanzlei} fieldPath="gutachterbestellung.gutachter_kanzlei" />
+        <DataField label="Adresse" field={g?.gutachter_adresse} fieldPath="gutachterbestellung.gutachter_adresse" />
+        <DataField label="Telefon" field={g?.gutachter_telefon} fieldPath="gutachterbestellung.gutachter_telefon" />
+        <DataField label="E-Mail" field={g?.gutachter_email} fieldPath="gutachterbestellung.gutachter_email" />
+        <DataField label="Abgabefrist" field={g?.abgabefrist} fieldPath="gutachterbestellung.abgabefrist" />
         {g?.befugnisse?.length > 0 && (
           <div className="mt-2">
             <span className="text-[11px] text-text-dim">Befugnisse:</span>

@@ -308,12 +308,15 @@ export function AktivaTab({ aktiva, forderungen, schuldner }: AktivaTabProps) {
           icon={KATEGORIE_ICONS[kategorie]}
           count={items.length}
         >
-          {items.map((item, i) => (
-            <div key={i} className="mb-1 last:mb-0">
-              <DataField label="Beschreibung" field={item.beschreibung} />
-              <DataField label="Geschätzter Wert" field={item.geschaetzter_wert} isCurrency />
-            </div>
-          ))}
+          {items.map((item, i) => {
+            const globalIdx = positionen.indexOf(item);
+            return (
+              <div key={i} className="mb-1 last:mb-0">
+                <DataField label="Beschreibung" field={item.beschreibung} fieldPath={`aktiva.positionen[${globalIdx}].beschreibung`} />
+                <DataField label="Geschätzter Wert" field={item.geschaetzter_wert} isCurrency fieldPath={`aktiva.positionen[${globalIdx}].geschaetzter_wert`} />
+              </div>
+            );
+          })}
         </Section>
       ))}
 

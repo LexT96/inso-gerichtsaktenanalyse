@@ -181,16 +181,16 @@ export function OverviewTab({ result: r, stats, lettersReady, lettersNA, letters
       )}
 
       <Section title="Verfahrensdaten" icon="⚖">
-        <DataField label="Aktenzeichen" field={r.verfahrensdaten?.aktenzeichen} />
-        <DataField label="Gericht" field={r.verfahrensdaten?.gericht} />
-        <DataField label="Richter" field={r.verfahrensdaten?.richter} />
-        <DataField label="Antragsdatum" field={r.verfahrensdaten?.antragsdatum} />
-        <DataField label="Beschlussdatum" field={r.verfahrensdaten?.beschlussdatum} />
-        <DataField label="Antragsart" field={r.verfahrensdaten?.antragsart} />
-        <DataField label="Eröffnungsgrund" field={r.verfahrensdaten?.eroeffnungsgrund} />
-        <DataField label="Zustellung Schuldner" field={r.verfahrensdaten?.zustellungsdatum_schuldner} />
-        <DataField label="Verfahrensstadium" field={r.verfahrensdaten?.verfahrensstadium} />
-        <DataField label="Verfahrensart" field={r.verfahrensdaten?.verfahrensart} />
+        <DataField label="Aktenzeichen" field={r.verfahrensdaten?.aktenzeichen} fieldPath="verfahrensdaten.aktenzeichen" />
+        <DataField label="Gericht" field={r.verfahrensdaten?.gericht} fieldPath="verfahrensdaten.gericht" />
+        <DataField label="Richter" field={r.verfahrensdaten?.richter} fieldPath="verfahrensdaten.richter" />
+        <DataField label="Antragsdatum" field={r.verfahrensdaten?.antragsdatum} fieldPath="verfahrensdaten.antragsdatum" />
+        <DataField label="Beschlussdatum" field={r.verfahrensdaten?.beschlussdatum} fieldPath="verfahrensdaten.beschlussdatum" />
+        <DataField label="Antragsart" field={r.verfahrensdaten?.antragsart} fieldPath="verfahrensdaten.antragsart" />
+        <DataField label="Eröffnungsgrund" field={r.verfahrensdaten?.eroeffnungsgrund} fieldPath="verfahrensdaten.eroeffnungsgrund" />
+        <DataField label="Zustellung Schuldner" field={r.verfahrensdaten?.zustellungsdatum_schuldner} fieldPath="verfahrensdaten.zustellungsdatum_schuldner" />
+        <DataField label="Verfahrensstadium" field={r.verfahrensdaten?.verfahrensstadium} fieldPath="verfahrensdaten.verfahrensstadium" />
+        <DataField label="Verfahrensart" field={r.verfahrensdaten?.verfahrensart} fieldPath="verfahrensdaten.verfahrensart" />
       </Section>
 
       {r.fristen?.length > 0 && (

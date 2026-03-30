@@ -39,34 +39,34 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
       {isEntity ? (
         /* ─── Juristische Person / Gesellschaft ─── */
         <Section title="Schuldner — Unternehmen" icon="●">
-          <DataField label="Firma" field={s?.firma} />
-          <DataField label="Rechtsform" field={s?.rechtsform} />
-          <DataField label="Name (Vertretung)" field={s?.name} />
-          <DataField label="Handelsregister-Nr." field={s?.handelsregisternummer} />
-          <DataField label="Betriebsstätte" field={s?.betriebsstaette_adresse} />
-          <DataField label="Aktuelle Adresse" field={s?.aktuelle_adresse} />
+          <DataField label="Firma" field={s?.firma} fieldPath="schuldner.firma" />
+          <DataField label="Rechtsform" field={s?.rechtsform} fieldPath="schuldner.rechtsform" />
+          <DataField label="Name (Vertretung)" field={s?.name} fieldPath="schuldner.name" />
+          <DataField label="Handelsregister-Nr." field={s?.handelsregisternummer} fieldPath="schuldner.handelsregisternummer" />
+          <DataField label="Betriebsstätte" field={s?.betriebsstaette_adresse} fieldPath="schuldner.betriebsstaette_adresse" />
+          <DataField label="Aktuelle Adresse" field={s?.aktuelle_adresse} fieldPath="schuldner.aktuelle_adresse" />
         </Section>
       ) : (
         /* ─── Natürliche Person ─── */
         <>
           <Section title="Schuldner — Persönliche Daten" icon="●">
-            <DataField label="Name" field={s?.name} />
-            <DataField label="Vorname" field={s?.vorname} />
-            <DataField label="Geburtsdatum" field={s?.geburtsdatum} />
-            <DataField label="Geburtsort" field={s?.geburtsort} />
-            <DataField label="Geburtsland" field={s?.geburtsland} />
-            <DataField label="Staatsangehörigkeit" field={s?.staatsangehoerigkeit} />
-            <DataField label="Familienstand" field={s?.familienstand} />
-            <DataField label="Geschlecht" field={s?.geschlecht} />
+            <DataField label="Name" field={s?.name} fieldPath="schuldner.name" />
+            <DataField label="Vorname" field={s?.vorname} fieldPath="schuldner.vorname" />
+            <DataField label="Geburtsdatum" field={s?.geburtsdatum} fieldPath="schuldner.geburtsdatum" />
+            <DataField label="Geburtsort" field={s?.geburtsort} fieldPath="schuldner.geburtsort" />
+            <DataField label="Geburtsland" field={s?.geburtsland} fieldPath="schuldner.geburtsland" />
+            <DataField label="Staatsangehörigkeit" field={s?.staatsangehoerigkeit} fieldPath="schuldner.staatsangehoerigkeit" />
+            <DataField label="Familienstand" field={s?.familienstand} fieldPath="schuldner.familienstand" />
+            <DataField label="Geschlecht" field={s?.geschlecht} fieldPath="schuldner.geschlecht" />
           </Section>
           <Section title="Schuldner — Adresse & Betrieb" icon="▫">
-            <DataField label="Aktuelle Adresse" field={s?.aktuelle_adresse} />
+            <DataField label="Aktuelle Adresse" field={s?.aktuelle_adresse} fieldPath="schuldner.aktuelle_adresse" />
             {(s?.firma?.wert || s?.rechtsform?.wert || s?.handelsregisternummer?.wert) && (
               <>
-                <DataField label="Firma" field={s?.firma} />
-                <DataField label="Rechtsform" field={s?.rechtsform} />
-                <DataField label="Betriebsstätte" field={s?.betriebsstaette_adresse} />
-                <DataField label="Handelsregister-Nr." field={s?.handelsregisternummer} />
+                <DataField label="Firma" field={s?.firma} fieldPath="schuldner.firma" />
+                <DataField label="Rechtsform" field={s?.rechtsform} fieldPath="schuldner.rechtsform" />
+                <DataField label="Betriebsstätte" field={s?.betriebsstaette_adresse} fieldPath="schuldner.betriebsstaette_adresse" />
+                <DataField label="Handelsregister-Nr." field={s?.handelsregisternummer} fieldPath="schuldner.handelsregisternummer" />
               </>
             )}
           </Section>
@@ -79,7 +79,7 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
               return <div key={i} className="py-1.5 border-b border-border text-[11px] text-text-dim">{addr}</div>;
             }
             if (typeof addr === 'object' && addr && 'wert' in addr) {
-              return <DataField key={i} label={`Adresse ${i + 1}`} field={addr} />;
+              return <DataField key={i} label={`Adresse ${i + 1}`} field={addr} fieldPath={`schuldner.fruehere_adressen[${i}]`} />;
             }
             if (typeof addr === 'object' && addr && 'adresse' in addr) {
               const a = addr as { adresse?: string; einzug?: string; auszug?: string; zeitraum?: string; quelle?: string };
@@ -89,6 +89,7 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
                   key={i}
                   label={period || `Adresse ${i + 1}`}
                   field={{ wert: a.adresse ?? '', quelle: a.quelle ?? '' }}
+                  fieldPath={`schuldner.fruehere_adressen[${i}]`}
                 />
               );
             }
@@ -103,7 +104,7 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
               return <div key={i} className="py-1.5 border-b border-border text-[11px] text-text-dim">{kind}</div>;
             }
             if (typeof kind === 'object' && kind && 'wert' in kind) {
-              return <DataField key={i} label={`Kind ${i + 1}`} field={kind} />;
+              return <DataField key={i} label={`Kind ${i + 1}`} field={kind} fieldPath={`schuldner.kinder[${i}]`} />;
             }
             if (typeof kind === 'object' && kind && 'name' in kind) {
               const k = kind as { name?: string; geburtsdatum?: string; geschlecht?: string; anschrift?: string; quelle?: string };
@@ -114,6 +115,7 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
                   key={i}
                   label={`Kind ${i + 1}`}
                   field={{ wert: displayValue, quelle: k.quelle ?? '' }}
+                  fieldPath={`schuldner.kinder[${i}]`}
                 />
               );
             }
@@ -124,8 +126,8 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
       {/* ─── Ehegatte / Lebenspartner (nur natürliche Personen) ─── */}
       {!isEntity && s?.ehegatte && (s.ehegatte.name?.wert || s.ehegatte.geburtsdatum?.wert || s.ehegatte.gemeinsames_eigentum?.wert) && (
         <Section title="Ehegatte / Lebenspartner" icon="◑">
-          <DataField label="Name" field={s.ehegatte.name} />
-          <DataField label="Geburtsdatum" field={s.ehegatte.geburtsdatum} />
+          <DataField label="Name" field={s.ehegatte.name} fieldPath="schuldner.ehegatte.name" />
+          <DataField label="Geburtsdatum" field={s.ehegatte.geburtsdatum} fieldPath="schuldner.ehegatte.geburtsdatum" />
           <div className="flex items-start py-1.5 border-b border-border gap-2">
             <span className="flex-shrink-0 w-[180px] text-[11px] text-text-dim pt-0.5">Güterstand</span>
             <div className="flex-1 min-w-0">
@@ -137,7 +139,7 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
             </div>
           </div>
           {s.ehegatte.gemeinsames_eigentum?.wert && (
-            <DataField label="Gemeinsames Eigentum" field={s.ehegatte.gemeinsames_eigentum} />
+            <DataField label="Gemeinsames Eigentum" field={s.ehegatte.gemeinsames_eigentum} fieldPath="schuldner.ehegatte.gemeinsames_eigentum" />
           )}
         </Section>
       )}
@@ -145,11 +147,11 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
       {/* ─── Beschäftigung (nur natürliche Personen, nur wenn Daten vorhanden) ─── */}
       {!isEntity && s?.beschaeftigung && (s.beschaeftigung.arbeitgeber?.wert || s.beschaeftigung.nettoeinkommen?.wert || s.beschaeftigung.art?.wert) && (
         <Section title="Beschäftigung" icon="◧">
-          <DataField label="Arbeitgeber" field={s.beschaeftigung.arbeitgeber} />
-          <DataField label="Arbeitgeber Adresse" field={s.beschaeftigung.arbeitgeber_adresse} />
-          <DataField label="Nettoeinkommen" field={s.beschaeftigung.nettoeinkommen} isCurrency />
-          <DataField label="Beschäftigt seit" field={s.beschaeftigung.beschaeftigt_seit} />
-          <DataField label="Art" field={s.beschaeftigung.art} />
+          <DataField label="Arbeitgeber" field={s.beschaeftigung.arbeitgeber} fieldPath="schuldner.beschaeftigung.arbeitgeber" />
+          <DataField label="Arbeitgeber Adresse" field={s.beschaeftigung.arbeitgeber_adresse} fieldPath="schuldner.beschaeftigung.arbeitgeber_adresse" />
+          <DataField label="Nettoeinkommen" field={s.beschaeftigung.nettoeinkommen} isCurrency fieldPath="schuldner.beschaeftigung.nettoeinkommen" />
+          <DataField label="Beschäftigt seit" field={s.beschaeftigung.beschaeftigt_seit} fieldPath="schuldner.beschaeftigung.beschaeftigt_seit" />
+          <DataField label="Art" field={s.beschaeftigung.art} fieldPath="schuldner.beschaeftigung.art" />
         </Section>
       )}
 
@@ -186,15 +188,15 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
       )}
 
       <Section title="Antragsteller" icon="◆">
-        <DataField label="Name" field={a?.name} />
-        <DataField label="Adresse" field={a?.adresse} />
-        <DataField label="Ansprechpartner" field={a?.ansprechpartner} />
-        <DataField label="Telefon" field={a?.telefon} />
-        <DataField label="Fax" field={a?.fax} />
-        <DataField label="E-Mail" field={a?.email} />
-        <DataField label="Betriebsnummer" field={a?.betriebsnummer} />
-        <DataField label="IBAN" field={a?.bankverbindung_iban} />
-        <DataField label="BIC" field={a?.bankverbindung_bic} />
+        <DataField label="Name" field={a?.name} fieldPath="antragsteller.name" />
+        <DataField label="Adresse" field={a?.adresse} fieldPath="antragsteller.adresse" />
+        <DataField label="Ansprechpartner" field={a?.ansprechpartner} fieldPath="antragsteller.ansprechpartner" />
+        <DataField label="Telefon" field={a?.telefon} fieldPath="antragsteller.telefon" />
+        <DataField label="Fax" field={a?.fax} fieldPath="antragsteller.fax" />
+        <DataField label="E-Mail" field={a?.email} fieldPath="antragsteller.email" />
+        <DataField label="Betriebsnummer" field={a?.betriebsnummer} fieldPath="antragsteller.betriebsnummer" />
+        <DataField label="IBAN" field={a?.bankverbindung_iban} fieldPath="antragsteller.bankverbindung_iban" />
+        <DataField label="BIC" field={a?.bankverbindung_bic} fieldPath="antragsteller.bankverbindung_bic" />
       </Section>
     </>
   );
