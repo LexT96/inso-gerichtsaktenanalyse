@@ -33,8 +33,9 @@ FROM nginx:alpine
 COPY --from=builder /workspace/frontend/dist /usr/share/nginx/html
 RUN chmod -R 755 /usr/share/nginx/html
 
-# Nginx config template — BACKEND_URL is resolved at container startup
-RUN printf 'server {\n\
+# Nginx config — envsubst replaces $BACKEND_URL at container start
+RUN mkdir -p /etc/nginx/templates && \
+    printf 'server {\n\
     listen 80;\n\
     root /usr/share/nginx/html;\n\
     index index.html;\n\
