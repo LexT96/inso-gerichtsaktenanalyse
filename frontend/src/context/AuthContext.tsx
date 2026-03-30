@@ -136,10 +136,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (authMode === 'entra') {
-      try {
-        await instance.logoutPopup();
-      } catch {
-        // Best-effort MSAL logout
+      // Only clear local MSAL cache — don't sign out of M365
+      const account = instance.getActiveAccount() || instance.getAllAccounts()[0];
+      if (account) {
+        instance.clearCache();
       }
     }
 
