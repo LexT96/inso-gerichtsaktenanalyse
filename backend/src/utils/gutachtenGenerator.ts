@@ -101,10 +101,11 @@ export function determineTemplateType(rechtsform: string): TemplateType {
 
 // --- Computed fields ---
 
-export function formatEUR(value: unknown): string {
+export function formatEUR(value: unknown, includeSuffix = true): string {
   const n = typeof value === 'number' ? value : parseFloat(String(value));
   if (isNaN(n) || value == null) return '';
-  return n.toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' EUR';
+  const formatted = n.toLocaleString('de-DE', { minimumFractionDigits: 2 });
+  return includeSuffix ? formatted + ' EUR' : formatted;
 }
 
 function isJuristischeOderGesellschaft(result: ExtractionResult): boolean {

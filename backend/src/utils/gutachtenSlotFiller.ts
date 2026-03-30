@@ -119,7 +119,7 @@ function buildPreFillMatchers(): SlotMatcher[] {
   return [
     // --- Arbeitnehmer ---
     {
-      patterns: [/anzahl.*arbeitnehmer|arbeitnehmer.*besch.{0,5}ftigt|\bbesch.{0,5}ftigt.*\d/i],
+      patterns: [/besch.{0,5}ftigt.*\[\[SLOT.*arbeitnehmer|anzahl.*arbeitnehmer.*davon|\bbesch.{0,5}ftigt\b.*\bArbeitnehmer\b.*\bdavon\b/i],
       extract: (r) => {
         const an = r.forderungen?.betroffene_arbeitnehmer;
         if (an?.length) {
@@ -345,6 +345,21 @@ function buildPreFillMatchers(): SlotMatcher[] {
   ];
 }
 
+/** Check if template text after the slot already contains "EUR" */
+function contextHasEurSuffix(slot: SlotInfo): boolean {
+  // Check if context has "EUR" right after the slot marker
+  const slotMarker = `[[${slot.id}]]`;
+  const idx = slot.context.indexOf(slotMarker);
+  if (idx < 0) return false;
+  const after = slot.context.slice(idx + slotMarker.length, idx + slotMarker.length + 10).trim();
+  return /^EUR\b/i.test(after);
+}
+
+/** Format EUR value, omitting "EUR" suffix if template already has it */
+function fmtEUR(value: unknown, slot: SlotInfo): string {
+  return formatEUR(value, !contextHasEurSuffix(slot));
+}
+
 /** Pre-fill slots deterministically from extraction data */
 function preFillSlots(
   slots: SlotInfo[],
@@ -360,7 +375,9 @@ function preFillSlots(
       if (matcher.patterns.some(p => p.test(ctx))) {
         const value = matcher.extract(result);
         if (value) {
-          filled.set(slot.id, { value, hint: matcher.hint });
+          // Strip "EUR" suffix if template already has it
+          const cleanValue = contextHasEurSuffix(slot) ? value.replace(/\s*EUR$/i, '') : value;
+          filled.set(slot.id, { value: cleanValue, hint: matcher.hint });
           break;
         }
       }
@@ -715,7 +732,7 @@ WICHTIG:
 - Fuelle JEDEN Slot, fuer den Daten vorhanden sind. Sei NICHT uebervorsichtig.
 - Suche AKTIV in den Daten nach passenden Werten. Wenn der Slot "Arbeitnehmer" erwaehnt, suche in forderungen.arbeitnehmer, ermittlungsergebnisse, zusammenfassung etc.
 - Wenn der Slot eine Tabelle oder Liste erwartet (Aktiva, Passiva, Forderungen), erstelle eine formatierte Aufstellung aus den Daten.
-- Betraege IMMER im Format 1.234,56 EUR.
+- Betraege IMMER im Format 1.234,56 EUR. ABER: Wenn der Kontext nach dem Slot bereits "EUR" enthaelt (z.B. "[[SLOT_xxx]] EUR"), dann NUR die Zahl ohne "EUR" (z.B. "1.234,56").
 - Daten IMMER als TT.MM.JJJJ.
 - NUR wenn wirklich KEINE passenden Daten existieren: "[TODO: ...]" mit Beschreibung was fehlt.
 - Redaktionelle Anweisungen ([wenn...], [ggf....]): "[TODO: ...]"
