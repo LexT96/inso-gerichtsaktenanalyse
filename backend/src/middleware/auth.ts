@@ -45,7 +45,7 @@ function verifyEntraToken(token: string): Promise<jwt.JwtPayload> {
       token,
       getEntraSigningKey,
       {
-        audience: config.AZURE_CLIENT_ID,
+        audience: `api://${config.AZURE_CLIENT_ID}`,
         issuer: `https://login.microsoftonline.com/${config.AZURE_TENANT_ID}/v2.0`,
         algorithms: ['RS256'],
       },
