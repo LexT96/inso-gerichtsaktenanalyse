@@ -1,0 +1,4 @@
+{$DOMAIN_NAME:localhost} {
+    reverse_proxy /api/* backend:3004
+    reverse_proxy frontend:80
+}
