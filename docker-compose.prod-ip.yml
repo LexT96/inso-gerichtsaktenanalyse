@@ -1,0 +1,46 @@
+# Production deployment without TLS — direct IP access
+# Usage: docker compose -f docker-compose.prod-ip.yml up --build -d
+#
+# When you have a domain later, switch to docker-compose.yml (Traefik + Let's Encrypt)
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    expose:
+      - "3004"
+    environment:
+      - NODE_ENV=production
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
+      - EXTRACTION_MODEL=${EXTRACTION_MODEL:-claude-sonnet-4-6}
+      - UTILITY_MODEL=${UTILITY_MODEL:-claude-haiku-4-5-20251001}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_EXPIRY=${JWT_ACCESS_EXPIRY:-15m}
+      - JWT_REFRESH_EXPIRY=${JWT_REFRESH_EXPIRY:-7d}
+      - DATABASE_PATH=/data/insolvenz.db
+      - UPLOAD_MAX_SIZE_MB=${UPLOAD_MAX_SIZE_MB:-50}
+      - RATE_LIMIT_EXTRACTIONS_PER_HOUR=${RATE_LIMIT_EXTRACTIONS_PER_HOUR:-10}
+      - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - PORT=3004
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DATA_RETENTION_HOURS=${DATA_RETENTION_HOURS:-72}
+      - DB_ENCRYPTION_KEY=${DB_ENCRYPTION_KEY}
+    volumes:
+      - db-data:/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db-data:

@@ -30,7 +30,7 @@ function BadgeIndicator({ type }: { type: BadgeType }) {
 export function Badge({ type }: BadgeProps) {
   const s = badgeStyles[type] || badgeStyles.missing;
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-bold tracking-wide border font-mono ${s.bg} ${s.text} ${s.border}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold tracking-wide border font-mono ${s.bg} ${s.text} ${s.border}`}>
       <BadgeIndicator type={type} />
       {s.label}
     </span>

@@ -246,10 +246,11 @@ export function DashboardPage() {
       )}
 
       {/* Footer */}
-      <div className="mt-4 p-3 px-4 bg-surface border border-border/60 rounded-lg shadow-card text-[8px] text-text-muted leading-relaxed font-mono">
-        <span className="text-accent font-bold tracking-wider">TBS</span>
-        <span className="text-text-dim"> AKTENANALYSE</span> · Alle extrahierten Daten
-        müssen vor Verwendung manuell geprüft werden.
+      <div className="mt-4 p-3 px-4 bg-surface border border-border/40 rounded-lg text-[8px] text-text-muted leading-relaxed font-mono">
+        <span className="text-accent font-bold tracking-[1.5px]">TBS</span>
+        <span className="text-text-dim tracking-wide"> AKTENANALYSE</span>
+        <span className="mx-1.5 text-border">|</span>
+        Alle extrahierten Daten müssen vor Verwendung manuell geprüft werden.
         <span className="text-ie-blue"> [S.X]</span>-Buttons zeigen die Quellenreferenz und navigieren zur Seite im PDF.
       </div>
     </div>
@@ -303,9 +304,9 @@ export function DashboardPage() {
           {!result && (
             <>
               <div className="mb-6">
-                <h1 className="text-lg font-bold text-text font-sans">Neue Akte analysieren</h1>
-                <p className="text-[12px] text-text-muted mt-1 font-sans">
-                  PDF hochladen → KI extrahiert Verfahrensdaten, Schuldner, Forderungen und erstellt Standardanschreiben mit Quellenreferenzen.
+                <h1 className="text-lg font-bold text-text font-sans tracking-tight">Neue Akte analysieren</h1>
+                <p className="text-[12px] text-text-muted mt-1.5 font-sans leading-relaxed">
+                  PDF hochladen — KI extrahiert Verfahrensdaten, Schuldner, Forderungen und erstellt Standardanschreiben mit Quellenreferenzen.
                 </p>
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
@@ -323,18 +324,20 @@ export function DashboardPage() {
                 currentId={historyId ? parseInt(historyId, 10) : extractionId}
               />
               </div>
-              <div className="mt-6 flex flex-wrap items-center gap-6 text-[11px] text-text-muted font-sans">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[9px] font-bold">1</span>
+              <div className="mt-6 flex flex-wrap items-center gap-5 text-[11px] text-text-muted font-sans">
+                <span className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[9px] font-bold font-mono">1</span>
                   PDF hochladen
                 </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[9px] font-bold">2</span>
+                <span className="text-border">—</span>
+                <span className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[9px] font-bold font-mono">2</span>
                   KI analysiert Akte
                 </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[9px] font-bold">3</span>
-                  Standardanschreiben & Quellen
+                <span className="text-border">—</span>
+                <span className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[9px] font-bold font-mono">3</span>
+                  Anschreiben & Quellen
                 </span>
                 <button
                   onClick={() => setShowImport(true)}

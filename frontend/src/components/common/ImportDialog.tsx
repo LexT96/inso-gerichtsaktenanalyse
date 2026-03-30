@@ -70,7 +70,7 @@ export function ImportDialog({ onImport, onClose }: ImportDialogProps) {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full px-3 py-2 bg-bg border border-border border-dashed rounded-sm text-xs font-mono text-text-muted hover:border-accent hover:text-accent transition-colors text-left"
+              className="w-full px-3 py-2 bg-bg border border-border border-dashed rounded-md text-xs font-mono text-text-muted hover:border-accent hover:text-accent transition-colors text-left"
             >
               {file ? file.name : 'Datei auswählen…'}
             </button>
@@ -82,14 +82,14 @@ export function ImportDialog({ onImport, onClose }: ImportDialogProps) {
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-bg border border-border rounded-sm text-xs font-mono focus:outline-none focus:border-accent"
+              className="w-full px-3 py-2 bg-bg border border-border rounded-md text-xs font-mono focus:outline-none focus:border-accent"
               placeholder="Export-Passwort eingeben"
               onKeyDown={e => e.key === 'Enter' && handleImport()}
             />
           </div>
 
           {error && (
-            <div className="text-[10px] text-ie-red bg-ie-red-bg border border-ie-red-border rounded-sm p-2">
+            <div className="text-[10px] text-ie-red bg-ie-red-bg border border-ie-red-border rounded-md p-2">
               {error}
             </div>
           )}
@@ -97,14 +97,14 @@ export function ImportDialog({ onImport, onClose }: ImportDialogProps) {
           <div className="flex gap-2 pt-1">
             <button
               onClick={onClose}
-              className="flex-1 px-3 py-2 border border-border rounded-sm text-[10px] font-mono text-text-muted hover:border-border-light transition-colors"
+              className="flex-1 px-3 py-2 border border-border rounded-md text-[10px] font-mono text-text-muted hover:border-border-light transition-colors"
             >
               ABBRECHEN
             </button>
             <button
               onClick={handleImport}
               disabled={loading || !file || !password}
-              className="flex-1 px-3 py-2 bg-accent text-white rounded-sm text-[10px] font-mono hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-3 py-2 bg-accent text-white rounded-md text-[10px] font-mono hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'ENTSCHLÜSSELN…' : 'IMPORTIEREN'}
             </button>

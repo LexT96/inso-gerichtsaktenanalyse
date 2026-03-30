@@ -22,7 +22,7 @@ export interface GutachtenSlot extends SlotInfo {
 
 // --- Slot Patterns ---
 
-// Matches: […], [...], [any text up to 80 chars] (but NOT [TODO:...]), xxxx+
+// Matches: [...], [...], [any text up to 80 chars] (but NOT [TODO:...]), xxxx+
 const SLOT_PATTERN = /\[\u2026\]|\[\.{3}\]|\[(?!TODO:)[^\[\]]{1,80}\]|\bx{4,}\b/gi;
 
 function hasSlotPattern(text: string): boolean {
@@ -61,8 +61,8 @@ export function extractSlots(xml: string): { xml: string; slots: SlotInfo[] } {
         const idx = parseInt(m[1], 10) - 1;
         if (idx >= 0 && idx < slots.length) {
           const pos = m.index;
-          const start = Math.max(0, pos - 60);
-          const end = Math.min(text.length, pos + m[0].length + 60);
+          const start = Math.max(0, pos - 80);
+          const end = Math.min(text.length, pos + m[0].length + 80);
           slots[idx].context = text.slice(start, end).trim();
         }
       }
@@ -94,6 +94,7 @@ export function applySlots(
 }
 
 // --- Flatten ExtractionResult to .wert values only ---
+// Complete data available for slot filling - includes ALL extracted sections
 
 function flattenResult(result: ExtractionResult): Record<string, unknown> {
   const flat: Record<string, unknown> = {};
@@ -118,9 +119,14 @@ function flattenResult(result: ExtractionResult): Record<string, unknown> {
     }
   }
 
+  // Core case data
   walk(result.verfahrensdaten, 'verfahrensdaten');
   walk(result.schuldner, 'schuldner');
   walk(result.antragsteller, 'antragsteller');
+  walk(result.gutachterbestellung, 'gutachterbestellung');
+  walk(result.ermittlungsergebnisse, 'ermittlungsergebnisse');
+
+  // Forderungen (summary + individual claims)
   walk(result.forderungen, 'forderungen');
   if (result.forderungen?.einzelforderungen) {
     flat['forderungen.einzelforderungen'] = result.forderungen.einzelforderungen.map(f => ({
@@ -137,9 +143,8 @@ function flattenResult(result: ExtractionResult): Record<string, unknown> {
       } : null,
     }));
   }
-  walk(result.gutachterbestellung, 'gutachterbestellung');
-  walk(result.ermittlungsergebnisse, 'ermittlungsergebnisse');
 
+  // Aktiva
   if (result.aktiva) {
     const aktiva = result.aktiva;
     flat['aktiva.summe_aktiva'] = aktiva.summe_aktiva?.wert;
@@ -154,26 +159,86 @@ function flattenResult(result: ExtractionResult): Record<string, unknown> {
     }
   }
 
+  // Anfechtung (previously missing)
+  if (result.anfechtung) {
+    flat['anfechtung.zusammenfassung'] = result.anfechtung.zusammenfassung;
+    flat['anfechtung.gesamtpotenzial'] = result.anfechtung.gesamtpotenzial?.wert;
+    flat['anfechtung.vorgaenge'] = result.anfechtung.vorgaenge.map(v => ({
+      beschreibung: v.beschreibung?.wert,
+      betrag: v.betrag?.wert,
+      datum: v.datum?.wert,
+      empfaenger: v.empfaenger?.wert,
+      grundlage: v.grundlage,
+      risiko: v.risiko,
+      begruendung: v.begruendung,
+    }));
+  }
+
+  // Summary-level intelligence (previously missing)
+  if (result.zusammenfassung?.length) {
+    flat['zusammenfassung'] = result.zusammenfassung.map(z => z.wert).filter(Boolean);
+  }
+  if (result.risiken_hinweise?.length) {
+    flat['risiken_hinweise'] = result.risiken_hinweise.map(r => r.wert).filter(Boolean);
+  }
+  if (result.fristen?.length) {
+    flat['fristen'] = result.fristen.map(f => ({
+      bezeichnung: f.bezeichnung,
+      datum: f.datum,
+      status: f.status,
+    }));
+  }
+  if (result.fehlende_informationen?.length) {
+    flat['fehlende_informationen'] = result.fehlende_informationen.map(f => ({
+      information: f.information,
+      grund: f.grund,
+    }));
+  }
+
   return flat;
 }
 
+// --- Slot classification for extraction/interpretation split ---
+
+/** Detect if a slot requires narrative/interpretive prose vs. factual data */
+function isNarrativeSlot(slot: SlotInfo): boolean {
+  const text = (slot.context + ' ' + slot.original).toLowerCase();
+  return /begr.{0,3}ndung|darstellung|feststellung|ausf.{0,3}hrung|bewertung|ergebnis|zusammenfassung|schlussfolgerung|empfehlung|einsch.{0,3}tzung|analyse|pr.{0,3}fung|w.{0,3}rdigung|stellungnahme/.test(text);
+}
+
 // --- Fill Slots via Claude API ---
+// Architecture: Extraction/Interpretation Split
+// - FACTUAL slots (dates, names, amounts) -> filled from data, Haiku validates
+// - NARRATIVE slots (analysis, conclusions) -> Sonnet generates grounded prose
 
-const SLOT_FILL_PROMPT = `Du bist ein spezialisierter KI-Assistent für deutsche Insolvenzverwalter. Du erhältst eine Liste nummerierter Platzhalter (Slots) aus einer Gutachten-Vorlage, zusammen mit dem Kontext (umgebender Satz) und extrahierten Daten aus der Gerichtsakte.
+const FACTUAL_PROMPT = `Du bist ein spezialisierter KI-Assistent fuer deutsche Insolvenzverwalter. Du erhaeltst Platzhalter (Slots) aus einer Gutachten-Vorlage mit Kontext und extrahierte Daten aus der Gerichtsakte.
 
-Deine Aufgabe: Fülle jeden Slot mit dem passenden Wert aus den bereitgestellten Daten UND gib einen kurzen Hinweis was in dieses Feld gehört.
+WICHTIG -- EXTRAKTION, NICHT INTERPRETATION:
+- Du fuellst Slots NUR mit Fakten, die direkt in den bereitgestellten Daten stehen.
+- Du INTERPRETIERST NICHT, du ERWEITERST NICHT, du SCHLUSSFOLGERST NICHT.
+- Wenn ein Datum, Name oder Betrag nicht in den Daten steht: "[TODO: ...]"
+- Datumsformat: TT.MM.JJJJ. Betraege: deutsche Schreibweise (1.234,56 EUR).
+- Redaktionelle Anweisungen ([wenn...], [ggf....]): "[TODO: ...]" mit Originaltext als Hinweis
+- "xxxx"-Platzhalter: "[TODO: Datum/Wert eintragen]"
+- "hint" ist IMMER eine kurze Beschreibung (3-8 Woerter) was in dieses Feld gehoert.
 
-REGELN:
-- Nur Werte aus den bereitgestellten Daten verwenden, NICHTS erfinden.
-- Datumsformat: TT.MM.JJJJ. Beträge: deutsche Schreibweise (1.234,56 EUR).
-- Wenn ein Slot aus den Daten NICHT füllbar ist: value = "[TODO: kurze Beschreibung was hier einzutragen ist]"
-- Redaktionelle Anweisungen (erkennbar an "wenn...", "ggf.", "ansonsten", "falls", Hinweise an den Anwalt): value = "[TODO: ...]" mit dem Originaltext als Hinweis
-- "xxxx"-Platzhalter für zukünftige Daten: value = "[TODO: Datum/Wert eintragen]"
-- "[Tabelle]"-Platzhalter: value = "[TODO: Tabelle einfügen]"
-- "hint" ist IMMER eine kurze, prägnante Beschreibung (3-8 Wörter) was in dieses Feld gehört. Beispiele: "Datum der Aktenübersendung", "Anzahl Arbeitnehmer", "EUR-Betrag Lohnrückstände", "Name des Steuerberaters", "Ort des Amtsgerichts"
+Antworte AUSSCHLIESSLICH mit validem JSON:
+{"SLOT_001": {"value": "18.12.2025", "hint": "Datum Beschluss"}, ...}`;
 
-Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). Jeder Slot ist ein Objekt mit "value" und "hint":
-{"SLOT_001": {"value": "18.12.2025", "hint": "Datum Beschluss"}, "SLOT_002": {"value": "[TODO: Angabe fehlt]", "hint": "Anzahl Arbeitnehmer"}, ...}`;
+const NARRATIVE_PROMPT = `Du bist ein erfahrener deutscher Insolvenzverwalter und verfasst Abschnitte fuer ein Gutachten nach Paragraph 5 InsO.
+
+WICHTIG -- INTERPRETATION, ABER QUELLENGEBUNDEN:
+- Du erhaeltst Platzhalter aus dem Gutachten und die vollstaendigen extrahierten Daten aus der Akte.
+- Fuer jeden Slot schreibst du professionelle juristische Prosa auf Deutsch.
+- Jede Aussage MUSS auf den bereitgestellten Daten basieren. Erfinde keine Fakten.
+- Betraege im deutschen Format (1.234,56 EUR), Daten als TT.MM.JJJJ.
+- Verwende die korrekte Fachterminologie (InsO, ZPO, BGB).
+- Fasse dich so knapp wie moeglich -- kein Fuelltext, keine Wiederholungen.
+- Wenn die Datenlage fuer eine fundierte Aussage nicht ausreicht: "[TODO: Angaben ergaenzen -- ...]"
+- "hint" ist IMMER eine kurze Beschreibung (3-8 Woerter) was in dieses Feld gehoert.
+
+Antworte AUSSCHLIESSLICH mit validem JSON:
+{"SLOT_001": {"value": "Die Zahlungsunfaehigkeit...", "hint": "Begruendung Insolvenzgrund"}, ...}`;
 
 export async function fillSlots(
   slots: SlotInfo[],
@@ -183,13 +248,60 @@ export async function fillSlots(
 
   const flatData = flattenResult(result);
 
+  // Split slots by type: factual vs. narrative
+  const factualSlots = slots.filter(s => !isNarrativeSlot(s));
+  const narrativeSlots = slots.filter(s => isNarrativeSlot(s));
+
+  logger.info('Slot classification', {
+    total: slots.length,
+    factual: factualSlots.length,
+    narrative: narrativeSlots.length,
+  });
+
+  // Fill both in parallel
+  const [factualResults, narrativeResults] = await Promise.all([
+    factualSlots.length > 0
+      ? fillSlotBatch(factualSlots, flatData, FACTUAL_PROMPT, config.UTILITY_MODEL || 'claude-haiku-4-5-20251001')
+      : Promise.resolve(new Map<string, { value: string; hint: string }>()),
+    narrativeSlots.length > 0
+      ? fillSlotBatch(narrativeSlots, flatData, NARRATIVE_PROMPT, config.EXTRACTION_MODEL || 'claude-sonnet-4-6')
+      : Promise.resolve(new Map<string, { value: string; hint: string }>()),
+  ]);
+
+  // Merge results
+  const allResults = new Map([...factualResults, ...narrativeResults]);
+
+  return slots.map(s => {
+    const entry = allResults.get(s.id);
+    const value = entry?.value ?? '';
+    const hint = entry?.hint ?? '';
+
+    let status: 'filled' | 'todo' | 'editorial';
+    if (value.startsWith('[TODO:')) {
+      status = s.original.length > 20 && /wenn|ggf|ansonsten|falls/i.test(s.original)
+        ? 'editorial'
+        : 'todo';
+    } else if (value) {
+      status = 'filled';
+    } else {
+      status = 'todo';
+      return { ...s, value: `[TODO: ${s.original}]`, hint: hint || s.original, status };
+    }
+    return { ...s, value, hint: hint || s.original, status };
+  });
+}
+
+async function fillSlotBatch(
+  slots: SlotInfo[],
+  flatData: Record<string, unknown>,
+  systemPrompt: string,
+  model: string
+): Promise<Map<string, { value: string; hint: string }>> {
   const slotList = slots.map(s =>
     `${s.id}: Kontext="${s.context}" Original="${s.original}"`
   ).join('\n');
 
-  const content = `${SLOT_FILL_PROMPT}\n\n--- EXTRAHIERTE DATEN ---\n${JSON.stringify(flatData, null, 2)}\n\n--- SLOTS ZUM FÜLLEN (${slots.length} Stück) ---\n${slotList}`;
-
-  const model = config.UTILITY_MODEL || 'claude-haiku-4-5-20251001';
+  const content = `${systemPrompt}\n\n--- EXTRAHIERTE DATEN ---\n${JSON.stringify(flatData, null, 2)}\n\n--- SLOTS ZUM FUELLEN (${slots.length} Stueck) ---\n${slotList}`;
 
   try {
     const response = await callWithRetry(() =>
@@ -214,46 +326,36 @@ export async function fillSlots(
       try {
         parsed = JSON.parse(jsonrepair(text));
       } catch {
-        logger.error('Slot-Fill JSON parse failed', { sample: text.slice(0, 300) });
+        logger.error('Slot-Fill JSON parse failed', { model, sample: text.slice(0, 300) });
         parsed = {};
       }
     }
 
-    logger.info('Slot-Filling completed', {
+    logger.info('Slot batch completed', {
+      model,
       total: slots.length,
       filled: Object.keys(parsed).length,
       inputTokens: response.usage?.input_tokens ?? 0,
       outputTokens: response.usage?.output_tokens ?? 0,
     });
 
-    return slots.map(s => {
+    const resultMap = new Map<string, { value: string; hint: string }>();
+    for (const s of slots) {
       const entry = parsed[s.id];
-      // Handle both formats: {value, hint} object or plain string (fallback)
       const value = entry && typeof entry === 'object' ? (entry.value ?? '') : String(entry ?? '');
       const hint = entry && typeof entry === 'object' ? (entry.hint ?? '') : '';
-
-      let status: 'filled' | 'todo' | 'editorial';
-      if (value.startsWith('[TODO:')) {
-        status = s.original.length > 20 && /wenn|ggf|ansonsten|falls|außerdem/i.test(s.original)
-          ? 'editorial'
-          : 'todo';
-      } else if (value) {
-        status = 'filled';
-      } else {
-        status = 'todo';
-        return { ...s, value: `[TODO: ${s.original}]`, hint: hint || s.original, status };
-      }
-      return { ...s, value, hint: hint || s.original, status };
-    });
+      resultMap.set(s.id, { value, hint });
+    }
+    return resultMap;
   } catch (err) {
-    logger.error('Slot-Filling API call failed', {
+    logger.error('Slot-Fill API call failed', {
+      model,
       error: err instanceof Error ? err.message : String(err),
     });
-    return slots.map(s => ({
-      ...s,
-      value: `[TODO: ${s.original}]`,
-      hint: s.original,
-      status: 'todo' as const,
-    }));
+    const resultMap = new Map<string, { value: string; hint: string }>();
+    for (const s of slots) {
+      resultMap.set(s.id, { value: `[TODO: ${s.original}]`, hint: s.original });
+    }
+    return resultMap;
   }
 }

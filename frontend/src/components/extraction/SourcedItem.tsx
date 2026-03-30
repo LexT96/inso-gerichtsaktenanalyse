@@ -27,7 +27,7 @@ export function SourcedItem({ item, variant = 'default' }: SourcedItemProps) {
   };
 
   const baseClasses = variant === 'warning'
-    ? 'p-1.5 px-2.5 mb-1 bg-ie-amber-bg border border-ie-amber-border rounded-sm text-ie-amber text-[11px] font-sans'
+    ? 'p-2 px-3 mb-1.5 bg-ie-amber-bg border border-ie-amber-border rounded-md text-ie-amber text-[11px] font-sans'
     : 'm-0 text-[11px] leading-7 text-text-dim font-sans py-0.5';
 
   return (
@@ -37,7 +37,7 @@ export function SourcedItem({ item, variant = 'default' }: SourcedItemProps) {
         <button
           onClick={handleClick}
           title={quelle}
-          className={`flex-shrink-0 bg-transparent border rounded-sm text-[8px] px-1.5 py-px cursor-pointer font-mono tracking-wide transition-colors mt-0.5
+          className={`flex-shrink-0 bg-transparent border rounded-md text-[8px] px-1.5 py-0.5 cursor-pointer font-mono tracking-wide transition-colors mt-0.5
             ${pageNum
               ? 'border-ie-blue-border text-ie-blue hover:border-ie-blue hover:text-ie-blue'
               : 'border-border text-text-muted'

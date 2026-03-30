@@ -82,7 +82,7 @@ export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile, onExpor
   }
 
   return (
-    <div ref={containerRef} className="flex items-end gap-0 mb-3.5 pb-0 relative shadow-[0_1px_2px_0_rgba(0,0,0,0.04)] sticky top-0 bg-bg/95 backdrop-blur-sm z-20 -mx-6 px-6 pt-1 flex-nowrap">
+    <div ref={containerRef} className="flex items-end gap-0 mb-3.5 pb-0 relative border-b border-border/40 sticky top-0 bg-bg/95 backdrop-blur-sm z-20 -mx-6 px-6 pt-1 flex-nowrap">
       {/* Visible tabs */}
       {visibleTabs.map((t, i) => (
         <div key={t.id} className="flex items-end">
@@ -92,10 +92,10 @@ export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile, onExpor
           <button
             ref={el => { if (el) tabsRef.current.set(t.id, el); else tabsRef.current.delete(t.id); }}
             onClick={() => onTabChange(t.id)}
-            className={`px-3 py-2 border-none rounded-t-md text-[10px] font-semibold cursor-pointer font-mono flex items-center gap-1.5 whitespace-nowrap tracking-wide transition-colors
+            className={`px-3 py-2.5 border-none rounded-t-md text-[10px] font-semibold cursor-pointer font-mono flex items-center gap-1.5 whitespace-nowrap tracking-wide transition-all duration-150
               ${activeTab === t.id
-                ? 'bg-surface text-text border-b-2 border-b-accent shadow-sm'
-                : 'bg-transparent text-text-muted border-b-2 border-b-transparent hover:text-text-dim'
+                ? 'bg-surface text-text border-b-[2px] border-b-accent shadow-sm -mb-px'
+                : 'bg-transparent text-text-muted border-b-[2px] border-b-transparent hover:text-text hover:bg-surface/50 -mb-px'
               }`}
           >
             <span className="text-[11px]">{t.icon}</span> {t.label}
@@ -109,10 +109,10 @@ export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile, onExpor
         <div ref={overflowRef} className="relative flex items-end">
           <button
             onClick={() => setOverflowOpen(o => !o)}
-            className={`px-2.5 py-2 border-none rounded-t-md text-[10px] font-bold cursor-pointer font-mono whitespace-nowrap tracking-wide transition-colors
+            className={`px-2.5 py-2.5 border-none rounded-t-md text-[10px] font-bold cursor-pointer font-mono whitespace-nowrap tracking-wide transition-all duration-150
               ${activeInOverflow || overflowOpen
-                ? 'bg-surface text-accent border-b-2 border-b-accent'
-                : 'bg-transparent text-text-muted border-b-2 border-b-transparent hover:text-text-dim'
+                ? 'bg-surface text-accent border-b-[2px] border-b-accent -mb-px'
+                : 'bg-transparent text-text-muted border-b-[2px] border-b-transparent hover:text-text -mb-px'
               }`}
             title={overflowTabs.map(t => t.label).join(', ')}
           >
@@ -144,18 +144,18 @@ export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile, onExpor
 
       {/* Spacer + action buttons */}
       <div className="flex-1" />
-      <div data-actions className="flex items-center gap-1 mb-0.5">
+      <div data-actions className="flex items-center gap-1.5 mb-1">
         {onExport && (
           <button
             onClick={onExport}
-            className="px-2.5 py-1 border border-border rounded-md bg-transparent text-text-muted text-[9px] cursor-pointer font-mono hover:border-accent hover:text-accent transition-colors"
+            className="px-3 py-1.5 border border-border/80 rounded-md bg-transparent text-text-muted text-[9px] cursor-pointer font-mono hover:border-accent hover:text-accent hover:bg-accent/[0.03] transition-all tracking-wider"
           >
             EXPORT
           </button>
         )}
         <button
           onClick={onNewFile}
-          className="px-2.5 py-1 border border-border rounded-md bg-transparent text-text-muted text-[9px] cursor-pointer font-mono hover:border-accent hover:text-accent transition-colors"
+          className="px-3 py-1.5 border border-border/80 rounded-md bg-transparent text-text-muted text-[9px] cursor-pointer font-mono hover:border-accent hover:text-accent hover:bg-accent/[0.03] transition-all tracking-wider"
         >
           NEU
         </button>
@@ -167,7 +167,7 @@ export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile, onExpor
 function TabBadge({ tab }: { tab: TabDef }) {
   if (!tab.badge || tab.badge <= 0) return null;
   return (
-    <span className={`rounded-md px-1.5 min-w-[18px] text-center text-[10px] font-bold text-white ${tab.id === 'briefe' ? 'bg-ie-green' : 'bg-ie-red'}`}>
+    <span className={`rounded-full px-1.5 min-w-[18px] text-center text-[9px] font-bold text-white ${tab.id === 'briefe' ? 'bg-ie-green' : 'bg-ie-red'}`}>
       {tab.badge}
     </span>
   );

@@ -261,7 +261,7 @@ export function QuellenTab({ result }: QuellenTabProps) {
 
   return (
     <>
-      <div className="bg-surface border border-border rounded-sm mb-2.5 p-3 px-4 flex items-center gap-4 text-[11px] font-sans">
+      <div className="bg-surface border border-border/60 rounded-lg shadow-card mb-3 p-3 px-4 flex items-center gap-4 text-[11px] font-sans">
         <span className="text-text-dim">
           <span className="font-bold text-text">{allFields.length}</span> Felder aus <span className="font-bold text-text">{docGroups.length}</span> Dokumenten
         </span>

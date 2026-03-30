@@ -39,8 +39,18 @@ const SICHERHEIT_LABELS: Record<string, string> = {
 function getNum(field: { wert: number | null } | null | undefined): number | null {
   if (!field) return null;
   const v = field.wert;
-  if (v === null || v === undefined || isNaN(v)) return null;
-  return v;
+  if (v === null || v === undefined) return null;
+  const n = typeof v === 'number' ? v : parseFloat(String(v));
+  return isNaN(n) ? null : n;
+}
+
+/** Safely extract a numeric wert, coercing strings like "1299370.35" to numbers */
+function safeWert(field: { wert: number | null } | null | undefined): number {
+  if (!field) return 0;
+  const v = field.wert;
+  if (v === null || v === undefined) return 0;
+  const n = typeof v === 'number' ? v : parseFloat(String(v));
+  return isNaN(n) ? 0 : n;
 }
 
 function parsePageNumber(quelle: string): number | null {
@@ -93,7 +103,7 @@ export function ForderungenTab({ forderungen: f }: ForderungenTabProps) {
   const gesichertVal = getNum(f?.gesicherte_forderungen);
   const ungesichertVal = getNum(f?.ungesicherte_forderungen);
   const computedTotal = useMemo(
-    () => einzelforderungen.reduce((sum, ef) => sum + (ef.betrag?.wert ?? 0), 0),
+    () => einzelforderungen.reduce((sum, ef) => sum + safeWert(ef.betrag), 0),
     [einzelforderungen]
   );
 
@@ -147,7 +157,7 @@ export function ForderungenTab({ forderungen: f }: ForderungenTabProps) {
           </thead>
           <tbody>
             {grouped.map(({ art, items }) => {
-              const groupTotal = items.reduce((s, ef) => s + (ef.betrag?.wert ?? 0), 0);
+              const groupTotal = items.reduce((s, ef) => s + safeWert(ef.betrag), 0);
               return (
                 <GroupRows
                   key={art}
@@ -216,7 +226,7 @@ function GroupRows({
       {items.map((ef, i) => {
         const nr = startNr + i;
         const rang = RANG_SHORT[ef.rang] || RANG_SHORT['§38 Insolvenzforderung'];
-        const betrag = ef.betrag?.wert;
+        const betrag = safeWert(ef.betrag) || null;
         const quelle = ef.betrag?.quelle || ef.glaeubiger?.quelle || '';
         const titel = ef.titel?.wert;
         const sicherheit = ef.sicherheit;
@@ -257,8 +267,8 @@ function GroupRows({
                   {sicherheit.gegenstand?.wert && (
                     <span className="text-text-muted">({sicherheit.gegenstand.wert})</span>
                   )}
-                  {sicherheit.geschaetzter_wert?.wert != null && (
-                    <span className="text-text-muted">~{EUR.format(sicherheit.geschaetzter_wert.wert)}</span>
+                  {getNum(sicherheit.geschaetzter_wert) != null && (
+                    <span className="text-text-muted">~{EUR.format(getNum(sicherheit.geschaetzter_wert)!)}</span>
                   )}
                 </div>
               )}
@@ -278,7 +288,7 @@ function GroupRows({
             <td className="py-1.5 px-2 text-center align-top">
               <QuelleButton
                 quelle={quelle}
-                searchText={betrag != null ? betrag.toLocaleString('de-DE', { minimumFractionDigits: 2 }) : glaeubiger}
+                searchText={betrag ? betrag.toLocaleString('de-DE', { minimumFractionDigits: 2 }) : glaeubiger}
               />
             </td>
           </tr>

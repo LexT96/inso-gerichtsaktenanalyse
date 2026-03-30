@@ -132,7 +132,7 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
             <span className="flex-shrink-0 w-[180px] text-[11px] text-text-dim pt-0.5">Güterstand</span>
             <div className="flex-1 min-w-0">
               <span
-                className={`inline-block px-2 py-0.5 rounded-sm text-[9px] font-bold tracking-wide border font-mono ${GUETERSTAND_STYLES[s.ehegatte.gueterstand] || GUETERSTAND_STYLES.unbekannt}`}
+                className={`inline-block px-2 py-0.5 rounded-md text-[9px] font-bold tracking-wide border font-mono ${GUETERSTAND_STYLES[s.ehegatte.gueterstand] || GUETERSTAND_STYLES.unbekannt}`}
               >
                 {GUETERSTAND_LABELS[s.ehegatte.gueterstand] || 'Unbekannt'}
               </span>
@@ -159,7 +159,7 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
       {!isEntity && s?.pfaendungsberechnung && s.pfaendungsberechnung.nettoeinkommen?.wert != null && (
         <Section title="Pfaendungsberechnung § 850c ZPO" icon="▥">
           <div className="flex flex-wrap gap-3 py-2">
-            <div className="flex flex-col items-center px-3 py-1.5 rounded-sm border border-border bg-bg">
+            <div className="flex flex-col items-center px-3 py-1.5 rounded-md border border-border/60 bg-bg">
               <span className="text-[9px] text-text-dim font-sans">Nettoeinkommen</span>
               <span className="text-sm font-bold font-mono text-text">
                 {s.pfaendungsberechnung.nettoeinkommen?.wert != null
@@ -167,7 +167,7 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
                   : '\u2014'}
               </span>
             </div>
-            <div className="flex flex-col items-center px-3 py-1.5 rounded-sm border border-border bg-bg">
+            <div className="flex flex-col items-center px-3 py-1.5 rounded-md border border-border/60 bg-bg">
               <span className="text-[9px] text-text-dim font-sans">Unterhaltspflichten</span>
               <span className="text-sm font-bold font-mono text-text">
                 {s.pfaendungsberechnung.unterhaltspflichten?.wert != null
@@ -175,7 +175,7 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
                   : '\u2014'}
               </span>
             </div>
-            <div className="flex flex-col items-center px-3 py-1.5 rounded-sm border border-accent/30 bg-accent/5">
+            <div className="flex flex-col items-center px-3 py-1.5 rounded-md border border-accent/30 bg-accent/5">
               <span className="text-[9px] text-text-dim font-sans">Pfaendbarer Betrag</span>
               <span className="text-sm font-bold font-mono text-accent">
                 {s.pfaendungsberechnung.pfaendbarer_betrag?.wert != null

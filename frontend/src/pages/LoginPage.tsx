@@ -58,13 +58,13 @@ export function LoginPage() {
           ${shake ? 'animate-shake' : 'animate-fade-up'}`}
       >
         {/* Logo area */}
-        <div className="px-10 pt-10 pb-6 text-center border-b border-border">
+        <div className="px-10 pt-10 pb-6 text-center border-b border-border/60">
           <img
             src="/demo/tbsl.png"
             alt="Professor Schmidt"
-            className="h-14 mx-auto mb-4 object-contain"
+            className="h-14 mx-auto mb-5 object-contain"
           />
-          <div className="w-12 h-px bg-accent mx-auto mb-3" />
+          <div className="w-10 h-px bg-gradient-to-r from-transparent via-accent to-transparent mx-auto mb-3" />
           <div className="text-[10px] text-text-muted tracking-[3px] uppercase font-mono">
             Aktenanalyse
           </div>
@@ -154,7 +154,7 @@ export function LoginPage() {
         </div>
 
         {/* Legal footer */}
-        <div className="px-10 py-4 border-t border-border text-center text-[8px] text-text-muted leading-relaxed font-mono tracking-wide">
+        <div className="px-10 py-4 border-t border-border/60 text-center text-[8px] text-text-muted leading-relaxed font-mono tracking-wide">
           &sect; 43a BRAO &middot; &sect; 2 BORA &middot; Art. 28 DSGVO<br />
           Alle Daten verbleiben innerhalb der EU
         </div>

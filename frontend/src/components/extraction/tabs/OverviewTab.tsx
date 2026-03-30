@@ -155,7 +155,7 @@ export function OverviewTab({ result: r, stats, lettersReady, lettersNA, letters
 
       {/* ─── Cross-Validierung ─── */}
       {warnungen.length > 0 && (
-        <div className="bg-surface border border-amber-400/30 rounded-sm mb-2.5 p-3 px-4">
+        <div className="bg-surface border border-amber-400/30 rounded-lg shadow-card mb-3 p-3 px-4">
           <div className="text-[10px] text-amber-400 font-bold font-mono mb-2 uppercase tracking-wide">
             Konsistenzprüfung ({warnungen.length})
           </div>

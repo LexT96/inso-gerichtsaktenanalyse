@@ -99,7 +99,7 @@ export function AnschreibenTab({ letters, missingInfo }: AnschreibenTabProps) {
             const title = typeof m === 'string' ? m : (m.information || m.grund || m.ermittlung_ueber || 'Fehlende Angabe').trim();
             const titleFromGrund = typeof m === 'object' && !m.information?.trim() && m.grund?.trim() === title;
             return (
-              <div key={i} className="p-2.5 px-3 mb-1.5 bg-ie-red-bg border border-ie-red-border rounded-sm">
+              <div key={i} className="p-2.5 px-3 mb-1.5 bg-ie-red-bg border border-ie-red-border rounded-md">
                 <div className="text-xs text-text font-semibold font-sans">{title}</div>
                 {typeof m === 'object' && m.grund && !titleFromGrund && (
                   <div className="text-[10px] text-text-dim mt-0.5">Grund: {m.grund}</div>

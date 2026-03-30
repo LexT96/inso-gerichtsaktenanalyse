@@ -169,7 +169,7 @@ function CheckFieldRow({ def, result, onUpdate }: CheckFieldRowProps) {
             onKeyDown={handleKeyDown}
             onBlur={saveEdit}
             autoFocus
-            className="w-full bg-bg border border-accent rounded-sm px-2 py-1 text-xs font-mono text-text outline-none"
+            className="w-full bg-bg border border-accent rounded-md px-2 py-1 text-xs font-mono text-text outline-none"
           />
         ) : hasVal ? (
           <button
@@ -194,7 +194,7 @@ function CheckFieldRow({ def, result, onUpdate }: CheckFieldRowProps) {
         <button
           onClick={handleRefClick}
           title={isUnverified ? 'Quelle nicht verifiziert' : pageNum ? `Seite ${pageNum} anzeigen` : 'Quelle anzeigen'}
-          className={`bg-transparent border rounded-sm text-[8px] px-1.5 py-px cursor-pointer font-mono tracking-wide transition-colors
+          className={`bg-transparent border rounded-md text-[8px] px-1.5 py-0.5 cursor-pointer font-mono tracking-wide transition-colors
             ${isUnverified
               ? 'border-ie-amber-border text-ie-amber'
               : pageNum
@@ -211,7 +211,7 @@ function CheckFieldRow({ def, result, onUpdate }: CheckFieldRowProps) {
         <button
           onClick={handleConfirm}
           title="Wert bestätigen"
-          className="px-2 py-0.5 border border-border rounded-sm bg-transparent text-text-muted text-[10px] cursor-pointer font-mono hover:border-ie-green hover:text-ie-green transition-colors"
+          className="px-2 py-0.5 border border-border rounded-md bg-transparent text-text-muted text-[10px] cursor-pointer font-mono hover:border-ie-green hover:text-ie-green transition-colors"
         >
           ✓
         </button>
@@ -219,7 +219,7 @@ function CheckFieldRow({ def, result, onUpdate }: CheckFieldRowProps) {
 
       {/* Already confirmed indicator */}
       {pruefstatus && (
-        <span className={`text-[9px] px-1.5 py-px rounded-sm font-mono border ${
+        <span className={`text-[9px] px-1.5 py-px rounded-md font-mono border ${
           pruefstatus === 'bestaetigt' ? 'border-ie-green/30 text-ie-green bg-ie-green/5'
           : 'border-ie-blue/30 text-ie-blue bg-ie-blue/5'
         }`}>
@@ -268,7 +268,7 @@ export function PrueflisteTab({ result, onUpdateField }: PrueflisteTabProps) {
   return (
     <>
       {/* Progress bar */}
-      <div className="bg-surface border border-border rounded-sm mb-2.5 p-3 px-4">
+      <div className="bg-surface border border-border/60 rounded-lg shadow-card mb-3 p-3 px-4">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[11px] font-semibold text-text font-sans">Prüffortschritt</span>
           <span className="text-[11px] font-mono text-text-dim">

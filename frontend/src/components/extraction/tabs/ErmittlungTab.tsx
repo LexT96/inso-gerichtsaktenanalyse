@@ -52,7 +52,7 @@ function StatusBadge({ letter }: { letter: Standardanschreiben | undefined }) {
 
   return (
     <div className="flex items-center gap-1.5">
-      <span className={`inline-block px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-wide border font-mono ${style.bg}`}>
+      <span className={`inline-block px-1.5 py-0.5 rounded-md text-[8px] font-bold tracking-wide border font-mono ${style.bg}`}>
         {style.label}
       </span>
       {st === 'bereit' && <span className="text-ie-green text-[9px]">{'\u2713'}</span>}
@@ -195,16 +195,16 @@ export function ErmittlungTab({ ermittlungsergebnisse: e, gutachterbestellung: g
   return (
     <>
       {/* ─── Summary ─── */}
-      <div className="bg-surface border border-border rounded-sm mb-2.5 p-3 px-4 flex flex-wrap items-center gap-3">
-        <div className="flex flex-col items-center px-3 py-1.5 rounded-sm border border-ie-green/30 bg-ie-green/5">
+      <div className="bg-surface border border-border/60 rounded-lg shadow-card mb-3 p-3 px-4 flex flex-wrap items-center gap-3">
+        <div className="flex flex-col items-center px-3 py-1.5 rounded-md border border-ie-green/30 bg-ie-green/5">
           <span className="text-[9px] text-text-dim font-sans">Bereit</span>
           <span className="text-sm font-bold font-mono text-ie-green">{summary.bereit}</span>
         </div>
-        <div className="flex flex-col items-center px-3 py-1.5 rounded-sm border border-ie-amber/30 bg-ie-amber/5">
+        <div className="flex flex-col items-center px-3 py-1.5 rounded-md border border-ie-amber/30 bg-ie-amber/5">
           <span className="text-[9px] text-text-dim font-sans">Fehlt</span>
           <span className="text-sm font-bold font-mono text-ie-amber">{summary.fehlt}</span>
         </div>
-        <div className="flex flex-col items-center px-3 py-1.5 rounded-sm border border-border bg-bg">
+        <div className="flex flex-col items-center px-3 py-1.5 rounded-md border border-border/60 bg-bg">
           <span className="text-[9px] text-text-dim font-sans">Entfaellt</span>
           <span className="text-sm font-bold font-mono text-text-muted">{summary.entfaellt}</span>
         </div>
@@ -215,7 +215,7 @@ export function ErmittlungTab({ ermittlungsergebnisse: e, gutachterbestellung: g
       </div>
 
       {/* ─── Investigation Lines Table ─── */}
-      <div className="bg-surface border border-border rounded-sm overflow-hidden mb-2.5">
+      <div className="bg-surface border border-border/60 rounded-lg shadow-card overflow-hidden mb-3">
         <table className="w-full text-[11px] font-mono">
           <thead>
             <tr className="bg-bg border-b border-border">
@@ -283,7 +283,7 @@ export function ErmittlungTab({ ermittlungsergebnisse: e, gutachterbestellung: g
             const title = typeof m === 'string' ? m : (m.information || m.grund || m.ermittlung_ueber || 'Fehlende Angabe').trim();
             const titleFromGrund = typeof m === 'object' && !m.information?.trim() && m.grund?.trim() === title;
             return (
-              <div key={i} className="p-2.5 px-3 mb-1.5 bg-ie-red-bg border border-ie-red-border rounded-sm">
+              <div key={i} className="p-2.5 px-3 mb-1.5 bg-ie-red-bg border border-ie-red-border rounded-md">
                 <div className="text-xs text-text font-semibold font-sans">{title}</div>
                 {typeof m === 'object' && m.grund && !titleFromGrund && (
                   <div className="text-[10px] text-text-dim mt-0.5">Grund: {m.grund}</div>

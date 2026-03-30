@@ -23,10 +23,10 @@
     background: #9CA3AF;
   }
 
-  /* Header accent line */
+  /* Header accent line — refined gradient fade */
   header {
     border-bottom: 1px solid #E5E7EB;
-    border-image: linear-gradient(to right, #A52A2A 100px, #E5E7EB 100px) 1;
+    border-image: linear-gradient(to right, #A52A2A 60px, #C4625A 120px, #E5E7EB 200px) 1;
   }
 
   /* PDF viewer */

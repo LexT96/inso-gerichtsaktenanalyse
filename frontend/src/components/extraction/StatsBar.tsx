@@ -6,9 +6,9 @@ interface StatsCardProps {
 
 function StatsCard({ label, value, colorClass }: StatsCardProps) {
   return (
-    <div className="bg-surface border border-border rounded-sm py-3.5 px-4 text-center flex-1">
+    <div className="bg-surface border border-border/60 rounded-lg shadow-card py-3.5 px-4 text-center flex-1">
       <div className={`text-2xl font-bold font-mono ${colorClass}`}>{value}</div>
-      <div className="text-[9px] text-text-muted mt-0.5 uppercase tracking-wide">{label}</div>
+      <div className="text-[9px] text-text-muted mt-1 uppercase tracking-wider font-mono">{label}</div>
     </div>
   );
 }

@@ -179,7 +179,7 @@ export function DataField({ label, field, isCurrency, fieldPath, extractionId: e
             <button
               onClick={handleQuelleClick}
               title={pageNum ? `Seite ${pageNum} im PDF anzeigen` : 'Quelle anzeigen'}
-              className={`bg-transparent border rounded text-[8px] px-1.5 py-px cursor-pointer font-mono tracking-wide transition-all hover:scale-105 active:scale-95
+              className={`bg-transparent border rounded-md text-[8px] px-1.5 py-0.5 cursor-pointer font-mono tracking-wide transition-all hover:scale-105 active:scale-95
                 ${isUnverified
                   ? 'border-ie-amber-border text-ie-amber'
                   : pageNum
@@ -202,7 +202,7 @@ export function DataField({ label, field, isCurrency, fieldPath, extractionId: e
         </div>
         {showSrc && q && (
           <div
-            className={`mt-0.5 px-2 py-0.5 bg-bg border rounded-md text-[10px] italic transition-colors
+            className={`mt-1 px-2.5 py-1 bg-bg border rounded-md text-[10px] italic transition-colors
               ${pageNum ? 'border-ie-blue-border text-ie-blue cursor-pointer hover:bg-ie-blue/5' : 'border-border text-accent'}`}
             onClick={() => {
               if (pageNum && totalPages > 0) {

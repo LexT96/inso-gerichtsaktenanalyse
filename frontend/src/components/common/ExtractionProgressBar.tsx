@@ -5,7 +5,7 @@ interface ExtractionProgressBarProps {
 
 export function ExtractionProgressBar({ progress, message }: ExtractionProgressBarProps) {
   return (
-    <div className="mt-3 p-4 bg-surface border border-border rounded-sm">
+    <div className="mt-3 p-4 bg-surface border border-border/60 rounded-lg shadow-card">
       <div className="h-1.5 bg-surface-high rounded-full overflow-hidden">
         <div
           className="h-full bg-accent rounded-full transition-all duration-500 ease-out"
