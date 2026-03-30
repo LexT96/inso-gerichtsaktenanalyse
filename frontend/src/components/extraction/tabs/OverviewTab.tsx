@@ -28,6 +28,37 @@ function crossValidate(r: ExtractionResult): Warnung[] {
     }
   }
 
+  // 1b. Gesicherte + Ungesicherte = Gesamtforderungen?
+  const gesichert = r.forderungen?.gesicherte_forderungen?.wert;
+  const ungesichert = r.forderungen?.ungesicherte_forderungen?.wert;
+  if (gesamtExtrahiert != null && gesichert != null && ungesichert != null && !isNaN(gesichert) && !isNaN(ungesichert)) {
+    const summeGesichertUngesichert = gesichert + ungesichert;
+    if (Math.abs(summeGesichertUngesichert - gesamtExtrahiert) > 1) {
+      warnungen.push({
+        typ: 'warnung',
+        text: `Gesicherte (${EUR.format(gesichert)}) + Ungesicherte (${EUR.format(ungesichert)}) = ${EUR.format(summeGesichertUngesichert)} ≠ Gesamtforderungen (${EUR.format(gesamtExtrahiert)})`,
+      });
+    }
+  }
+
+  // 1c. Einzelforderung-Titel enthält Aufschlüsselung → Summe plausibel?
+  for (const ef of einzelforderungen) {
+    const titel = String(ef.titel?.wert ?? '');
+    const betrag = ef.betrag?.wert;
+    if (!titel || !betrag || betrag <= 0) continue;
+    // Parse EUR amounts from titel (e.g. "SV 5.104,34 + SZ 387,50 + MG 57,50 + AK 216,00")
+    const amounts = titel.match(/[\d.]+,\d{2}/g);
+    if (amounts && amounts.length >= 2) {
+      const titelSumme = amounts.reduce((s, a) => s + parseFloat(a.replace(/\./g, '').replace(',', '.')), 0);
+      if (titelSumme > 0 && Math.abs(titelSumme - betrag) > 1) {
+        warnungen.push({
+          typ: 'warnung',
+          text: `Forderung ${ef.glaeubiger?.wert || '?'}: Aufschlüsselung im Titel ergibt ${EUR.format(titelSumme)}, Gesamtbetrag ist ${EUR.format(betrag)} — Differenz: ${EUR.format(Math.abs(titelSumme - betrag))}`,
+        });
+      }
+    }
+  }
+
   // 2. Summe Aktiva vs Summe Positionen
   const positionen = r.aktiva?.positionen ?? [];
   const summeAktivaExtrahiert = r.aktiva?.summe_aktiva?.wert;
