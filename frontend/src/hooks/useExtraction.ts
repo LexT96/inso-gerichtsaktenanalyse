@@ -137,8 +137,9 @@ export function useExtraction() {
   const resumeIfProcessing = useCallback(async () => {
     try {
       const { data: items } = await apiClient.get('/history');
-      const processing = (items as Array<{ id: number; status: string; filename: string }>)
-        .find(item => item.status === 'processing');
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const processing = (items as Array<{ id: number; status: string; filename: string; createdAt: string }>)
+        .find(item => item.status === 'processing' && item.createdAt > tenMinutesAgo);
 
       if (!processing) return false;
 
