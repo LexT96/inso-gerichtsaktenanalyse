@@ -122,7 +122,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
           req.user = payload;
           next();
         } catch {
-          logger.debug('Token-Validierung fehlgeschlagen', { entraError: String(entraErr) });
+          logger.error('Token-Validierung fehlgeschlagen', { entraError: String(entraErr), localError: 'fallback failed' });
           res.status(401).json({ error: 'Ungültiges oder abgelaufenes Token' });
         }
       });
