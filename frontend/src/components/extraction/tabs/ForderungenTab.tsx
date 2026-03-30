@@ -168,7 +168,15 @@ export function ForderungenTab({ forderungen: f }: ForderungenTabProps) {
               <td className="py-2.5 px-2 text-right text-xs font-bold text-ie-red whitespace-nowrap">
                 {EUR.format(gesamtVal ?? computedTotal)}
               </td>
-              <td colSpan={2} />
+              <td />
+              <td className="py-2.5 px-2 text-center">
+                {f?.gesamtforderungen?.quelle && (
+                  <QuelleButton
+                    quelle={f.gesamtforderungen.quelle}
+                    searchText={(gesamtVal ?? computedTotal).toLocaleString('de-DE', { minimumFractionDigits: 2 })}
+                  />
+                )}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -351,12 +359,20 @@ function ArbeitnehmerSection({ arbeitnehmer }: { arbeitnehmer: Forderungen['betr
         if (a && typeof a === 'object') {
           const o = a as Record<string, unknown>;
           if ('anzahl' in o && 'typ' in o) {
+            const quelleStr = String(o.quelle ?? '');
             return (
-              <div key={i} className="py-1.5 border-b border-border text-[11px] text-text-dim">
-                <span className="font-mono text-ie-blue">{String(o.anzahl ?? '')}</span>
-                {' \u00d7 '}
-                {String(o.typ ?? '')}
-                {o.quelle ? <span className="text-[10px] text-text-muted italic"> ({String(o.quelle)})</span> : null}
+              <div key={i} className="flex items-center gap-2 py-1.5 border-b border-border text-[11px] text-text-dim">
+                <span className="flex-1">
+                  <span className="font-mono text-ie-blue">{String(o.anzahl ?? '')}</span>
+                  {' \u00d7 '}
+                  {String(o.typ ?? '')}
+                </span>
+                {quelleStr && (
+                  <QuelleButton
+                    quelle={quelleStr}
+                    searchText={String(o.anzahl ?? '')}
+                  />
+                )}
               </div>
             );
           }
