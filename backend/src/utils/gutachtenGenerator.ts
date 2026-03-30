@@ -5,8 +5,7 @@ import type { ExtractionResult } from '../types/extraction';
 import { extractSlots, fillSlots, applySlots, type GutachtenSlot, type SlotInfo } from './gutachtenSlotFiller';
 
 // __dirname at runtime = dist/utils/ or src/utils/ — 3 levels up = project root
-const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
-const TEMPLATES_DIR = path.join(PROJECT_ROOT, 'gutachtenvorlagen');
+const TEMPLATES_DIR = path.resolve(process.cwd(), 'gutachtenvorlagen');
 const MAPPING_PATH = path.join(TEMPLATES_DIR, 'gutachten-mapping.json');
 
 // --- Types ---
