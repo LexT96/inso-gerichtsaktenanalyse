@@ -47,15 +47,28 @@ async function start(): Promise<void> {
   // Initialize DB
   initDatabase(config.DATABASE_PATH);
 
-  // Seed admin user if not exists
+  // Seed admin user if not exists (only in local auth mode)
   const db = getDb();
-  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(config.DEFAULT_ADMIN_USERNAME);
-  if (!existing) {
-    const hash = await bcrypt.hash(config.DEFAULT_ADMIN_PASSWORD, 12);
-    db.prepare(
-      'INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)'
-    ).run(config.DEFAULT_ADMIN_USERNAME, hash, 'Administrator', 'admin');
-    logger.info(`Admin-Benutzer "${config.DEFAULT_ADMIN_USERNAME}" erstellt`);
+
+  // Add azure_oid column if it doesn't exist (for Entra ID SSO support)
+  try {
+    db.prepare("SELECT azure_oid FROM users LIMIT 1").get();
+  } catch {
+    db.prepare("ALTER TABLE users ADD COLUMN azure_oid TEXT").run();
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_azure_oid ON users(azure_oid) WHERE azure_oid IS NOT NULL").run();
+    logger.info('Spalte azure_oid zu users-Tabelle hinzugefuegt');
+  }
+
+  const isEntraEnabled = Boolean(config.AZURE_TENANT_ID && config.AZURE_CLIENT_ID);
+  if (!isEntraEnabled && config.DEFAULT_ADMIN_PASSWORD) {
+    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(config.DEFAULT_ADMIN_USERNAME);
+    if (!existing) {
+      const hash = await bcrypt.hash(config.DEFAULT_ADMIN_PASSWORD, 12);
+      db.prepare(
+        'INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)'
+      ).run(config.DEFAULT_ADMIN_USERNAME, hash, 'Administrator', 'admin');
+      logger.info(`Admin-Benutzer "${config.DEFAULT_ADMIN_USERNAME}" erstellt`);
+    }
   }
 
   // Encrypt any legacy unencrypted result_json rows

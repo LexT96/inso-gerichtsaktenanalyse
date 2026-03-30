@@ -8,10 +8,10 @@ export function LoginPage() {
   const [err, setErr] = useState('');
   const [shake, setShake] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, loginWithEntra, authMode } = useAuth();
   const navigate = useNavigate();
 
-  const submit = async () => {
+  const submitLocal = async () => {
     if (!user || !pass) return;
     setLoading(true);
     setErr('');
@@ -20,6 +20,21 @@ export function LoginPage() {
       navigate('/dashboard');
     } catch {
       setErr('Ungültige Anmeldedaten');
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitEntra = async () => {
+    setLoading(true);
+    setErr('');
+    try {
+      await loginWithEntra();
+      navigate('/dashboard');
+    } catch {
+      setErr('Microsoft-Anmeldung fehlgeschlagen');
       setShake(true);
       setTimeout(() => setShake(false), 500);
     } finally {
@@ -55,53 +70,92 @@ export function LoginPage() {
           </div>
         </div>
 
-        {/* Form */}
+        {/* Auth forms */}
         <div className="px-10 py-8">
-          <div className="mb-4">
-            <label className="text-[9px] text-text-dim uppercase tracking-[2px] block mb-1.5 font-mono">
-              Benutzer
-            </label>
-            <input
-              value={user}
-              onChange={e => { setUser(e.target.value); setErr(''); }}
-              onKeyDown={e => e.key === 'Enter' && submit()}
-              placeholder="benutzername"
-              className="w-full p-2.5 px-3 bg-bg border border-border rounded-md text-text text-[12px] font-mono box-border"
-            />
-          </div>
+          {authMode === 'entra' ? (
+            <>
+              {/* Microsoft SSO login */}
+              <div className="text-center mb-6">
+                <div className="text-[11px] text-text-dim mb-1 font-mono">
+                  Anmeldung über Microsoft 365
+                </div>
+              </div>
 
-          <div className="mb-6">
-            <label className="text-[9px] text-text-dim uppercase tracking-[2px] block mb-1.5 font-mono">
-              Passwort
-            </label>
-            <input
-              type="password"
-              value={pass}
-              onChange={e => { setPass(e.target.value); setErr(''); }}
-              onKeyDown={e => e.key === 'Enter' && submit()}
-              placeholder="••••••••"
-              className="w-full p-2.5 px-3 bg-bg border border-border rounded-md text-text text-[12px] font-mono box-border"
-            />
-          </div>
+              {err && (
+                <div className="p-2 px-3 mb-4 bg-ie-red-bg border border-ie-red-border rounded-md text-ie-red text-[10px] font-mono">
+                  {err}
+                </div>
+              )}
 
-          {err && (
-            <div className="p-2 px-3 mb-4 bg-ie-red-bg border border-ie-red-border rounded-md text-ie-red text-[10px] font-mono">
-              {err}
+              <button
+                onClick={submitEntra}
+                disabled={loading}
+                className="w-full py-2.5 bg-accent border-none rounded-md text-white text-[10px] font-bold font-mono cursor-pointer tracking-[2px] uppercase hover:brightness-110 disabled:opacity-60 transition-all flex items-center justify-center gap-2"
+              >
+                <svg width="16" height="16" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                  <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                  <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                  <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                  <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                </svg>
+                {loading ? 'Anmelden...' : 'Mit Microsoft anmelden'}
+              </button>
+            </>
+          ) : authMode === 'local' ? (
+            <>
+              {/* Local username/password login */}
+              <div className="mb-4">
+                <label className="text-[9px] text-text-dim uppercase tracking-[2px] block mb-1.5 font-mono">
+                  Benutzer
+                </label>
+                <input
+                  value={user}
+                  onChange={e => { setUser(e.target.value); setErr(''); }}
+                  onKeyDown={e => e.key === 'Enter' && submitLocal()}
+                  placeholder="benutzername"
+                  className="w-full p-2.5 px-3 bg-bg border border-border rounded-md text-text text-[12px] font-mono box-border"
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="text-[9px] text-text-dim uppercase tracking-[2px] block mb-1.5 font-mono">
+                  Passwort
+                </label>
+                <input
+                  type="password"
+                  value={pass}
+                  onChange={e => { setPass(e.target.value); setErr(''); }}
+                  onKeyDown={e => e.key === 'Enter' && submitLocal()}
+                  placeholder="••••••••"
+                  className="w-full p-2.5 px-3 bg-bg border border-border rounded-md text-text text-[12px] font-mono box-border"
+                />
+              </div>
+
+              {err && (
+                <div className="p-2 px-3 mb-4 bg-ie-red-bg border border-ie-red-border rounded-md text-ie-red text-[10px] font-mono">
+                  {err}
+                </div>
+              )}
+
+              <button
+                onClick={submitLocal}
+                disabled={loading}
+                className="w-full py-2.5 bg-accent border-none rounded-md text-white text-[10px] font-bold font-mono cursor-pointer tracking-[2px] uppercase hover:brightness-110 disabled:opacity-60 transition-all"
+              >
+                {loading ? 'Anmelden...' : 'Anmelden'}
+              </button>
+            </>
+          ) : (
+            /* Loading state while detecting auth mode */
+            <div className="flex justify-center py-4">
+              <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin-fast" />
             </div>
           )}
-
-          <button
-            onClick={submit}
-            disabled={loading}
-            className="w-full py-2.5 bg-accent border-none rounded-md text-white text-[10px] font-bold font-mono cursor-pointer tracking-[2px] uppercase hover:brightness-110 disabled:opacity-60 transition-all"
-          >
-            {loading ? 'Anmelden…' : 'Anmelden'}
-          </button>
         </div>
 
         {/* Legal footer */}
         <div className="px-10 py-4 border-t border-border text-center text-[8px] text-text-muted leading-relaxed font-mono tracking-wide">
-          § 43a BRAO &middot; § 2 BORA &middot; Art. 28 DSGVO<br />
+          &sect; 43a BRAO &middot; &sect; 2 BORA &middot; Art. 28 DSGVO<br />
           Alle Daten verbleiben innerhalb der EU
         </div>
       </div>

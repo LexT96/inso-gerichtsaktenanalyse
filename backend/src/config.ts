@@ -9,7 +9,7 @@ const envSchema = z.object({
   UPLOAD_MAX_SIZE_MB: z.coerce.number().default(50),
   RATE_LIMIT_EXTRACTIONS_PER_HOUR: z.coerce.number().default(10),
   DEFAULT_ADMIN_USERNAME: z.string().default('admin'),
-  DEFAULT_ADMIN_PASSWORD: z.string().min(1, 'DEFAULT_ADMIN_PASSWORD ist erforderlich'),
+  DEFAULT_ADMIN_PASSWORD: z.string().default(''),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   PORT: z.coerce.number().default(3004),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
@@ -25,6 +25,9 @@ const envSchema = z.object({
   ),
   DATA_RETENTION_HOURS: z.coerce.number().default(72),
   DB_ENCRYPTION_KEY: z.string().min(32, 'DB_ENCRYPTION_KEY muss mindestens 32 Zeichen haben (256-bit Hex empfohlen)'),
+  // Azure Entra ID (optional — if set, enables SSO; if not set, falls back to local password auth)
+  AZURE_TENANT_ID: z.string().optional(),
+  AZURE_CLIENT_ID: z.string().optional(),
 });
 
 function loadConfig() {

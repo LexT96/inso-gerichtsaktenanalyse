@@ -1,5 +1,8 @@
 import { createContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { useMsal, useIsAuthenticated } from '@azure/msal-react';
+import { InteractionRequiredAuthError } from '@azure/msal-browser';
 import { apiClient } from '../api/client';
+import { loginRequest } from '../auth/msalConfig';
 
 interface User {
   id: number;
@@ -8,26 +11,82 @@ interface User {
   role: string;
 }
 
+type AuthMode = 'local' | 'entra' | null;
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  authMode: AuthMode;
   login: (username: string, password: string) => Promise<void>;
+  loginWithEntra: () => Promise<void>;
   logout: () => void;
 }
 
 export const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  authMode: null,
   login: async () => {},
+  loginWithEntra: async () => {},
   logout: () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authMode, setAuthMode] = useState<AuthMode>(null);
+  const { instance, accounts } = useMsal();
+  const isEntraAuthenticated = useIsAuthenticated();
 
+  // Detect auth mode from backend
   useEffect(() => {
-    // Try to restore session by checking if cookies are still valid
+    apiClient.get('/auth/mode')
+      .then(({ data }) => {
+        setAuthMode(data.mode as AuthMode);
+      })
+      .catch(() => {
+        // Fallback to local if mode endpoint not available
+        setAuthMode('local');
+      });
+  }, []);
+
+  // Entra ID: after MSAL reports authenticated, fetch user from backend /auth/me
+  useEffect(() => {
+    if (authMode !== 'entra') return;
+    if (!isEntraAuthenticated || accounts.length === 0) {
+      setLoading(false);
+      return;
+    }
+
+    // Acquire token silently, then call /auth/me
+    (async () => {
+      try {
+        const tokenResponse = await instance.acquireTokenSilent({
+          scopes: loginRequest.scopes,
+          account: accounts[0],
+        });
+        // Set token for the /auth/me request
+        const { data } = await apiClient.get('/auth/me', {
+          headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
+        });
+        setUser(data.user);
+      } catch (err) {
+        if (err instanceof InteractionRequiredAuthError) {
+          // Token expired, user needs to re-authenticate
+          setUser(null);
+        } else {
+          console.error('Fehler beim Laden des Benutzers:', err);
+          setUser(null);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [authMode, isEntraAuthenticated, accounts, instance]);
+
+  // Local auth: restore session from localStorage
+  useEffect(() => {
+    if (authMode !== 'local') return;
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       try {
@@ -37,15 +96,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     setLoading(false);
-  }, []);
+  }, [authMode]);
 
+  // Still loading while we don't know the auth mode
+  useEffect(() => {
+    if (authMode === null) {
+      setLoading(true);
+    }
+  }, [authMode]);
+
+  // Local auth: username/password login
   const login = useCallback(async (username: string, password: string) => {
     const { data } = await apiClient.post('/auth/login', { username, password });
-    // Tokens are now set as HTTP-only cookies by the server
-    // Only store non-sensitive user info in localStorage
     localStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);
   }, []);
+
+  // Entra ID: popup login
+  const loginWithEntra = useCallback(async () => {
+    const response = await instance.loginPopup(loginRequest);
+    if (response.account) {
+      // Fetch user profile from backend
+      const tokenResponse = await instance.acquireTokenSilent({
+        scopes: loginRequest.scopes,
+        account: response.account,
+      });
+      const { data } = await apiClient.get('/auth/me', {
+        headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
+      });
+      setUser(data.user);
+    }
+  }, [instance]);
 
   const logout = useCallback(async () => {
     try {
@@ -53,12 +134,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Best-effort logout
     }
+
+    if (authMode === 'entra') {
+      try {
+        await instance.logoutPopup();
+      } catch {
+        // Best-effort MSAL logout
+      }
+    }
+
     localStorage.removeItem('user');
     setUser(null);
-  }, []);
+  }, [authMode, instance]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, authMode, login, loginWithEntra, logout }}>
       {children}
     </AuthContext.Provider>
   );

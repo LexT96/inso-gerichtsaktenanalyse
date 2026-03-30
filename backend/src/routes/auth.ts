@@ -7,9 +7,49 @@ import { getDb } from '../db/database';
 import { loginSchema } from '../utils/validation';
 import { logger } from '../utils/logger';
 import { authRateLimit } from '../middleware/rateLimit';
+import { authMiddleware } from '../middleware/auth';
 import type { JwtPayload } from '../types/api';
 
 const router = Router();
+
+const isEntraEnabled = (): boolean =>
+  Boolean(config.AZURE_TENANT_ID && config.AZURE_CLIENT_ID);
+
+// ─── Auth mode endpoint — tells the frontend which login flow to use ───
+
+router.get('/mode', (_req: Request, res: Response): void => {
+  res.json({ mode: isEntraEnabled() ? 'entra' : 'local' });
+});
+
+// ─── /auth/me — returns the current user from token (works for both Entra and local) ───
+
+router.get('/me', authMiddleware, (req: Request, res: Response): void => {
+  if (!req.user) {
+    res.status(401).json({ error: 'Nicht authentifiziert' });
+    return;
+  }
+
+  const db = getDb();
+  const user = db.prepare(
+    'SELECT id, username, display_name, role FROM users WHERE id = ?'
+  ).get(req.user.userId) as { id: number; username: string; display_name: string; role: string } | undefined;
+
+  if (!user) {
+    res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    return;
+  }
+
+  res.json({
+    user: {
+      id: user.id,
+      username: user.username,
+      displayName: user.display_name,
+      role: user.role,
+    },
+  });
+});
+
+// ─── Local auth routes (only active when Entra ID is NOT configured) ───
 
 function parseExpiry(expiry: string): number {
   const match = expiry.match(/^(\d+)([mhd])$/);
@@ -44,6 +84,12 @@ function clearAuthCookies(res: Response): void {
 }
 
 router.post('/login', authRateLimit, async (req: Request, res: Response): Promise<void> => {
+  // In Entra mode, local login is disabled
+  if (isEntraEnabled()) {
+    res.status(400).json({ error: 'Lokale Anmeldung ist deaktiviert. Bitte Microsoft SSO verwenden.' });
+    return;
+  }
+
   try {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -109,6 +155,12 @@ router.post('/login', authRateLimit, async (req: Request, res: Response): Promis
 });
 
 router.post('/refresh', (req: Request, res: Response): void => {
+  // In Entra mode, token refresh is handled by MSAL
+  if (isEntraEnabled()) {
+    res.status(400).json({ error: 'Token-Refresh wird von Microsoft SSO verwaltet.' });
+    return;
+  }
+
   const refreshTokenValue = req.cookies?.refreshToken;
   if (!refreshTokenValue) {
     res.status(400).json({ error: 'Refresh Token erforderlich' });
@@ -157,10 +209,13 @@ router.post('/refresh', (req: Request, res: Response): void => {
 });
 
 router.post('/logout', (req: Request, res: Response): void => {
-  const refreshTokenValue = req.cookies?.refreshToken;
-  if (refreshTokenValue) {
-    const db = getDb();
-    db.prepare('DELETE FROM refresh_tokens WHERE token = ?').run(refreshTokenValue);
+  if (!isEntraEnabled()) {
+    // Local auth: clean up refresh tokens
+    const refreshTokenValue = req.cookies?.refreshToken;
+    if (refreshTokenValue) {
+      const db = getDb();
+      db.prepare('DELETE FROM refresh_tokens WHERE token = ?').run(refreshTokenValue);
+    }
   }
   clearAuthCookies(res);
   res.json({ ok: true });
