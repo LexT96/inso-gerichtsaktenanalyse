@@ -102,7 +102,7 @@ export function DashboardPage() {
   const [file, setFile] = useState<File | null>(null);
   const [tab, setTab] = useState('overview');
   const [proMode, setProMode] = useState(false);
-  const { loading, progress, progressPercent, result, error, extractionId, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField } = useExtraction();
+  const { loading, progress, progressPercent, result, error, extractionId, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField, resumeIfProcessing } = useExtraction();
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importedFilename, setImportedFilename] = useState<string | null>(null);
@@ -129,6 +129,14 @@ export function DashboardPage() {
     setTab('overview');
     navigate('/dashboard');
   }, [reset, navigate]);
+
+  // On mount: check if an extraction is still processing (e.g. after tab refresh)
+  useEffect(() => {
+    if (!historyId && !result && !loading) {
+      resumeIfProcessing();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (historyId && !loading) {

@@ -132,6 +132,66 @@ export function useExtraction() {
     }
   }, []);
 
+  // Resume: check if an extraction is still processing (e.g. after tab refresh)
+  // Polls history every 3s until it completes or fails
+  const resumeIfProcessing = useCallback(async () => {
+    try {
+      const { data: items } = await apiClient.get('/history');
+      const processing = (items as Array<{ id: number; status: string; filename: string }>)
+        .find(item => item.status === 'processing');
+
+      if (!processing) return false;
+
+      // Found an in-progress extraction — show progress and poll
+      setState(s => ({
+        ...s,
+        loading: true,
+        progress: 'Extraktion läuft im Hintergrund — warte auf Ergebnis…',
+        progressPercent: 50,
+        error: null,
+      }));
+
+      const pollInterval = setInterval(async () => {
+        try {
+          const { data: updated } = await apiClient.get(`/history/${processing.id}`);
+          if (updated.status === 'completed' && updated.result) {
+            clearInterval(pollInterval);
+            const result = updated.result as ExtractionResult;
+            result.standardanschreiben = recomputeLetterStatuses(result);
+            setState({
+              loading: false,
+              progress: '',
+              progressPercent: 100,
+              result,
+              error: null,
+              extractionId: processing.id,
+              statsFound: updated.statsFound ?? 0,
+              statsMissing: updated.statsMissing ?? 0,
+              statsLettersReady: updated.statsLettersReady ?? 0,
+              processingTimeMs: updated.processingTimeMs ?? null,
+            });
+          } else if (updated.status === 'failed') {
+            clearInterval(pollInterval);
+            setState(s => ({
+              ...s,
+              loading: false,
+              progress: '',
+              progressPercent: 0,
+              error: 'Extraktion fehlgeschlagen.',
+            }));
+          }
+          // else: still processing, keep polling
+        } catch {
+          clearInterval(pollInterval);
+        }
+      }, 3000);
+
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const reset = useCallback(() => {
     abortRef.current?.abort();
     setState({
@@ -282,5 +342,5 @@ export function useExtraction() {
     }
   }, [state.result, state.extractionId]);
 
-  return { ...state, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField };
+  return { ...state, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField, resumeIfProcessing };
 }
