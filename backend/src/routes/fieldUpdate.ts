@@ -8,20 +8,10 @@ import type { Pruefstatus } from '../types/extraction';
 const router = Router();
 
 /**
- * Whitelist of field paths that can be updated via this endpoint.
- * These are the 9 fields required by the standard letters.
+ * Any SourcedValue field path is allowed for editing.
+ * Validation: path must resolve to an object with 'wert' key in the result.
+ * All corrections feed into the few-shot learning loop.
  */
-const ALLOWED_FIELDS = new Set([
-  'verfahrensdaten.aktenzeichen',
-  'verfahrensdaten.gericht',
-  'schuldner.name',
-  'schuldner.vorname',
-  'schuldner.geburtsdatum',
-  'schuldner.aktuelle_adresse',
-  'schuldner.handelsregisternummer',
-  'schuldner.firma',
-  'schuldner.betriebsstaette_adresse',
-]);
 
 const VALID_PRUEFSTATUS = new Set<Pruefstatus>(['bestaetigt', 'korrigiert', 'manuell']);
 
@@ -42,8 +32,8 @@ router.patch('/:id/fields', authMiddleware, (req: Request, res: Response): void 
     pruefstatus: Pruefstatus;
   };
 
-  if (!fieldPath || !ALLOWED_FIELDS.has(fieldPath)) {
-    res.status(400).json({ error: `Ungültiger Feldpfad: ${fieldPath}` });
+  if (!fieldPath || typeof fieldPath !== 'string' || fieldPath.length > 200) {
+    res.status(400).json({ error: 'Ungültiger Feldpfad' });
     return;
   }
 

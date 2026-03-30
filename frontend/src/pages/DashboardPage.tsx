@@ -19,6 +19,7 @@ import { AktivaTab } from '../components/extraction/tabs/AktivaTab';
 import { AnfechtungTab } from '../components/extraction/tabs/AnfechtungTab';
 import { GutachtenTab } from '../components/extraction/tabs/GutachtenTab';
 import { useExtraction } from '../hooks/useExtraction';
+import { ExtractionProvider } from '../contexts/ExtractionContext';
 import { HistoryPanel } from '../components/dashboard/HistoryPanel';
 import type { ExtractionResult } from '../types/extraction';
 
@@ -198,6 +199,7 @@ export function DashboardPage() {
 
   // ─── Results content (used in both layouts) ───
   const resultsContent = result && (
+    <ExtractionProvider value={{ extractionId }}>
     <div className="animate-fade-up-fast">
       <TabNavigation
         tabs={tabs}
@@ -251,6 +253,7 @@ export function DashboardPage() {
         <span className="text-ie-blue"> [S.X]</span>-Buttons zeigen die Quellenreferenz und navigieren zur Seite im PDF.
       </div>
     </div>
+    </ExtractionProvider>
   );
 
   return (
