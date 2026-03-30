@@ -353,6 +353,7 @@ function preFillSlots(
   const matchers = buildPreFillMatchers();
   const filled = new Map<string, { value: string; hint: string }>();
 
+  // Phase 1: Pattern-based matching
   for (const slot of slots) {
     const ctx = (slot.context + ' ' + slot.original).toLowerCase();
     for (const matcher of matchers) {
@@ -366,7 +367,234 @@ function preFillSlots(
     }
   }
 
+  // Phase 2: Sequential filling for positional slots (aktiva rows, EUR amounts)
+  fillSequentialSlots(slots, result, filled);
+
+  // Phase 3: Table slots
+  fillTableSlots(slots, result, filled);
+
+  // Phase 4: Calculated financial slots
+  fillCalculatedSlots(slots, result, filled);
+
   return filled;
+}
+
+/** Fill positional slots that appear in sequence (e.g. multiple "Betrag EUR" slots) */
+function fillSequentialSlots(
+  slots: SlotInfo[],
+  result: ExtractionResult,
+  filled: Map<string, { value: string; hint: string }>
+): void {
+  const positionen = result.aktiva?.positionen ?? [];
+  if (positionen.length === 0) return;
+
+  // Find consecutive "Betrag...EUR" slots that aren't filled yet
+  const eurSlots = slots.filter(s =>
+    !filled.has(s.id) &&
+    /betrag.*eur|eur.*betrag|\[\[SLOT_\d+\]\]\s*EUR/i.test(s.context) &&
+    !/verfahrenskosten|masse.*position|passiva/i.test(s.context)
+  );
+
+  // Assign aktiva values in order
+  let posIdx = 0;
+  for (const slot of eurSlots) {
+    if (posIdx >= positionen.length) break;
+    const wert = sn(positionen[posIdx].geschaetzter_wert);
+    if (wert != null) {
+      filled.set(slot.id, {
+        value: formatEUR(wert),
+        hint: String(positionen[posIdx].beschreibung?.wert || positionen[posIdx].kategorie),
+      });
+    }
+    posIdx++;
+  }
+
+  // Find "Aktiva-Position Beschreibung" slots
+  const aktivaDescSlots = slots.filter(s =>
+    !filled.has(s.id) &&
+    /aktiva.{0,5}position.*beschreibung|beschreibung.*betrag/i.test(s.context)
+  );
+
+  posIdx = 0;
+  for (const slot of aktivaDescSlots) {
+    if (posIdx >= positionen.length) break;
+    const p = positionen[posIdx];
+    const wert = sn(p.geschaetzter_wert);
+    filled.set(slot.id, {
+      value: `${sv(p.beschreibung) || p.kategorie}: ${wert != null ? formatEUR(wert) : 'k.A.'}`,
+      hint: `Aktivum ${posIdx + 1}`,
+    });
+    posIdx++;
+  }
+}
+
+/** Fill table-type slots with formatted lists */
+function fillTableSlots(
+  slots: SlotInfo[],
+  result: ExtractionResult,
+  filled: Map<string, { value: string; hint: string }>
+): void {
+  for (const slot of slots) {
+    if (filled.has(slot.id)) continue;
+    const ctx = (slot.context + ' ' + slot.original).toLowerCase();
+
+    // Insolvenzforderungen table
+    if (/tabelle.*insolvenzforderung|angemeldete.*forderung.*tabelle/i.test(ctx)) {
+      const ef = result.forderungen?.einzelforderungen?.filter(f => f.rang === '§38 Insolvenzforderung');
+      if (ef?.length) {
+        const lines = ef.map(f => {
+          const b = sn(f.betrag);
+          return `${sv(f.glaeubiger) || 'k.A.'} (${f.art}): ${b != null ? formatEUR(b) : 'k.A.'}`;
+        });
+        const total = ef.reduce((s, f) => s + (sn(f.betrag) || 0), 0);
+        lines.push(`Gesamt: ${formatEUR(total)}`);
+        filled.set(slot.id, { value: lines.join('\n'), hint: 'Insolvenzforderungen' });
+      }
+    }
+
+    // Masseforderungen table
+    if (/tabelle.*masseforderung|masse.*55/i.test(ctx)) {
+      const ef = result.forderungen?.einzelforderungen?.filter(f => f.rang === 'Masseforderung §55');
+      if (ef?.length) {
+        const lines = ef.map(f => {
+          const b = sn(f.betrag);
+          return `${sv(f.glaeubiger) || 'k.A.'}: ${b != null ? formatEUR(b) : 'k.A.'}`;
+        });
+        filled.set(slot.id, { value: lines.join('\n'), hint: 'Masseforderungen' });
+      } else {
+        filled.set(slot.id, { value: 'Masseforderungen liegen derzeit nicht vor.', hint: 'Masseforderungen' });
+      }
+    }
+
+    // Absonderung table
+    if (/tabelle.*absonderung|absonderung.*gl.{0,5}ubiger.*sicherheit/i.test(ctx)) {
+      const ef = result.forderungen?.einzelforderungen?.filter(f => f.sicherheit && f.sicherheit.absonderungsberechtigt);
+      if (ef?.length) {
+        const lines = ef.map(f => {
+          const b = sn(f.betrag);
+          return `${sv(f.glaeubiger) || 'k.A.'} — ${f.sicherheit!.art}: ${b != null ? formatEUR(b) : 'k.A.'}`;
+        });
+        filled.set(slot.id, { value: lines.join('\n'), hint: 'Absonderungsrechte' });
+      } else {
+        filled.set(slot.id, { value: 'Absonderungsrechte bestehen nach derzeitigem Erkenntnisstand nicht.', hint: 'Absonderungsrechte' });
+      }
+    }
+
+    // Anfechtung overview
+    if (/anfechtung.*129|129.*anfechtung|anfechtungsanspr/i.test(ctx)) {
+      const vorgaenge = result.anfechtung?.vorgaenge;
+      if (vorgaenge?.length) {
+        const lines = vorgaenge.map(v => {
+          const b = sn(v.betrag);
+          return `${sv(v.beschreibung) || 'k.A.'} (${v.grundlage}, ${v.risiko}): ${b != null ? formatEUR(b) : 'k.A.'}`;
+        });
+        filled.set(slot.id, { value: lines.join('\n'), hint: 'Anfechtbare Vorgaenge' });
+      }
+    }
+
+    // Fortführungsaussichten / Sanierung
+    if (/fortf.{0,5}hrung.*aussicht|beurteilung.*fortf|sanierung.*perspektive/i.test(ctx)) {
+      const ia = result.aktiva?.insolvenzanalyse;
+      if (ia?.gesamtbewertung) {
+        filled.set(slot.id, { value: ia.gesamtbewertung, hint: 'Fortfuehrungsaussichten' });
+      }
+    }
+  }
+}
+
+/** Fill slots with calculated financial values */
+function fillCalculatedSlots(
+  slots: SlotInfo[],
+  result: ExtractionResult,
+  filled: Map<string, { value: string; hint: string }>
+): void {
+  const summeAktiva = sn(result.aktiva?.summe_aktiva);
+  const massekosten = sn(result.aktiva?.massekosten_schaetzung);
+  const gesamtforderungen = sn(result.forderungen?.gesamtforderungen);
+  const anfechtung = sn(result.anfechtung?.gesamtpotenzial);
+
+  // Compute summe from positionen if not set
+  const positionenSumme = (result.aktiva?.positionen ?? [])
+    .reduce((s, p) => s + (sn(p.geschaetzter_wert) || 0), 0);
+  const computedSumme = summeAktiva ?? (positionenSumme > 0 ? positionenSumme : null);
+
+  // Compute freie Masse
+  const freieMasse = computedSumme != null && massekosten != null
+    ? computedSumme - massekosten : null;
+
+  for (const slot of slots) {
+    if (filled.has(slot.id)) continue;
+    const ctx = (slot.context + ' ' + slot.original).toLowerCase();
+
+    // Freies Vermögen / Insolvenzmasse
+    if (/freies.*verm.{0,5}gen.*eur|insolvenzmasse.*eur|masse.*bestand.*eur/i.test(ctx)) {
+      if (computedSumme != null) {
+        filled.set(slot.id, { value: formatEUR(computedSumme), hint: 'Aktiva/Insolvenzmasse' });
+      }
+    }
+
+    // Insolvenzspezifische Ansprüche / Anfechtungspotenzial EUR
+    if (/insolvenzspezifisch.*anspr.*eur|realisierbar.*eur|mindestens.*eur.*realisier/i.test(ctx)) {
+      if (anfechtung != null) {
+        filled.set(slot.id, { value: formatEUR(anfechtung), hint: 'Anfechtungspotenzial' });
+      } else if (computedSumme != null) {
+        filled.set(slot.id, { value: formatEUR(computedSumme), hint: 'Realisierbare Masse' });
+      }
+    }
+
+    // Verfahrenskosten gesamt
+    if (/verfahrenskosten.*von.*eur/i.test(ctx)) {
+      if (massekosten != null) {
+        filled.set(slot.id, { value: formatEUR(massekosten), hint: 'Verfahrenskosten' });
+      }
+    }
+
+    // Passiva / Verbindlichkeiten Betrag
+    if (/passiva.*eur|verbindlichkeit.*eur/i.test(ctx)) {
+      if (gesamtforderungen != null) {
+        filled.set(slot.id, { value: formatEUR(gesamtforderungen), hint: 'Verbindlichkeiten' });
+      }
+    }
+
+    // Forderungen aus Lieferung und Leistung
+    if (/forderungen.*lieferung.*leistung/i.test(ctx) && !/stand/i.test(slot.original)) {
+      const pos = result.aktiva?.positionen?.find(p => p.kategorie === 'forderungen_schuldner');
+      if (pos) {
+        const wert = sn(pos.geschaetzter_wert);
+        if (wert != null) filled.set(slot.id, { value: formatEUR(wert), hint: 'Forderungen LuL' });
+      }
+    }
+
+    // Bankguthaben
+    if (/bankguthaben|kontostand/i.test(ctx) && !/stand/i.test(slot.original)) {
+      const pos = result.aktiva?.positionen?.find(p => p.kategorie === 'bankguthaben');
+      if (pos) {
+        const wert = sn(pos.geschaetzter_wert);
+        if (wert != null) filled.set(slot.id, { value: formatEUR(wert), hint: 'Bankguthaben' });
+      }
+    }
+
+    // Eröffnungsvoraussetzungen / Zahlungsunfähigkeit Prüfung
+    if (/er.{0,3}ffnungsvoraussetzung|zahlungsunf.{0,5}higkeit.*masse/i.test(ctx)) {
+      const ia = result.aktiva?.insolvenzanalyse;
+      if (ia) {
+        const parts: string[] = [];
+        if (ia.zahlungsunfaehigkeit_17?.status === 'ja') {
+          parts.push(`Zahlungsunfähigkeit gem. § 17 InsO liegt vor: ${ia.zahlungsunfaehigkeit_17.begruendung}`);
+        }
+        if (ia.massekostendeckung_26?.status === 'ja') {
+          parts.push(`Massedeckung gem. § 26 InsO ist gewährleistet: ${ia.massekostendeckung_26.begruendung}`);
+        }
+        if (ia.ueberschuldung_19) {
+          const ue = ia.ueberschuldung_19;
+          parts.push(`Überschuldung gem. § 19 InsO: ${ue.status === 'ja' ? 'liegt vor' : ue.status === 'offen' ? 'noch offen' : 'liegt nicht vor'}. ${ue.begruendung}`);
+        }
+        if (parts.length) {
+          filled.set(slot.id, { value: parts.join(' '), hint: 'Eroeffnungsvoraussetzungen' });
+        }
+      }
+    }
+  }
 }
 
 // --- Flatten ExtractionResult ---
@@ -476,7 +704,7 @@ function flattenResult(result: ExtractionResult): Record<string, unknown> {
 
 function isNarrativeSlot(slot: SlotInfo): boolean {
   const text = (slot.context + ' ' + slot.original).toLowerCase();
-  return /begr.{0,3}ndung|darstellung|feststellung|ausf.{0,3}hrung|bewertung|ergebnis|zusammenfassung|schlussfolgerung|empfehlung|einsch.{0,3}tzung|analyse|pr.{0,3}fung|w.{0,3}rdigung|stellungnahme|liquidation.*fortf|fortf.*liquidation|investoren|sanierung/i.test(text);
+  return /begr.{0,3}ndung|darstellung|feststellung|ausf.{0,3}hrung|bewertung|ergebnis|zusammenfassung|schlussfolgerung|empfehlung|einsch.{0,3}tzung|analyse|pr.{0,3}fung|w.{0,3}rdigung|stellungnahme|liquidation.*fortf|fortf.*liquidation|investoren|sanierung|finanzstatus|liquidit.{0,3}tsplan|er.{0,3}ffnungsvoraussetzung|kommunikation.*stakeholder|ma.{0,3}nahmen.*liquidit/i.test(text);
 }
 
 // --- Prompts ---
