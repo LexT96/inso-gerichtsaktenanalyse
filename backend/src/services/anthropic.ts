@@ -722,7 +722,9 @@ export async function extractComprehensive(
   const systemPrompt = EXTRACTION_PROMPT + fewShotSnippet;
 
   // For small-medium PDFs (<=500 pages): use native PDF mode if buffer available
-  if (pdfBuffer && pageTexts.length <= 500) {
+  // Native PDF mode requires direct Anthropic API — proxies like Langdock don't support it
+  const supportsNativePdf = !config.ANTHROPIC_BASE_URL;
+  if (supportsNativePdf && pdfBuffer && pageTexts.length <= 500) {
     const base64 = pdfBuffer.toString('base64');
     logger.info('Starte umfassende Extraktion (PDF-Modus)', { pages: pageTexts.length });
 
