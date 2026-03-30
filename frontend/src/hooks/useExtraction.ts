@@ -1,11 +1,29 @@
 import { useState, useCallback, useRef } from 'react';
+import { InteractionRequiredAuthError } from '@azure/msal-browser';
 import { apiClient } from '../api/client';
+import { msalInstance, loginRequest } from '../auth/msalConfig';
 import type { ExtractionResult, Pruefstatus } from '../types/extraction';
 import { recomputeLetterStatuses } from '../utils/checklistValidator';
 import mockResult from '../data/mock-result.json';
 import demoPdfUrl from '../assets/demo/test-pdf.pdf?url';
 
 const API_BASE = import.meta.env['VITE_API_URL'] as string || '/api';
+
+/** Get Bearer token for fetch() calls that bypass apiClient */
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length === 0) return {};
+  try {
+    const res = await msalInstance.acquireTokenSilent({ scopes: loginRequest.scopes, account: accounts[0] });
+    return { Authorization: `Bearer ${res.accessToken}` };
+  } catch (err) {
+    if (err instanceof InteractionRequiredAuthError) {
+      const res = await msalInstance.acquireTokenPopup({ scopes: loginRequest.scopes });
+      return { Authorization: `Bearer ${res.accessToken}` };
+    }
+    return {};
+  }
+}
 
 interface ExtractionState {
   loading: boolean;
@@ -54,8 +72,10 @@ export function useExtraction() {
       formData.append('pdf', file);
 
       const url = proMode ? `${API_BASE}/extract?pro=1` : `${API_BASE}/extract`;
+      const authHeaders = await getAuthHeaders();
       const response = await fetch(url, {
         method: 'POST',
+        headers: authHeaders,
         body: formData,
         credentials: 'include',
         signal: controller.signal,
