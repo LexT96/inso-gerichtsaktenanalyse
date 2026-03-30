@@ -178,7 +178,7 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICH
   "aktiva": {
     "positionen": [
       {
-        "beschreibung": {"wert": "Beschreibung des Vermögenswerts", "quelle": "Seite X"},
+        "beschreibung": {"wert": "Textliche Bezeichnung des Vermögenswerts (z.B. Vorräte, Sachanlagen, PKW VW Golf, Girokonto Sparkasse) — NIEMALS eine Zahl hier!", "quelle": "Seite X"},
         "geschaetzter_wert": {"wert": 0, "quelle": "Seite X"},
         "kategorie": "immobilien|fahrzeuge|bankguthaben|lebensversicherungen|wertpapiere_beteiligungen|forderungen_schuldner|bewegliches_vermoegen|geschaeftsausstattung|steuererstattungen|einkommen"
       }
