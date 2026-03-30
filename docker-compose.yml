@@ -44,6 +44,8 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - DATA_RETENTION_HOURS=${DATA_RETENTION_HOURS:-72}
       - DB_ENCRYPTION_KEY=${DB_ENCRYPTION_KEY}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID:-}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID:-}
     volumes:
       - db-data:/data
     restart: unless-stopped
