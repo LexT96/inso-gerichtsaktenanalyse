@@ -26,6 +26,11 @@ RUN mkdir -p src/assets/demo && \
   fi
 COPY shared /workspace/shared
 
+ARG VITE_AZURE_TENANT_ID
+ARG VITE_AZURE_CLIENT_ID
+ENV VITE_AZURE_TENANT_ID=$VITE_AZURE_TENANT_ID
+ENV VITE_AZURE_CLIENT_ID=$VITE_AZURE_CLIENT_ID
+
 RUN npm run build
 
 FROM nginx:alpine
