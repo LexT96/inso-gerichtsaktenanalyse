@@ -59,9 +59,19 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
     if (isCurrency && typeof w === 'number') {
       return `${w.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`;
     }
+    // Auto-format numbers that look like EUR amounts (even in non-currency fields)
+    if (typeof w === 'number' && w > 100) {
+      return w.toLocaleString('de-DE', { minimumFractionDigits: 2 });
+    }
     if (typeof w === 'boolean') return w ? 'Ja' : 'Nein';
     if (w === 0) return '0';
-    return String(w);
+    // Format number strings that look like amounts (e.g. "1299370.35")
+    const s = String(w);
+    if (/^\d+\.\d{2}$/.test(s)) {
+      const num = parseFloat(s);
+      if (!isNaN(num) && num > 100) return num.toLocaleString('de-DE', { minimumFractionDigits: 2 });
+    }
+    return s;
   };
 
   /** Raw value for highlighting — format numbers in German style to match PDF text */
@@ -87,11 +97,11 @@ export function DataField({ label, field, isCurrency }: DataFieldProps) {
   };
 
   return (
-    <div className="flex items-start py-1.5 border-b border-border gap-2">
-      <span className="flex-shrink-0 w-[180px] text-[11px] text-text-dim pt-0.5">{label}</span>
+    <div className="flex items-start py-2 border-b border-border gap-2">
+      <span className="flex-shrink-0 w-[180px] text-[12px] text-text-dim pt-0.5">{label}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className={`text-xs font-mono ${empty ? 'text-text-muted' : 'text-text'}`}>
+          <span className={`text-[13px] font-mono ${empty ? 'text-text-muted' : 'text-text'}`}>
             {displayValue()}
           </span>
           {q && (
