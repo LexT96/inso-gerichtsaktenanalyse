@@ -33,8 +33,10 @@ export function LoginPage() {
     try {
       await loginWithEntra();
       navigate('/dashboard');
-    } catch {
-      setErr('Microsoft-Anmeldung fehlgeschlagen');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('Entra login error:', e);
+      setErr(`Microsoft-Anmeldung fehlgeschlagen: ${msg}`);
       setShake(true);
       setTimeout(() => setShake(false), 500);
     } finally {
