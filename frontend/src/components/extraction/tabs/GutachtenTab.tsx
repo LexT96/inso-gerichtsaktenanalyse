@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react';
 import { DataField } from '../DataField';
 import { Section } from '../Section';
+import { FieldChecklist } from '../FieldChecklist';
 import { GutachtenDialog } from '../GutachtenDialog';
-import type { ExtractionResult } from '../../../types/extraction';
+import type { ExtractionResult, Pruefstatus } from '../../../types/extraction';
 
 interface GutachtenTabProps {
   result: ExtractionResult;
   extractionId: number | null;
+  onUpdateField: (fieldPath: string, wert: string | null, pruefstatus: Pruefstatus) => void;
 }
 
 type TemplateType = 'juristische_person' | 'personengesellschaft' | 'natuerliche_person';
@@ -30,7 +32,44 @@ function templateLabel(type: TemplateType): string {
   }
 }
 
-export function GutachtenTab({ result, extractionId }: GutachtenTabProps) {
+// Fields that flow into the Gutachten template (KI_* placeholders)
+const GUTACHTEN_FIELDS_BASE = [
+  { path: 'verfahrensdaten.aktenzeichen', label: 'Aktenzeichen' },
+  { path: 'verfahrensdaten.gericht', label: 'Gericht' },
+  { path: 'verfahrensdaten.beschlussdatum', label: 'Beschlussdatum' },
+  { path: 'verfahrensdaten.antragsdatum', label: 'Antragsdatum' },
+  { path: 'verfahrensdaten.eroeffnungsgrund', label: 'Er\u00f6ffnungsgrund' },
+  { path: 'gutachterbestellung.gutachter_name', label: 'Gutachter' },
+  { path: 'gutachterbestellung.gutachter_kanzlei', label: 'Kanzlei' },
+  { path: 'gutachterbestellung.gutachter_adresse', label: 'Gutachter-Adresse' },
+  { path: 'antragsteller.name', label: 'Antragsteller' },
+  { path: 'antragsteller.adresse', label: 'Antragsteller-Adresse' },
+];
+
+const GUTACHTEN_FIELDS_PERSON = [
+  { path: 'schuldner.name', label: 'Schuldner Name' },
+  { path: 'schuldner.vorname', label: 'Schuldner Vorname' },
+  { path: 'schuldner.geburtsdatum', label: 'Geburtsdatum' },
+  { path: 'schuldner.aktuelle_adresse', label: 'Adresse' },
+  { path: 'schuldner.familienstand', label: 'Familienstand' },
+];
+
+const GUTACHTEN_FIELDS_ENTITY = [
+  { path: 'schuldner.firma', label: 'Firma' },
+  { path: 'schuldner.rechtsform', label: 'Rechtsform' },
+  { path: 'schuldner.handelsregisternummer', label: 'HRB' },
+  { path: 'schuldner.betriebsstaette_adresse', label: 'Betriebsst\u00e4tte' },
+];
+
+const GUTACHTEN_FIELDS_FINANCIAL = [
+  { path: 'forderungen.gesamtforderungen', label: 'Gesamtforderungen' },
+  { path: 'forderungen.gesicherte_forderungen', label: 'Gesicherte Forderungen' },
+  { path: 'forderungen.ungesicherte_forderungen', label: 'Ungesicherte Forderungen' },
+  { path: 'aktiva.summe_aktiva', label: 'Summe Aktiva' },
+  { path: 'aktiva.massekosten_schaetzung', label: 'Massekosten' },
+];
+
+export function GutachtenTab({ result, extractionId, onUpdateField }: GutachtenTabProps) {
   const [showDialog, setShowDialog] = useState(false);
 
   const templateType = useMemo(
@@ -112,6 +151,20 @@ export function GutachtenTab({ result, extractionId }: GutachtenTabProps) {
           )}
         </div>
       </Section>
+
+      {/* Pflichtfelder-Checkliste */}
+      <FieldChecklist
+        title="Verfahren & Beteiligte"
+        fields={[...GUTACHTEN_FIELDS_BASE, ...(isNatuerlich ? GUTACHTEN_FIELDS_PERSON : GUTACHTEN_FIELDS_ENTITY)]}
+        result={result}
+        onUpdateField={onUpdateField}
+      />
+      <FieldChecklist
+        title="Finanzdaten (f\u00fcr Verfahrenskostendeckung)"
+        fields={GUTACHTEN_FIELDS_FINANCIAL}
+        result={result}
+        onUpdateField={onUpdateField}
+      />
 
       {/* Generate button */}
       <div className="mt-4 flex justify-center">

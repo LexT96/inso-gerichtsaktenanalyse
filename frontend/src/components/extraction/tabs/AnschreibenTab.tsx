@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Badge } from '../Badge';
 import { Section } from '../Section';
-import type { Standardanschreiben, FehlendInfo } from '../../../types/extraction';
+import { FieldChecklist } from '../FieldChecklist';
+import type { ExtractionResult, Standardanschreiben, FehlendInfo, Pruefstatus } from '../../../types/extraction';
 
 function LetterCard({ letter }: { letter: Standardanschreiben }) {
   const [expanded, setExpanded] = useState(false);
@@ -54,12 +55,28 @@ function StatsCardSmall({ label, value, colorClass }: StatsCardSmallProps) {
   );
 }
 
+// All unique fields needed across all letter types
+const ANSCHREIBEN_REQUIRED_FIELDS = [
+  { path: 'verfahrensdaten.aktenzeichen', label: 'Aktenzeichen' },
+  { path: 'verfahrensdaten.gericht', label: 'Gericht' },
+  { path: 'verfahrensdaten.beschlussdatum', label: 'Beschlussdatum' },
+  { path: 'schuldner.name', label: 'Schuldner Name' },
+  { path: 'schuldner.vorname', label: 'Schuldner Vorname' },
+  { path: 'schuldner.geburtsdatum', label: 'Geburtsdatum' },
+  { path: 'schuldner.aktuelle_adresse', label: 'Aktuelle Adresse' },
+  { path: 'schuldner.firma', label: 'Firma' },
+  { path: 'schuldner.handelsregisternummer', label: 'Handelsregister-Nr.' },
+  { path: 'schuldner.betriebsstaette_adresse', label: 'Betriebsstätte' },
+];
+
 interface AnschreibenTabProps {
+  result: ExtractionResult;
   letters: Standardanschreiben[];
   missingInfo: FehlendInfo[];
+  onUpdateField: (fieldPath: string, wert: string | null, pruefstatus: Pruefstatus) => void;
 }
 
-export function AnschreibenTab({ letters, missingInfo }: AnschreibenTabProps) {
+export function AnschreibenTab({ result, letters, missingInfo, onUpdateField }: AnschreibenTabProps) {
   const bereit = letters.filter(l => l.status === 'bereit');
   const fehlt = letters.filter(l => l.status === 'fehlt');
   const entfaellt = letters.filter(l => l.status === 'entfaellt');
@@ -71,6 +88,13 @@ export function AnschreibenTab({ letters, missingInfo }: AnschreibenTabProps) {
         <StatsCardSmall label="Daten fehlen" value={fehlt.length} colorClass="text-ie-amber" />
         <StatsCardSmall label="Entfällt" value={entfaellt.length} colorClass="text-ie-blue" />
       </div>
+
+      <FieldChecklist
+        title="Pflichtfelder f\u00fcr Anschreiben"
+        fields={ANSCHREIBEN_REQUIRED_FIELDS}
+        result={result}
+        onUpdateField={onUpdateField}
+      />
 
       {bereit.length > 0 && (
         <Section title="Alle Daten vorhanden" icon="✓" count={bereit.length}>

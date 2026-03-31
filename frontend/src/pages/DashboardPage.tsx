@@ -280,10 +280,10 @@ export function DashboardPage() {
         <PrueflisteTab result={result} onUpdateField={updateField} />
       )}
       {tab === 'briefe' && (
-        <AnschreibenTab letters={letters} missingInfo={missingInfo} />
+        <AnschreibenTab result={result} letters={letters} missingInfo={missingInfo} onUpdateField={updateField} />
       )}
       {tab === 'gutachten' && (
-        <GutachtenTab result={result} extractionId={extractionId} />
+        <GutachtenTab result={result} extractionId={extractionId} onUpdateField={updateField} />
       )}
 
       {/* Footer */}
