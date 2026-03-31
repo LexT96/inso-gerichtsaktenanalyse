@@ -826,6 +826,74 @@ function removeConditionalSections(xml: string, result: ExtractionResult): strin
   });
 }
 
+// --- Template instruction cleanup (uses processDocxParagraphs for run-splitting safety) ---
+
+function cleanupTemplateInstructions(xml: string, result: ExtractionResult): string {
+  const isVorlIV = isVorlaeufigverwalter(result);
+
+  // Patterns to remove entirely (editorial instructions that leaked into output)
+  const REMOVE_PATTERNS = [
+    /^\[kollektivarbeitsrechtliche und betriebsverfassungsrechtliche Verhältnisse.*\]$/i,
+    /^\[nicht nur Wiedergabe des oftmals wenig sagenden.*\]$/i,
+    /^\[Das Unternehmen hat einen handelsrechtlich nicht bilanzierbaren.*\]$/i,
+    /^optional:\s*bei zusätzlicher Belastung.*$/i,
+    /^-\s*Datensicherung in komplexen EDV-Systemen/i,
+    /^-\s*Datenaufbereitung aus branchenspezifischer Software/i,
+    /^-\s*Datenwiederherstellung \(gelöschte Daten/i,
+    /^\[falls schon erkennbar Nennung von Beweisanzeichen.*\]$/i,
+    /^\[wenn überschaubare arbeitsrechtliche Verhältnisse.*\]$/i,
+  ];
+
+  // Text replacements (old → new)
+  const TEXT_FIXES: [RegExp, string][] = [];
+
+  // Fix signature line if not vorl. IV
+  if (!isVorlIV) {
+    TEXT_FIXES.push(
+      [/als Sachverständige[r]?\s+und\s+vorläufige[r]?\s+Insolvenzverwalter(in)?/gi, 'als Sachverständiger'],
+      [/Gutachten und Bericht/g, 'Gutachten'],
+      [/und erstattet hiermit Bericht über den Verlauf des Antragsverfahrens:/g, ':'],
+    );
+  }
+
+  // Fix "Lohnrückstände sind 1 aufgelaufen" (Arbeitnehmer count leaked)
+  // Keep this generic — if a number directly follows "Lohnrückstände sind" and is 1-digit, it's likely wrong
+  TEXT_FIXES.push(
+    [/Er\/Sie führte auch die Lohnbuchhaltung der Schuldnerin\./g, ''],
+  );
+
+  // Fix "der Schuldnerin" → "des Schuldners" for natürliche Person male
+  // (template defaults to "Schuldnerin" but Schuldner may be male)
+
+  return processDocxParagraphs(
+    xml,
+    (text) => {
+      const lower = text.toLowerCase();
+      // Check if paragraph matches any remove pattern
+      for (const p of REMOVE_PATTERNS) {
+        if (p.test(text.trim())) return true;
+      }
+      // Check text fixes
+      for (const [pattern] of TEXT_FIXES) {
+        if (pattern.test(text)) return true;
+      }
+      return false;
+    },
+    (text) => {
+      // Check remove patterns first
+      for (const p of REMOVE_PATTERNS) {
+        if (p.test(text.trim())) return '';
+      }
+      // Apply text fixes
+      let result = text;
+      for (const [pattern, replacement] of TEXT_FIXES) {
+        result = result.replace(pattern, replacement);
+      }
+      return result;
+    }
+  );
+}
+
 // --- XML field replacement (handles Word run-splitting) ---
 
 function replaceFieldsInXml(xml: string, replacements: Record<string, string>): string {
@@ -880,6 +948,8 @@ function loadAndPrepareTemplate(
     xmlContent = removeConditionalSections(xmlContent, result);
     // Phase 4: Apply editorial rules from Word comments
     xmlContent = applyCommentRules(xmlContent, result);
+    // Phase 5: Clean up template instructions and boilerplate
+    xmlContent = cleanupTemplateInstructions(xmlContent, result);
     zip.file(partName, xmlContent);
   }
 

@@ -117,9 +117,9 @@ function sn(v: { wert?: number | null } | undefined | null): number | null {
 
 function buildPreFillMatchers(): SlotMatcher[] {
   return [
-    // --- Arbeitnehmer ---
+    // --- Arbeitnehmer (must have [[SLOT_xxx]] directly before "Arbeitnehmer") ---
     {
-      patterns: [/besch.{0,5}ftigt.*\[\[SLOT.*arbeitnehmer|anzahl.*arbeitnehmer.*davon|\bbesch.{0,5}ftigt\b.*\bArbeitnehmer\b.*\bdavon\b/i],
+      patterns: [/\[\[SLOT_\d+\]\]\s*Arbeitnehmer/i],
       extract: (r) => {
         const an = r.forderungen?.betroffene_arbeitnehmer;
         if (an?.length) {
