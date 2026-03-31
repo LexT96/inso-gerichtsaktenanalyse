@@ -733,7 +733,7 @@ function replaceFieldsInXml(xml: string, replacements: Record<string, string>): 
 
   return processDocxParagraphs(
     xml,
-    (text) => text.includes('FELD_'),
+    (text) => text.includes('KI_'),
     (text) => {
       let replaced = text;
       for (const key of sortedKeys) {
@@ -741,13 +741,13 @@ function replaceFieldsInXml(xml: string, replacements: Record<string, string>): 
         const regex = new RegExp(escaped + '(?:_\\d+)?', 'g');
         replaced = replaced.replace(regex, replacements[key] ?? '');
       }
-      replaced = replaced.replace(/FELD_[\w\u00C0-\u024F]+/g, '');
+      replaced = replaced.replace(/KI_[\w\u00C0-\u024F]+/g, '');
       return replaced;
     }
   );
 }
 
-// --- Shared: load and prepare template ZIP with FELD_* replaced ---
+// --- Shared: load and prepare template ZIP with KI_* replaced ---
 
 function loadAndPrepareTemplate(
   result: ExtractionResult,
@@ -772,7 +772,7 @@ function loadAndPrepareTemplate(
     const file = zip.file(partName);
     if (!file) continue;
     let xmlContent = file.asText();
-    // Phase 1: Replace FELD_* placeholders (Tier 1 — direct extraction data)
+    // Phase 1: Replace KI_* placeholders (Tier 1 — direct extraction data)
     xmlContent = replaceFieldsInXml(xmlContent, replacements);
     // Phase 2: Inject dynamic tables (Tier 2 — deterministic from arrays)
     xmlContent = injectDynamicTables(xmlContent, result);

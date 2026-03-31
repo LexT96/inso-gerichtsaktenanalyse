@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Inject FELD_* placeholders into empty table cells in Gutachten DOCX templates.
-Maps table row labels to the corresponding FELD_* placeholder names.
+Inject KI_* placeholders into empty table cells in Gutachten DOCX templates.
+Maps table row labels to the corresponding KI_* placeholder names.
 """
 import zipfile
 import re
@@ -9,43 +9,43 @@ import shutil
 import sys
 import os
 
-# Mapping: left-cell label pattern → FELD_* placeholder for right cell
+# Mapping: left-cell label pattern → KI_* placeholder for right cell
 TABLE_MAPPINGS = {
     # Table 0: Statistische Angaben (nat + jur)
-    r'^Name$': 'FELD_Schuldner_Name',
-    r'^Handelsfirma': 'FELD_Schuldner_Firma',
-    r'^Anschrift$': 'FELD_Schuldner_Adr',
-    r'^Handelsregister$': 'FELD_Schuldner_HRB',
-    r'^Insolvenzforderungen': 'FELD_Forderungen_Gesamt',
-    r'^Antragsteller': 'FELD_Antragsteller_Name',
-    r'^Antragsgrund': 'FELD_Verfahren_Eroeffnungsgrund',
-    r'^Unternehmensgegenstand': 'FELD_Schuldner_Firma',
-    r'^Arbeitnehmer$': 'FELD_Arbeitnehmer_Anzahl',
+    r'^Name$': 'KI_Schuldner_Name',
+    r'^Handelsfirma': 'KI_Schuldner_Firma',
+    r'^Anschrift$': 'KI_Schuldner_Adr',
+    r'^Handelsregister$': 'KI_Schuldner_HRB',
+    r'^Insolvenzforderungen': 'KI_Forderungen_Gesamt',
+    r'^Antragsteller': 'KI_Antragsteller_Name',
+    r'^Antragsgrund': 'KI_Verfahren_Eroeffnungsgrund',
+    r'^Unternehmensgegenstand': 'KI_Schuldner_Firma',
+    r'^Arbeitnehmer$': 'KI_Arbeitnehmer_Anzahl',
 
     # Table 1 (nat) / Table 2 (jur): Steuerrechtliche Angaben
-    r'^Finanzamt$': 'FELD_Finanzamt',
-    r'^Steuer-Nr': 'FELD_Steuernummer',
-    r'^Letzter Jahresabschluss': 'FELD_Letzter_Jahresabschluss',
+    r'^Finanzamt$': 'KI_Finanzamt',
+    r'^Steuer-Nr': 'KI_Steuernummer',
+    r'^Letzter Jahresabschluss': 'KI_Letzter_Jahresabschluss',
 
     # Table 2 (nat): Sonstige Angaben
-    r'^Geburtsdatum': 'FELD_Schuldner_Geburtsdaten',
-    r'^Ausbildung$': 'FELD_Ausbildung',
-    r'^Telefon$': 'FELD_Schuldner_Telefon',
-    r'^Mobiltelefon$': 'FELD_Schuldner_Mobiltelefon',
-    r'^E-Mail$': 'FELD_Schuldner_Email',
-    r'^Sozialversicherungstr': 'FELD_SVTraeger',
-    r'^Betriebsnummer$': 'FELD_Betriebsnummer',
-    r'^Steuerberater$': 'FELD_Steuerberater',
-    r'^Bankverbindungen$': 'FELD_Bankverbindungen',
-    r'^Insolvenzsonderkonto$': 'FELD_Anderkonto',
-    r'^Zuständiger': 'FELD_Gerichtsvollzieher',
-    r'^älteste Forderung': 'FELD_Aelteste_Forderung',
+    r'^Geburtsdatum': 'KI_Schuldner_Geburtsdaten',
+    r'^Ausbildung$': 'KI_Ausbildung',
+    r'^Telefon$': 'KI_Schuldner_Telefon',
+    r'^Mobiltelefon$': 'KI_Schuldner_Mobiltelefon',
+    r'^E-Mail$': 'KI_Schuldner_Email',
+    r'^Sozialversicherungstr': 'KI_SVTraeger',
+    r'^Betriebsnummer$': 'KI_Betriebsnummer',
+    r'^Steuerberater$': 'KI_Steuerberater',
+    r'^Bankverbindungen$': 'KI_Bankverbindungen',
+    r'^Insolvenzsonderkonto$': 'KI_Anderkonto',
+    r'^Zuständiger': 'KI_Gerichtsvollzieher',
+    r'^älteste Forderung': 'KI_Aelteste_Forderung',
 
     # Table 1 (jur): Gesellschaftsrechtliche Angaben
-    r'^Gesellschafter': 'FELD_Gesellschafter',
-    r'^Größenklasse': 'FELD_Groessenklasse',
-    r'^Gründung$': 'FELD_Gruendung',
-    r'^Eintragung ins Handelsregister': 'FELD_HR_Eintragung',
+    r'^Gesellschafter': 'KI_Gesellschafter',
+    r'^Größenklasse': 'KI_Groessenklasse',
+    r'^Gründung$': 'KI_Gruendung',
+    r'^Eintragung ins Handelsregister': 'KI_HR_Eintragung',
 }
 
 
