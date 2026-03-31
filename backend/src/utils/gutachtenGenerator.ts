@@ -142,13 +142,19 @@ function computeGutachtenField(
   switch (key) {
     // --- Akte ---
     case 'akte_bezeichnung': {
+      // Used on cover page — just the Schuldner name/firma, no "Insolvenzverfahren" prefix
+      // (the template already has "Insolvenzantragsverfahren über das Vermögen...")
       const firma = getByPath(result, 'schuldner.firma.wert');
-      if (firma) return `Insolvenzverfahren ${firma}`;
       const name = getByPath(result, 'schuldner.name.wert');
       const vorname = getByPath(result, 'schuldner.vorname.wert');
-      if (name && vorname) return `Insolvenzverfahren ${name}, ${vorname}`;
-      if (name) return `Insolvenzverfahren ${name}`;
-      return 'Insolvenzverfahren';
+      if (firma) {
+        // For entities: "Pizza Kebaphaus Alt Ehrang" or "coboworx GmbH"
+        return firma;
+      }
+      // For natural persons: "Bayar, Mehmet" (Nachname, Vorname)
+      if (name && vorname) return `${name}, ${vorname}`;
+      if (name) return name;
+      return '';
     }
 
     // --- Gericht ---
