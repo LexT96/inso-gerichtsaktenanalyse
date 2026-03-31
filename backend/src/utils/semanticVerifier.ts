@@ -498,11 +498,34 @@ ${retryFieldList}`;
     return { mutations: batchMutations, stats: batchStats, inputTokens, outputTokens };
   });
 
-  // Run all batches in parallel with concurrency limit
-  const { results: batchResults, errors: batchErrors } = await parallelLimitSettled(
-    batchTasks,
-    VERIFICATION_CONCURRENCY
-  );
+  // Run batches — parallel for direct API, serial with delays for rate-limited providers
+  const isRateLimited = Boolean(config.ANTHROPIC_BASE_URL?.includes('langdock'));
+
+  let batchResults: (Awaited<ReturnType<typeof batchTasks[0]>> | undefined)[];
+  let batchErrors: (Error | undefined)[];
+
+  if (isRateLimited) {
+    logger.info('Rate-limited provider: Verifikation seriell mit 62s Pause');
+    batchResults = [];
+    batchErrors = [];
+    for (let i = 0; i < batchTasks.length; i++) {
+      if (i > 0) {
+        logger.info(`Rate-limit Pause vor Batch ${i + 1}/${batchTasks.length} (62s)`);
+        await new Promise(r => setTimeout(r, 62_000));
+      }
+      try {
+        batchResults.push(await batchTasks[i]());
+        batchErrors.push(undefined);
+      } catch (err) {
+        batchResults.push({ mutations: [], stats: { verified: 0, sourceCorrected: 0, valueCorrected: 0, removed: 0, failed: 0 }, inputTokens: 0, outputTokens: 0 });
+        batchErrors.push(err instanceof Error ? err : new Error(String(err)));
+      }
+    }
+  } else {
+    const settled = await parallelLimitSettled(batchTasks, VERIFICATION_CONCURRENCY);
+    batchResults = settled.results as typeof batchResults;
+    batchErrors = settled.errors as typeof batchErrors;
+  }
 
   // Aggregate results from all batches
   const mutations: Mutation[] = [];

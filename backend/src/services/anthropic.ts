@@ -12,6 +12,13 @@ export const anthropic = new Anthropic({
   ...(config.ANTHROPIC_BASE_URL ? { baseURL: config.ANTHROPIC_BASE_URL } : {}),
 });
 
+// Detect rate-limited providers (Langdock: 60K TPM)
+const isRateLimitedProvider = (): boolean =>
+  Boolean(config.ANTHROPIC_BASE_URL?.includes('langdock'));
+
+// Delay between API calls for rate-limited providers (wait for TPM window to reset)
+const RATE_LIMITED_DELAY_MS = 62_000; // 62s — just over 1 minute TPM window
+
 // Max pages per document-aware chunk (soft limit — won't split a document)
 const MAX_PAGES_PER_CHUNK = 40;
 // Fallback: 30 pages per chunk when no segments available
@@ -827,8 +834,32 @@ export async function extractFromPageTexts(
     return callWithRetry(() => callClaudeText(content));
   });
 
-  // Run chunks in parallel with concurrency limit
-  const { results, errors } = await parallelLimitSettled(tasks, EXTRACTION_CONCURRENCY);
+  // Run chunks — parallel for direct API, serial with delays for rate-limited providers
+  let results: (ExtractionResult | undefined)[];
+  let errors: (Error | undefined)[];
+
+  if (isRateLimitedProvider()) {
+    logger.info('Rate-limited provider: Chunks seriell mit 62s Pause');
+    results = [];
+    errors = [];
+    for (let i = 0; i < tasks.length; i++) {
+      if (i > 0) {
+        logger.info(`Rate-limit Pause vor Chunk ${i + 1}/${tasks.length} (62s)`);
+        await sleep(RATE_LIMITED_DELAY_MS);
+      }
+      try {
+        results.push(await tasks[i]());
+        errors.push(undefined);
+      } catch (err) {
+        results.push(undefined);
+        errors.push(err instanceof Error ? err : new Error(String(err)));
+      }
+    }
+  } else {
+    const settled = await parallelLimitSettled(tasks, EXTRACTION_CONCURRENCY);
+    results = settled.results;
+    errors = settled.errors;
+  }
 
   // Log errors but continue with successful results
   const successfulResults: ExtractionResult[] = [];

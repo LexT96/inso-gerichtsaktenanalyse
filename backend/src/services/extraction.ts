@@ -13,7 +13,13 @@ import { analyzeAnfechtung } from '../utils/anfechtungsAnalyzer';
 import { enrichmentReview } from '../utils/enrichmentReview';
 import type { ExtractionResult } from '../types/extraction';
 
+// Rate-limited providers (Langdock: 60K TPM) must always use chunked mode
+const isRateLimitedProvider = (): boolean =>
+  Boolean(config.ANTHROPIC_BASE_URL?.includes('langdock'));
+
 const LARGE_PDF_THRESHOLD = 500; // pages — above this, use chunked fallback
+// For rate-limited providers, force chunked mode for any PDF
+const effectiveThreshold = (): number => isRateLimitedProvider() ? 0 : LARGE_PDF_THRESHOLD;
 
 interface ExtractionStats {
   found: number;
@@ -110,7 +116,7 @@ export async function processExtraction(
     // chunked fallback with separate aktiva/anfechtung for very large PDFs
     let result: ExtractionResult;
 
-    if (pageCount <= LARGE_PDF_THRESHOLD) {
+    if (pageCount <= effectiveThreshold()) {
       // Single comprehensive call — extracts base data + aktiva + anfechtung
       report(`Vollständige Analyse (${pageCount} S.)… (Stufe 2/3)`, 35);
       result = await extractComprehensive(pdfBuffer, pageTexts, documentMap);
@@ -124,11 +130,28 @@ export async function processExtraction(
       result = await extractFromPageTexts(pageTexts, documentMap, segments);
 
       // For chunked extraction, run aktiva + anfechtung separately
+      // On rate-limited providers, serialize with delay
       report('Zusatzanalysen…', 55);
-      const [aktivaResult, anfechtungResult] = await Promise.allSettled([
-        extractAktiva(pageTexts, documentMap, result),
-        analyzeAnfechtung(pageTexts, documentMap, result),
-      ]);
+      let aktivaResult: PromiseSettledResult<Awaited<ReturnType<typeof extractAktiva>>>;
+      let anfechtungResult: PromiseSettledResult<Awaited<ReturnType<typeof analyzeAnfechtung>>>;
+
+      if (isRateLimitedProvider()) {
+        logger.info('Rate-limited provider: Zusatzanalysen seriell mit Pause');
+        report('Aktiva-Analyse… (Rate-Limit-Modus)', 55);
+        aktivaResult = await extractAktiva(pageTexts, documentMap, result)
+          .then(v => ({ status: 'fulfilled' as const, value: v }))
+          .catch(reason => ({ status: 'rejected' as const, reason }));
+        await new Promise(r => setTimeout(r, 62_000));
+        report('Anfechtungsanalyse…', 60);
+        anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result)
+          .then(v => ({ status: 'fulfilled' as const, value: v }))
+          .catch(reason => ({ status: 'rejected' as const, reason }));
+      } else {
+        [aktivaResult, anfechtungResult] = await Promise.allSettled([
+          extractAktiva(pageTexts, documentMap, result),
+          analyzeAnfechtung(pageTexts, documentMap, result),
+        ]);
+      }
 
       if (aktivaResult.status === 'fulfilled' && aktivaResult.value) {
         result.aktiva = aktivaResult.value;
