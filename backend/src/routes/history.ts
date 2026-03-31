@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/database';
+import { config } from '../config';
 import { readResultJson } from '../db/resultJson';
 import { encrypt, decrypt } from '../utils/crypto';
 import { logger } from '../utils/logger';
@@ -86,6 +89,32 @@ router.get('/:id', authMiddleware, (req: Request, res: Response): void => {
   };
 
   res.json(response);
+});
+
+// Serve stored PDF for extraction
+router.get('/:id/pdf', authMiddleware, (req: Request, res: Response): void => {
+  const userId = req.user!.userId;
+  const idParam = req.params['id'];
+  const id = parseInt(Array.isArray(idParam) ? idParam[0] : idParam ?? '', 10);
+  if (isNaN(id)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
+
+  // Verify user owns this extraction
+  const db = getDb();
+  const row = db.prepare(
+    'SELECT id, filename FROM extractions WHERE id = ? AND user_id = ?'
+  ).get(id, userId) as { id: number; filename: string } | undefined;
+  if (!row) { res.status(404).json({ error: 'Nicht gefunden' }); return; }
+
+  const pdfDir = path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs');
+  const pdfPath = path.join(pdfDir, `${id}.pdf`);
+  if (!fs.existsSync(pdfPath)) {
+    res.status(404).json({ error: 'PDF nicht mehr verfügbar' });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(row.filename)}"`);
+  fs.createReadStream(pdfPath).pipe(res);
 });
 
 // Export encrypted extraction result

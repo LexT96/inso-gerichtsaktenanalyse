@@ -1,3 +1,4 @@
+import path from 'path';
 import { extractComprehensive, extractFromPageTexts, anthropic, callWithRetry, extractJsonFromText } from './anthropic';
 import { config } from '../config';
 import { extractTextPerPage } from './pdfProcessor';
@@ -98,6 +99,13 @@ export async function processExtraction(
   const extractionId = Number(insertResult.lastInsertRowid);
 
   try {
+    // Save PDF to disk for later viewing (stored alongside DB in /data volume)
+    const pdfDir = path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs');
+    const fs = await import('fs');
+    if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
+    fs.writeFileSync(path.join(pdfDir, `${extractionId}.pdf`), pdfBuffer);
+    logger.info('PDF gespeichert', { extractionId, path: path.join(pdfDir, `${extractionId}.pdf`) });
+
     report('Seitentext wird extrahiert…', 8);
 
     // Always extract text per page — needed for analysis and verification
