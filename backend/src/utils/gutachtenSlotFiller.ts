@@ -789,14 +789,34 @@ export async function fillSlots(
     narrative: narrativeSlots.length,
   });
 
-  const [factualResults, narrativeResults] = await Promise.all([
-    factualSlots.length > 0
-      ? fillSlotBatch(factualSlots, flatData, FACTUAL_PROMPT, config.UTILITY_MODEL || 'claude-haiku-4-5-20251001')
-      : Promise.resolve(new Map<string, { value: string; hint: string }>()),
-    narrativeSlots.length > 0
-      ? fillSlotBatch(narrativeSlots, flatData, NARRATIVE_PROMPT, config.EXTRACTION_MODEL || 'claude-sonnet-4-6')
-      : Promise.resolve(new Map<string, { value: string; hint: string }>()),
-  ]);
+  // Split large batches into chunks of max 40 slots to avoid output truncation
+  const BATCH_SIZE = 40;
+  const factualChunks: SlotInfo[][] = [];
+  for (let i = 0; i < factualSlots.length; i += BATCH_SIZE) {
+    factualChunks.push(factualSlots.slice(i, i + BATCH_SIZE));
+  }
+
+  const allPromises: Promise<Map<string, { value: string; hint: string }>>[] = [];
+
+  // Factual chunks in parallel
+  for (const chunk of factualChunks) {
+    allPromises.push(
+      fillSlotBatch(chunk, flatData, FACTUAL_PROMPT, config.UTILITY_MODEL || 'claude-haiku-4-5-20251001')
+    );
+  }
+
+  // Narrative batch
+  if (narrativeSlots.length > 0) {
+    allPromises.push(
+      fillSlotBatch(narrativeSlots, flatData, NARRATIVE_PROMPT, config.EXTRACTION_MODEL || 'claude-sonnet-4-6')
+    );
+  }
+
+  const batchResults = await Promise.all(allPromises);
+  const [factualResults, narrativeResults] = [
+    new Map(batchResults.slice(0, factualChunks.length).flatMap(m => [...m])),
+    batchResults.length > factualChunks.length ? batchResults[batchResults.length - 1] : new Map<string, { value: string; hint: string }>(),
+  ];
 
   // Merge: pre-filled > factual > narrative
   const allResults = new Map([...factualResults, ...narrativeResults, ...preFilled]);
@@ -837,7 +857,7 @@ async function fillSlotBatch(
     const response = await callWithRetry(() =>
       anthropic.messages.create({
         model,
-        max_tokens: 8192,
+        max_tokens: 16384,
         temperature: 0.1,
         messages: [{ role: 'user' as const, content }],
       })
