@@ -269,6 +269,84 @@ function computeGutachtenField(
     case 'anfechtung_potenzial':
       return formatEUR(result.anfechtung?.gesamtpotenzial?.wert);
 
+    // --- Table cell fields (new) ---
+    case 'arbeitnehmer_anzahl': {
+      const an = result.forderungen?.betroffene_arbeitnehmer;
+      if (an?.length) {
+        const total = an.reduce((s: number, a: unknown) => {
+          if (a && typeof a === 'object' && 'anzahl' in a) return s + ((a as { anzahl: number }).anzahl || 0);
+          return s;
+        }, 0);
+        if (total > 0) return String(total);
+      }
+      return '';
+    }
+
+    case 'finanzamt':
+    case 'steuernummer':
+    case 'letzter_jahresabschluss':
+    case 'steuerberater':
+    case 'gerichtsvollzieher':
+    case 'sv_traeger':
+    case 'ausbildung':
+    case 'groessenklasse':
+    case 'gruendung':
+    case 'gesellschafter': {
+      // These are extracted by the ermittlungsergebnisse or zusammenfassung
+      // Search zusammenfassung for relevant info
+      const zf = result.zusammenfassung ?? [];
+      const keywords: Record<string, RegExp> = {
+        finanzamt: /finanzamt/i,
+        steuernummer: /steuer.?n/i,
+        letzter_jahresabschluss: /jahresabschluss|bilanz/i,
+        steuerberater: /steuerberater/i,
+        gerichtsvollzieher: /gerichtsvollzieher/i,
+        sv_traeger: /sozialversicherung|krankenkasse/i,
+        ausbildung: /ausbildung|beruf/i,
+        groessenklasse: /gr.{0,3}.enklasse|267.*hgb/i,
+        gruendung: /gr.{0,3}ndung|gegr.{0,3}ndet/i,
+        gesellschafter: /gesellschafter|anteilseigner/i,
+      };
+      const kw = keywords[key];
+      if (kw) {
+        // Search ermittlungsergebnisse fields
+        const erm = result.ermittlungsergebnisse as unknown as Record<string, unknown>;
+        for (const [k, v] of Object.entries(erm || {})) {
+          if (kw.test(k) && v && typeof v === 'object' && 'wert' in v) {
+            const val = (v as { wert: unknown }).wert;
+            if (val != null && val !== '') return String(val);
+          }
+        }
+        // Search zusammenfassung
+        for (const z of zf) {
+          if (z.wert && kw.test(z.wert)) {
+            // Extract the relevant part
+            return z.wert.length > 80 ? z.wert.slice(0, 80) + '…' : z.wert;
+          }
+        }
+      }
+      return '';
+    }
+
+    case 'bankverbindungen': {
+      const iban = getByPath(result, 'antragsteller.bankverbindung_iban.wert');
+      const bic = getByPath(result, 'antragsteller.bankverbindung_bic.wert');
+      if (iban) return bic ? `${iban} (BIC: ${bic})` : iban;
+      return '';
+    }
+
+    case 'aelteste_forderung': {
+      const ef = result.forderungen?.einzelforderungen ?? [];
+      if (ef.length === 0) return '';
+      // Find earliest zeitraum_von
+      let earliest = '';
+      for (const f of ef) {
+        const von = f.zeitraum_von?.wert;
+        if (von && (!earliest || von < earliest)) earliest = von;
+      }
+      return earliest || '';
+    }
+
     // --- Verwalter gender variants ---
     case 'verwalter_der_die_gross':
       return weiblichVerwalter ? 'Die' : 'Der';
