@@ -691,6 +691,100 @@ function injectDynamicTables(xml: string, result: ExtractionResult): string {
   });
 }
 
+// --- Comment-based editorial rules ---
+// Implements instructions from Word comments in the templates:
+// #0: "Bericht nur wenn vorl. Verwalter" → Title adaptation
+// #29: Internal process note → skip (not relevant for generation)
+// #58: "Streichen wenn Bezug zu Mitgliedsstaat" → Remove EuInsVO detail section
+// #61: "Entfernen wenn keine selbstständige Tätigkeit" → Adapt örtl. Zuständigkeit
+
+function isVorlaeufigverwalter(result: ExtractionResult): boolean {
+  const befugnisse = result.gutachterbestellung?.befugnisse ?? [];
+  return befugnisse.some(b =>
+    /vorl.{0,5}ufig.*insolvenzverwalter|vorl.{0,5}ufig.*verwalter/i.test(b)
+  );
+}
+
+function hasSelbststaendigeTaetigkeit(result: ExtractionResult): boolean {
+  // If there's a Betriebsstätte or Firma, they have a business
+  const firma = result.schuldner?.firma?.wert;
+  const betrieb = result.schuldner?.betriebsstaette_adresse?.wert;
+  return Boolean(firma || betrieb);
+}
+
+function hasInternationalerBezug(result: ExtractionResult): boolean {
+  // Check for non-German nationality or foreign addresses
+  const staat = String(result.schuldner?.staatsangehoerigkeit?.wert || '').toLowerCase();
+  if (staat && staat !== 'deutsch' && staat !== 'deutschland' && staat !== 'german') return true;
+  const geburtsland = String(result.schuldner?.geburtsland?.wert || '').toLowerCase();
+  if (geburtsland && geburtsland !== 'deutschland' && geburtsland !== 'germany' && geburtsland !== 'de') return true;
+  return false;
+}
+
+function applyCommentRules(xml: string, result: ExtractionResult): string {
+  const isVorlIV = isVorlaeufigverwalter(result);
+  const hatSelbststaendig = hasSelbststaendigeTaetigkeit(result);
+  const hatInternational = hasInternationalerBezug(result);
+
+  return xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, (paragraph) => {
+    const tRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+    let fullText = '';
+    let m;
+    while ((m = tRegex.exec(paragraph)) !== null) fullText += m[1];
+    const text = fullText.trim();
+    const lower = text.toLowerCase();
+
+    // Rule #0: "Gutachten und Bericht" → "Gutachten" if only Sachverständiger
+    if (!isVorlIV && /^gutachten und bericht$/i.test(text)) {
+      return paragraph.replace(/Gutachten und Bericht/i, 'Gutachten');
+    }
+
+    // Rule #0b: Remove "und erstattet hiermit Bericht..." if only Sachverständiger
+    if (!isVorlIV && lower.includes('erstattet hiermit bericht')) {
+      return paragraph.replace(
+        /und erstattet hiermit Bericht über den Verlauf des Antragsverfahrens:/i,
+        ':'
+      );
+    }
+
+    // Rule #58: Remove detailed EuInsVO explanation if no international connection
+    // Keep the conclusion ("Gem. Art. 3 Abs. 1 EuInsVO sind deutsche Gerichte...zuständig")
+    // but remove the lengthy legal explanation (paragraphs starting with "Zur Bestimmung",
+    // "Die Norm regelt", "Nach Art. 3 Abs. 1 EuInsVO", "Der COMI ist", "Bei einer natürlichen Person")
+    if (!hatInternational) {
+      if (/^zur bestimmung der internationalen zuständigkeit/i.test(lower) ||
+          /^die norm regelt/i.test(lower) ||
+          /^nach art\. 3 abs\. 1 euinsvo sind für die eröffnung/i.test(lower) ||
+          /^der comi ist/i.test(lower) ||
+          /^bei einer natürlichen person.*euinsvo/i.test(lower) ||
+          /^bei einer gesellschaft.*euinsvo/i.test(lower) ||
+          /^insofern hat das deutsche internationale/i.test(lower)) {
+        return ''; // Remove paragraph
+      }
+    }
+
+    // Rule #61: If no selbstständige Tätigkeit, remove the paragraph about
+    // "Mittelpunkt der selbstständigen wirtschaftlichen Tätigkeit"
+    // and keep the general Gerichtsstand variant
+    if (!hatSelbststaendig) {
+      if (/^die bestimmung der örtlichen zuständigkeit richtet sich gem\. § 3 abs\. 1 s\. 2/i.test(lower) ||
+          /^der mittelpunkt der selbstständigen tätigkeit/i.test(lower)) {
+        return ''; // Remove paragraph - falls back to general Gerichtsstand
+      }
+    }
+
+    // Rule: Remove "als Sachverständiger und vorläufiger Insolvenzverwalter" → just Sachverständiger
+    if (!isVorlIV && /als sachverständige.*und vorl.*insolvenzverwalter/i.test(lower)) {
+      return paragraph.replace(
+        /als Sachverständige[r]? und vorläufige[r]? Insolvenzverwalter(in)?/gi,
+        'als Sachverständiger'
+      );
+    }
+
+    return paragraph;
+  });
+}
+
 // --- Conditional section removal ---
 
 const NATUERLICHE_PERSON_SECTION_KW = [
@@ -778,6 +872,8 @@ function loadAndPrepareTemplate(
     xmlContent = injectDynamicTables(xmlContent, result);
     // Phase 3: Remove conditional sections irrelevant for entity type
     xmlContent = removeConditionalSections(xmlContent, result);
+    // Phase 4: Apply editorial rules from Word comments
+    xmlContent = applyCommentRules(xmlContent, result);
     zip.file(partName, xmlContent);
   }
 
