@@ -73,8 +73,9 @@ function runMigrations(database: Database.Database): void {
 
 export function cleanupExpiredExtractions(retentionHours?: number): void {
   if (!db) return;
+  const hours = retentionHours ?? 72;
+  if (hours <= 0) return; // 0 = disabled, no auto-deletion
   try {
-    const hours = retentionHours ?? 72;
     const result = db.prepare(
       `UPDATE extractions
        SET result_json = NULL, status = 'expired'
