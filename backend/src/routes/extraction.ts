@@ -3,6 +3,7 @@ import { authMiddleware } from '../middleware/auth';
 import { uploadMiddleware, validatePdfBuffer } from '../middleware/upload';
 import { extractionRateLimit } from '../middleware/rateLimit';
 import { processExtraction } from '../services/extraction';
+import { config } from '../config';
 import { getDb } from '../db/database';
 import { logger } from '../utils/logger';
 
@@ -62,7 +63,9 @@ router.post(
 
       // Pro mode: use Opus for higher accuracy (user-selectable)
       const proMode = req.query.pro === '1' || req.query.pro === 'true';
-      const modelOverride = proMode ? 'claude-opus-4-6' : undefined;
+      // Langdock requires -default suffix on model names
+      const opusModel = config.ANTHROPIC_BASE_URL?.includes('langdock') ? 'claude-opus-4-6-default' : 'claude-opus-4-6';
+      const modelOverride = proMode ? opusModel : undefined;
 
       const { id, result, stats, processingTimeMs } = await processExtraction(
         req.file.buffer,
