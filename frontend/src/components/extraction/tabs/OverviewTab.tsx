@@ -133,7 +133,7 @@ function crossValidate(r: ExtractionResult): Warnung[] {
 
 interface OverviewTabProps {
   result: ExtractionResult;
-  stats: { found: number; missing: number; total: number };
+  stats: { found: number; missing: number; total: number; fields?: import('../../../pages/DashboardPage').FieldDetail[] };
   lettersReady: number;
   lettersNA: number;
   lettersOpen: number;
@@ -151,6 +151,7 @@ export function OverviewTab({ result: r, stats, lettersReady, lettersNA, letters
         lettersReady={lettersReady}
         lettersNA={lettersNA}
         lettersOpen={lettersOpen}
+        fields={stats.fields}
       />
 
       {/* ─── Cross-Validierung ─── */}

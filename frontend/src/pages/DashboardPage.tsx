@@ -33,18 +33,63 @@ function isFieldEmpty(field: { wert?: unknown; quelle?: unknown }): boolean {
  * Dynamic arrays (einzelforderungen, aktiva.positionen, anfechtung.vorgaenge)
  * are NOT counted — their subfields being empty is normal, not "missing".
  */
-function computeStats(result: ExtractionResult): { found: number; missing: number; total: number } {
+export interface FieldDetail {
+  path: string;
+  label: string;
+  value: string | null;
+  filled: boolean;
+}
+
+function computeStats(result: ExtractionResult): { found: number; missing: number; total: number; fields: FieldDetail[] } {
   let found = 0, missing = 0;
-  const walkObj = (obj: Record<string, unknown>): void => {
+  const fields: FieldDetail[] = [];
+
+  const LABELS: Record<string, string> = {
+    aktenzeichen: 'Aktenzeichen', gericht: 'Gericht', richter: 'Richter',
+    antragsdatum: 'Antragsdatum', beschlussdatum: 'Beschlussdatum',
+    antragsart: 'Antragsart', eroeffnungsgrund: 'Eröffnungsgrund',
+    zustellungsdatum_schuldner: 'Zustellungsdatum',
+    name: 'Name', vorname: 'Vorname', firma: 'Firma',
+    rechtsform: 'Rechtsform', handelsregisternummer: 'HRB',
+    aktuelle_adresse: 'Adresse', betriebsstaette_adresse: 'Betriebsstätte',
+    geburtsdatum: 'Geburtsdatum', geburtsort: 'Geburtsort',
+    geburtsland: 'Geburtsland', staatsangehoerigkeit: 'Staatsangehörigkeit',
+    familienstand: 'Familienstand', geschlecht: 'Geschlecht',
+    adresse: 'Adresse', ansprechpartner: 'Ansprechpartner',
+    telefon: 'Telefon', fax: 'Fax', email: 'E-Mail',
+    betriebsnummer: 'Betriebsnummer', bankverbindung_iban: 'IBAN',
+    bankverbindung_bic: 'BIC',
+    gutachter_name: 'Gutachter', gutachter_kanzlei: 'Kanzlei',
+    gutachter_adresse: 'Gutachter-Adresse', gutachter_telefon: 'Gutachter-Telefon',
+    gutachter_email: 'Gutachter-E-Mail', abgabefrist: 'Abgabefrist',
+    gesamtforderungen: 'Gesamtforderungen', gesicherte_forderungen: 'Gesichert',
+    ungesicherte_forderungen: 'Ungesichert',
+    summe_aktiva: 'Summe Aktiva', massekosten_schaetzung: 'Massekosten',
+    gesamtpotenzial: 'Anfechtungspotenzial',
+    ergebnis: 'Ergebnis', grundbesitz_vorhanden: 'Grundbesitz',
+    datum: 'Datum', meldestatus: 'Meldestatus',
+    betriebsstaette_bekannt: 'Betriebsstätte bekannt',
+    vollstreckungen: 'Vollstreckungen', masse_deckend: 'Massedeckend',
+    vermoegensauskunft_abgegeben: 'Vermögensauskunft',
+    haftbefehle: 'Haftbefehle',
+    schuldnerverzeichnis_eintrag: 'Schuldnerverzeichnis',
+    vermoegensverzeichnis_eintrag: 'Vermögensverzeichnis',
+  };
+
+  const walkObj = (obj: Record<string, unknown>, prefix: string): void => {
     if (!obj) return;
-    for (const value of Object.values(obj)) {
-      if (Array.isArray(value)) continue; // Skip arrays entirely
+    for (const [key, value] of Object.entries(obj)) {
+      if (Array.isArray(value)) continue;
       if (value && typeof value === 'object') {
         const v = value as Record<string, unknown>;
         if ('wert' in v || 'quelle' in v) {
-          isFieldEmpty(v as { wert?: unknown; quelle?: unknown }) ? missing++ : found++;
+          const empty = isFieldEmpty(v as { wert?: unknown; quelle?: unknown });
+          empty ? missing++ : found++;
+          const path = prefix ? `${prefix}.${key}` : key;
+          const wert = v.wert != null && v.wert !== '' ? String(v.wert) : null;
+          fields.push({ path, label: LABELS[key] || key, value: wert, filled: !empty });
         } else {
-          walkObj(v as Record<string, unknown>);
+          walkObj(v as Record<string, unknown>, prefix ? `${prefix}.${key}` : key);
         }
       }
     }
@@ -55,10 +100,9 @@ function computeStats(result: ExtractionResult): { found: number; missing: numbe
     || rf.includes('juristische') || rf.includes('gesellschaft');
 
   // Only count fixed scalar sections — NOT dynamic arrays
-  walkObj(result.verfahrensdaten as unknown as Record<string, unknown>);
+  walkObj(result.verfahrensdaten as unknown as Record<string, unknown>, 'verfahrensdaten');
 
   if (isEntity) {
-    // For entities: only count firma, rechtsform, name, HRB, addresses
     const entityFields = {
       firma: result.schuldner?.firma,
       rechtsform: result.schuldner?.rechtsform,
@@ -67,36 +111,33 @@ function computeStats(result: ExtractionResult): { found: number; missing: numbe
       aktuelle_adresse: result.schuldner?.aktuelle_adresse,
       betriebsstaette_adresse: result.schuldner?.betriebsstaette_adresse,
     };
-    walkObj(entityFields as unknown as Record<string, unknown>);
+    walkObj(entityFields as unknown as Record<string, unknown>, 'schuldner');
   } else {
-    walkObj(result.schuldner as unknown as Record<string, unknown>);
+    walkObj(result.schuldner as unknown as Record<string, unknown>, 'schuldner');
   }
 
-  walkObj(result.antragsteller as unknown as Record<string, unknown>);
-  walkObj(result.gutachterbestellung as unknown as Record<string, unknown>);
-  // Forderungen: only summary fields, not einzelforderungen array
+  walkObj(result.antragsteller as unknown as Record<string, unknown>, 'antragsteller');
+  walkObj(result.gutachterbestellung as unknown as Record<string, unknown>, 'gutachterbestellung');
   const fSummary = {
     gesamtforderungen: result.forderungen?.gesamtforderungen,
     gesicherte_forderungen: result.forderungen?.gesicherte_forderungen,
     ungesicherte_forderungen: result.forderungen?.ungesicherte_forderungen,
   };
-  walkObj(fSummary as unknown as Record<string, unknown>);
-  // Aktiva: only summary fields, not positionen array
+  walkObj(fSummary as unknown as Record<string, unknown>, 'forderungen');
   if (result.aktiva) {
     const aSummary = {
       summe_aktiva: result.aktiva.summe_aktiva,
       massekosten_schaetzung: result.aktiva.massekosten_schaetzung,
     };
-    walkObj(aSummary as unknown as Record<string, unknown>);
+    walkObj(aSummary as unknown as Record<string, unknown>, 'aktiva');
   }
   // Anfechtung: only gesamtpotenzial, not vorgaenge array
   if (result.anfechtung) {
     const anSummary = { gesamtpotenzial: result.anfechtung.gesamtpotenzial };
-    walkObj(anSummary as unknown as Record<string, unknown>);
+    walkObj(anSummary as unknown as Record<string, unknown>, 'anfechtung');
   }
-  // Ermittlungsergebnisse: fixed structure, walk fully
-  walkObj(result.ermittlungsergebnisse as unknown as Record<string, unknown>);
-  return { found, missing, total: found + missing };
+  walkObj(result.ermittlungsergebnisse as unknown as Record<string, unknown>, 'ermittlungsergebnisse');
+  return { found, missing, total: found + missing, fields };
 }
 
 export function DashboardPage() {
