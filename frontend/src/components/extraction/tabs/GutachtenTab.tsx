@@ -38,7 +38,7 @@ const GUTACHTEN_FIELDS_BASE = [
   { path: 'verfahrensdaten.gericht', label: 'Gericht' },
   { path: 'verfahrensdaten.beschlussdatum', label: 'Beschlussdatum' },
   { path: 'verfahrensdaten.antragsdatum', label: 'Antragsdatum' },
-  { path: 'verfahrensdaten.eroeffnungsgrund', label: 'Er\u00f6ffnungsgrund' },
+  { path: 'verfahrensdaten.eroeffnungsgrund', label: 'Eröffnungsgrund' },
   { path: 'gutachterbestellung.gutachter_name', label: 'Gutachter' },
   { path: 'gutachterbestellung.gutachter_kanzlei', label: 'Kanzlei' },
   { path: 'gutachterbestellung.gutachter_adresse', label: 'Gutachter-Adresse' },
@@ -58,7 +58,7 @@ const GUTACHTEN_FIELDS_ENTITY = [
   { path: 'schuldner.firma', label: 'Firma' },
   { path: 'schuldner.rechtsform', label: 'Rechtsform' },
   { path: 'schuldner.handelsregisternummer', label: 'HRB' },
-  { path: 'schuldner.betriebsstaette_adresse', label: 'Betriebsst\u00e4tte' },
+  { path: 'schuldner.betriebsstaette_adresse', label: 'Betriebsstätte' },
 ];
 
 const GUTACHTEN_FIELDS_FINANCIAL = [
@@ -160,7 +160,7 @@ export function GutachtenTab({ result, extractionId, onUpdateField }: GutachtenT
         onUpdateField={onUpdateField}
       />
       <FieldChecklist
-        title="Finanzdaten (f\u00fcr Verfahrenskostendeckung)"
+        title="Finanzdaten (für Verfahrenskostendeckung)"
         fields={GUTACHTEN_FIELDS_FINANCIAL}
         result={result}
         onUpdateField={onUpdateField}
