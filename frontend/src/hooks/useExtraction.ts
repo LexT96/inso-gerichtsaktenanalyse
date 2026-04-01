@@ -36,6 +36,7 @@ interface ExtractionState {
   statsMissing: number;
   statsLettersReady: number;
   processingTimeMs: number | null;
+  pdfFile: File | null;
 }
 
 export function useExtraction() {
@@ -50,6 +51,7 @@ export function useExtraction() {
     statsMissing: 0,
     statsLettersReady: 0,
     processingTimeMs: null,
+    pdfFile: null,
   });
 
   const abortRef = useRef<AbortController | null>(null);
@@ -123,6 +125,7 @@ export function useExtraction() {
                 statsMissing: event.statsMissing,
                 statsLettersReady: event.statsLettersReady,
                 processingTimeMs: event.processingTimeMs,
+                pdfFile: null,
               });
             } else if (event.type === 'error') {
               setState(s => ({
@@ -190,6 +193,7 @@ export function useExtraction() {
               statsMissing: updated.statsMissing ?? 0,
               statsLettersReady: updated.statsLettersReady ?? 0,
               processingTimeMs: updated.processingTimeMs ?? null,
+              pdfFile: null,
             });
           } else if (updated.status === 'failed') {
             clearInterval(pollInterval);
@@ -226,6 +230,7 @@ export function useExtraction() {
       statsMissing: 0,
       statsLettersReady: 0,
       processingTimeMs: null,
+      pdfFile: null,
     });
   }, []);
 
@@ -253,7 +258,24 @@ export function useExtraction() {
         statsMissing: data.statsMissing,
         statsLettersReady: data.statsLettersReady,
         processingTimeMs: data.processingTimeMs,
+        pdfFile: null,
       });
+
+      // Try to load stored PDF for the viewer
+      try {
+        const authHeaders = await getAuthHeaders();
+        const pdfRes = await fetch(`${API_BASE}/history/${id}/pdf`, {
+          headers: authHeaders,
+          credentials: 'include',
+        });
+        if (pdfRes.ok) {
+          const blob = await pdfRes.blob();
+          const pdfFile = new File([blob], data.filename || `extraction-${id}.pdf`, { type: 'application/pdf' });
+          setState(s => ({ ...s, pdfFile }));
+        }
+      } catch {
+        // PDF not available — that's OK, show without viewer
+      }
     } catch (err: unknown) {
       let msg = 'Fehler beim Laden des Verlaufs';
       if (err && typeof err === 'object' && 'response' in err) {
@@ -300,6 +322,7 @@ export function useExtraction() {
         statsMissing: missing,
         statsLettersReady: 1,
         processingTimeMs: 0,
+        pdfFile: null,
       });
       return file;
     } catch (err) {
@@ -326,6 +349,7 @@ export function useExtraction() {
       statsMissing: 0,
       statsLettersReady: 0,
       processingTimeMs: null,
+      pdfFile: null,
     });
   }, []);
 

@@ -144,7 +144,7 @@ export function DashboardPage() {
   const [file, setFile] = useState<File | null>(null);
   const [tab, setTab] = useState('overview');
   const [proMode, setProMode] = useState(false);
-  const { loading, progress, progressPercent, result, error, extractionId, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField, resumeIfProcessing } = useExtraction();
+  const { loading, progress, progressPercent, result, error, extractionId, pdfFile, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField, resumeIfProcessing } = useExtraction();
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importedFilename, setImportedFilename] = useState<string | null>(null);
@@ -314,11 +314,11 @@ export function DashboardPage() {
       )}
 
       {/* Split layout when results are available + file exists */}
-      {result && file ? (
-        <PdfViewer file={file}>
+      {result && (file || pdfFile) ? (
+        <PdfViewer file={(file || pdfFile)!}>
           {resultsContent}
         </PdfViewer>
-      ) : result && !file ? (
+      ) : result && !file && !pdfFile ? (
         <div className="max-w-[1050px] mx-auto p-5 px-6">
           <div className="mb-3 p-2 px-3 bg-surface border border-border/60 rounded-lg text-[10px] text-text-muted flex items-center gap-2">
             <span className="text-ie-amber">⚠</span>
