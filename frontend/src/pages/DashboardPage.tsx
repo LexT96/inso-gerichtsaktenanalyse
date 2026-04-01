@@ -76,6 +76,21 @@ function computeStats(result: ExtractionResult): { found: number; missing: numbe
     vermoegensverzeichnis_eintrag: 'Vermögensverzeichnis',
   };
 
+  // Fields only relevant for juristische Personen — skip for natürliche Person
+  const ENTITY_ONLY = new Set([
+    'satzungssitz', 'verwaltungssitz', 'stammkapital', 'geschaeftsfuehrer',
+    'prokurist', 'gruendungsdatum', 'hr_eintragung_datum', 'groessenklasse_hgb',
+    'dundo_versicherung', 'steuerliche_organschaft',
+  ]);
+  const PERSON_ONLY = new Set(['geburtsort', 'geburtsland', 'staatsangehoerigkeit']);
+  // Optional fields that don't count as "missing" when empty
+  const OPTIONAL = new Set([
+    'mobiltelefon', 'ust_id', 'wirtschaftsjahr', 'ust_versteuerung',
+    'insolvenzsonderkonto', 'geschaeftszweig', 'unternehmensgegenstand',
+    'internationaler_bezug', 'eigenverwaltung', 'verfahrensstadium', 'verfahrensart',
+    'richter', 'zustellungsdatum_schuldner',
+  ]);
+
   const walkObj = (obj: Record<string, unknown>, prefix: string): void => {
     if (!obj) return;
     for (const [key, value] of Object.entries(obj)) {
@@ -83,7 +98,13 @@ function computeStats(result: ExtractionResult): { found: number; missing: numbe
       if (value && typeof value === 'object') {
         const v = value as Record<string, unknown>;
         if ('wert' in v || 'quelle' in v) {
+          // Skip entity-irrelevant fields
+          if (!isEntity && ENTITY_ONLY.has(key)) continue;
+          if (isEntity && PERSON_ONLY.has(key)) continue;
           const empty = isFieldEmpty(v as { wert?: unknown; quelle?: unknown });
+          // Skip optional fields that shouldn't count as missing
+          if (OPTIONAL.has(key) && empty) continue;
+
           empty ? missing++ : found++;
           const path = prefix ? `${prefix}.${key}` : key;
           const wert = v.wert != null && v.wert !== '' ? String(v.wert) : null;

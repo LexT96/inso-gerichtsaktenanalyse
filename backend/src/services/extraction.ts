@@ -287,20 +287,52 @@ function postProcessDefaults(result: ExtractionResult): ExtractionResult {
   return result;
 }
 
+// Fields that are only relevant for juristische Personen / Gesellschaften — skip for natürliche Person
+const ENTITY_ONLY_FIELDS = new Set([
+  'satzungssitz', 'verwaltungssitz', 'stammkapital', 'geschaeftsfuehrer',
+  'prokurist', 'gruendungsdatum', 'hr_eintragung_datum', 'groessenklasse_hgb',
+  'dundo_versicherung', 'steuerliche_organschaft', 'gesellschafter',
+]);
+
+// Fields that are only relevant for natürliche Personen — skip for entities
+const PERSON_ONLY_FIELDS = new Set([
+  'geburtsort', 'geburtsland', 'staatsangehoerigkeit',
+]);
+
+// Extended/optional fields that should not count as "missing" when empty
+const OPTIONAL_STATS_FIELDS = new Set([
+  'mobiltelefon', 'ust_id', 'wirtschaftsjahr', 'ust_versteuerung',
+  'insolvenzsonderkonto', 'geschaeftszweig', 'unternehmensgegenstand',
+  'internationaler_bezug', 'eigenverwaltung', 'verfahrensstadium', 'verfahrensart',
+  'richter', 'zustellungsdatum_schuldner',
+]);
+
+function isJuristischePersonResult(result: ExtractionResult): boolean {
+  const rf = String(result.schuldner?.rechtsform?.wert ?? '').toLowerCase();
+  return /gmbh|ug\b|ag\b|se\b|kg\b|ohg|gbr|partg|e\.?\s?v|stiftung|genossenschaft|kgaa/i.test(rf);
+}
+
 function computeStats(result: ExtractionResult): ExtractionStats {
   let found = 0;
   let missing = 0;
+  const isEntity = isJuristischePersonResult(result);
 
-  const walkObj = (obj: Record<string, unknown>): void => {
+  const walkObj = (obj: Record<string, unknown>, parentKey?: string): void => {
     if (!obj) return;
-    for (const value of Object.values(obj)) {
+    for (const [key, value] of Object.entries(obj)) {
       if (Array.isArray(value)) continue;
       if (value && typeof value === 'object') {
         const v = value as Record<string, unknown>;
         if ('wert' in v || 'quelle' in v) {
+          // Skip entity-irrelevant fields
+          if (!isEntity && ENTITY_ONLY_FIELDS.has(key)) continue;
+          if (isEntity && PERSON_ONLY_FIELDS.has(key)) continue;
+          // Skip optional fields that shouldn't count as missing
+          if (OPTIONAL_STATS_FIELDS.has(key) && isEmpty(v as { wert?: unknown })) continue;
+
           isEmpty(v as { wert?: unknown; quelle?: unknown }) ? missing++ : found++;
         } else {
-          walkObj(v as Record<string, unknown>);
+          walkObj(v as Record<string, unknown>, key);
         }
       }
     }
