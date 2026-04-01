@@ -392,6 +392,12 @@ const aktivumSchema = z.preprocess(
     beschreibung: sourcedValueSchema.optional().default(defaultSourced),
     geschaetzter_wert: sourcedNumberSchema.optional().default(defaultSourcedNum),
     kategorie: aktivaKategorieSchema.optional().default('bewegliches_vermoegen'),
+    liquidationswert: sourcedNumberSchema.optional(),
+    fortfuehrungswert: sourcedNumberSchema.optional(),
+    absonderung: sourcedNumberSchema.optional(),
+    aussonderung: sourcedNumberSchema.optional(),
+    freie_masse: sourcedNumberSchema.optional(),
+    sicherungsrechte: z.string().optional(),
   })
 );
 

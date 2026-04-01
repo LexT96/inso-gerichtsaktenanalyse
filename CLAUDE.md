@@ -47,7 +47,7 @@ PDF → pdfProcessor (watermark removal) → pageTexts
           Stage 2: anthropic.ts (Sonnet + Extended Thinking)
           Single comprehensive call: extracts ALL fields + aktiva + anfechtung
           Uses system prompt (prompt injection defense) + prompt caching
-          PDFs ≤500 pages: native PDF mode
+          PDFs ≤500 pages: native PDF mode (Claude reads images directly)
           PDFs >500 pages: chunked fallback with separate aktiva/anfechtung
                         ↓ ExtractionResult
           Stage 3: semanticVerifier.ts (Haiku)
@@ -56,21 +56,34 @@ PDF → pdfProcessor (watermark removal) → pageTexts
                         ↓
           Stage 3b: Targeted re-extraction (Haiku)
           Re-extracts only fields removed by Stage 3 (recovers 5-15%)
+                        ↓
+          Stage 3c: Focused handwriting extraction (native PDF only)
+          Detects Fragebogen pages → extracts as mini-PDF → focused OCR prompt
+          Merges handwritten fields (telefon, email, etc.) into main result
+                        ↓
+          Stage 4: Post-processing defaults
+          Gender inference from vorname, boolean defaults, arbeitnehmer fallback
+          All with transparent quelle ("Abgeleitet aus...", "Standard-Annahme...")
                         ↓ verified ExtractionResult
           letterChecklist.ts — validates 10 standard letter types
 ```
 
 - **Stage 1 — Document Analysis** (`src/utils/documentAnalyzer.ts`): Haiku call → text map of document structure. Graceful degradation on failure.
-- **Stage 2 — Comprehensive Extraction** (`src/services/anthropic.ts`): Single Sonnet call with Extended Thinking (10K token budget). Streaming API for long operations. System prompt separated from user content. Prompt caching via `cache_control: ephemeral`. Extracts: verfahrensdaten, schuldner (+ ehegatte, beschaeftigung, pfaendungsberechnung), antragsteller, einzelforderungen (dynamic array with sicherheiten), aktiva (10 categories + insolvenzanalyse), anfechtung (§§ 129-147 InsO), ermittlungsergebnisse, standardanschreiben.
+- **Stage 2 — Comprehensive Extraction** (`src/services/anthropic.ts`): Single Sonnet call with Extended Thinking (10K token budget). Streaming API for long operations. System prompt separated from user content. Prompt caching via `cache_control: ephemeral`. Extracts: verfahrensdaten (+ internationaler_bezug, eigenverwaltung), schuldner (+ ehegatte, beschaeftigung, pfaendungsberechnung + 30 corporate/tax/misc fields), antragsteller, einzelforderungen (dynamic array with sicherheiten), aktiva (10 categories + insolvenzanalyse + absonderung/aussonderung/freie_masse), anfechtung (§§ 129-147 InsO), ermittlungsergebnisse, standardanschreiben. Includes handwriting hints for reading Fragebogen forms.
+- **Stage 3c — Handwriting Extraction** (`src/services/extraction.ts`): Detects Fragebogen/Anlage pages by text markers, extracts them as mini-PDF via `pdf-lib`, sends to Claude with focused OCR prompt. Merges handwritten fields (telefon, email, betriebsstaette, etc.) into main result. Only runs in native PDF mode (direct Anthropic API).
+- **Stage 4 — Post-processing Defaults** (`src/services/extraction.ts`): Gender inference from ~80 common German first names, boolean defaults (internationaler_bezug, eigenverwaltung, betriebsrat → false), arbeitnehmer count fallback. All defaults include transparent quelle.
 - **Stage 3 — Semantic Verification** (`src/utils/semanticVerifier.ts`): Collects all `{wert, quelle}` fields (except `SKIP_VERIFICATION_PATHS` and `.titel` suffix fields), verifies against page texts. Can: confirm, correct source, correct value, or remove. Returns `removedPaths` for targeted re-extraction.
 - **Aktiva Extractor** (`src/utils/aktivaExtractor.ts`): Fallback for chunked mode. 10 asset categories, InsVV-based cost estimation, insolvency analysis (§§ 17-19, 26 InsO).
 - **Anfechtung Analyzer** (`src/utils/anfechtungsAnalyzer.ts`): Fallback for chunked mode. Identifies contestable transactions with lookback periods and risk assessment.
 
 ### Gutachten Generation (`src/utils/gutachtenGenerator.ts`)
-- **Templates**: 3 DOCX templates in `gutachtenvorlagen/` (natürliche Person, juristische Person, Personengesellschaft)
-- **FELD_* Replacement**: 28 placeholders mapped via `gutachten-mapping.json`. XML text replacement with paragraph-flattening (`processDocxParagraphs`) to handle Word run-splitting.
-- **Slot Filling** (`src/utils/gutachtenSlotFiller.ts`): Extracts ~100 `[…]` placeholders as numbered `[[SLOT_NNN]]` markers, fills via Claude API, returns for user review.
+- **Templates**: 3 DOCX templates in `gutachtenvorlagen/` (natürliche Person, juristische Person, Personengesellschaft). Rebuilt from 3 real finalized TBS Gutachten — all `[...]` replaced with `[[SLOT_NNN: descriptive context]]` markers, standard legal boilerplate filled in (VID §4, §17/§19 definitions, Zuständigkeit). Change markers `⚡KI:` for review.
+- **KI_* Replacement**: 90+ placeholders mapped via `gutachten-mapping.json`. XML text replacement with paragraph-flattening (`processDocxParagraphs`) to handle Word run-splitting. Computed fields include gender variants, InsVV fee calculation, gesellschafter formatting.
+- **Dynamic Tables**: `buildAktivaTable` (5-column: Wert/Absonderung/Aussonderung/Freie Masse), `buildPassivaTable` (Gläubiger/Betrag), `buildGlaeubigerTable` (detailed), `buildAnfechtungTable`.
+- **InsVV Calculation**: `berechneVerfahrenskosten()` — § 2 Abs. 1 (7 brackets), § 11 (25% vorläufig), GKG KV Nr. 2310. Available as computed fields `KI_Verfahrenskosten_Berechnung`, `KI_Verfahrenskosten_Gesamt`, `KI_Freie_Masse_Gesamt`.
+- **Slot Filling** (`src/utils/gutachtenSlotFiller.ts`): Extracts `[[SLOT_NNN]]` markers, fills via Claude API with few-shot examples from real TBS Gutachten. Factual slots → Haiku, narrative slots → Sonnet. Batches of 40, 16384 max_tokens.
 - **Two endpoints**: `POST /:id/prepare` (JSON with slots) → `POST /:id/generate` (DOCX download)
+- **Template rebuild script**: `scripts/rebuild-templates.py` — Python script using python-docx to update templates from real Gutachten examples.
 
 ### Frontend (React 18 + Vite + Tailwind CSS, port 3005)
 - **Design**: Geist Mono + DM Sans fonts, maroon accent (#A52A2A), shadows + rounded corners
@@ -78,19 +91,22 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 - **10 Tabs**: Übersicht, Quellen, Beteiligte, Forderungen, Aktiva, Anfechtung, Ermittlung, Prüfliste, Anschreiben, Gutachten
 - **Tab Navigation**: Priority+ overflow with group separators, sticky position
 - **PDF Viewer**: Side-by-side with paragraph-level semantic highlighting, single-click jump
-- **Entity-aware display**: GmbH shows firma/rechtsform/HRB; natürliche Person shows name/geburtsdatum/familienstand
+- **Entity-aware display**: GmbH shows firma/rechtsform/HRB + Gesellschafter table + steuerliche Angaben + sonstige Angaben; natürliche Person shows name/geburtsdatum/familienstand + telefon/email + steuerliche & sonstige Angaben (collapsed sections)
 - **Calculations** (frontend-only, verified): InsVV § 2 Abs. 1 (7 brackets), GKG KV Nr. 2310 (1.5 Gebühren), Quotenberechnung with § 171 Kostenbeiträge
 - **Cross-Validation**: Sum consistency, familienstand↔ehegatte, betriebsstätte↔privatanschrift, anfechtungspotenzial ratio
 
 ### Shared Types (`shared/types/extraction.ts`)
-- Canonical type definitions for `ExtractionResult`, `SourcedValue<T>`, `Einzelforderung`, `Aktivum`, `AnfechtbarerVorgang`, `Insolvenzanalyse`, `Ehegatte`, `Beschaeftigung`, `Pfaendungsberechnung`
+- Canonical type definitions for `ExtractionResult`, `SourcedValue<T>`, `Einzelforderung`, `Aktivum` (+ liquidationswert/fortfuehrungswert/absonderung/aussonderung/freie_masse), `AnfechtbarerVorgang`, `Insolvenzanalyse`, `Ehegatte`, `Beschaeftigung`, `Pfaendungsberechnung`, `Gesellschafter`
+- `Schuldner` has 50+ fields: personal data, corporate data (satzungssitz, gesellschafter[], geschaeftsfuehrer, prokurist, stammkapital, groessenklasse_hgb), tax data (finanzamt, steuernummer, ust_id, wirtschaftsjahr), misc (telefon, email, steuerberater, bankverbindungen, insolvenzsonderkonto)
+- `Verfahrensdaten` includes `internationaler_bezug` and `eigenverwaltung` (SourcedBoolean)
 - Backend duplicates these in `backend/src/types/extraction.ts` to avoid `rootDir` issues with tsc
 - **When modifying types**: update both `shared/types/extraction.ts` and `backend/src/types/extraction.ts`
 
 ### Gutachtenvorlagen (`gutachtenvorlagen/`)
-- 3 DOCX templates with `FELD_*` placeholders (28 unique, all mapped in `gutachten-mapping.json`)
+- 3 DOCX templates with `KI_*` placeholders (90+ unique, all mapped in `gutachten-mapping.json`) and `[[SLOT_NNN: context]]` markers for AI filling
+- Templates rebuilt from 3 real finalized TBS Gutachten (Geldt natürliche Person, freiraum 3 GmbH, Carl Puricelli Stiftung). Standard legal boilerplate (VID, §17/§19 InsO definitions, Zuständigkeit) pre-filled. Zero remaining `[...]` brackets.
 - Template selection by `schuldner.rechtsform` (longest-match-first)
-- `gutachten-mapping.json` — field mappings: `path` (ExtractionResult lookup), `computed` (gender/address derivation), `input` (user-provided)
+- `gutachten-mapping.json` — field mappings: `path` (ExtractionResult lookup), `computed` (gender/address derivation, InsVV fees, gesellschafter formatting), `input` (user-provided)
 
 ### Standardschreiben (`standardschreiben/`)
 - `checklisten.json` — defines required fields per letter type, aliases, default recipients

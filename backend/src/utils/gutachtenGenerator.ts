@@ -453,10 +453,17 @@ function computeGutachtenField(
 
     // --- Verfahrenskostenberechnung (InsVV) ---
     case 'verfahrenskosten_berechnung': {
-      // Berechnungsgrundlage = freie Masse (Aktiva - Absonderung - Aussonderung)
-      const summeAktiva = safeNum(result.aktiva?.summe_aktiva?.wert);
-      if (summeAktiva <= 0) return '';
-      const vk = berechneVerfahrenskosten(summeAktiva);
+      // Berechnungsgrundlage = freie Masse (§ 1 InsVV: Insolvenzmasse bei Schlussverteilung)
+      const positionen = result.aktiva?.positionen ?? [];
+      const berechnungsgrundlage = positionen.reduce((s, p) => {
+        if (p.freie_masse?.wert != null) return s + safeNum(p.freie_masse.wert);
+        const w = safeNum(p.geschaetzter_wert?.wert);
+        const ab = safeNum(p.absonderung?.wert);
+        const au = safeNum(p.aussonderung?.wert);
+        return s + Math.max(0, w - ab - au);
+      }, 0) || safeNum(result.aktiva?.summe_aktiva?.wert); // fallback to summe if no positionen
+      if (berechnungsgrundlage <= 0) return '';
+      const vk = berechneVerfahrenskosten(berechnungsgrundlage);
       return [
         `Vergütung vorläufiges Insolvenzverfahren: ${formatEUR(vk.verguetung_vorlaeufig)}`,
         `Vergütung eröffnetes Verfahren: ${formatEUR(vk.verguetung_eroeffnet)}`,
@@ -466,9 +473,13 @@ function computeGutachtenField(
     }
 
     case 'verfahrenskosten_gesamt': {
-      const s = safeNum(result.aktiva?.summe_aktiva?.wert);
-      if (s <= 0) return '';
-      return formatEUR(berechneVerfahrenskosten(s).gesamt);
+      const pos = result.aktiva?.positionen ?? [];
+      const bg = pos.reduce((sum, p) => {
+        if (p.freie_masse?.wert != null) return sum + safeNum(p.freie_masse.wert);
+        return sum + Math.max(0, safeNum(p.geschaetzter_wert?.wert) - safeNum(p.absonderung?.wert) - safeNum(p.aussonderung?.wert));
+      }, 0) || safeNum(result.aktiva?.summe_aktiva?.wert);
+      if (bg <= 0) return '';
+      return formatEUR(berechneVerfahrenskosten(bg).gesamt);
     }
 
     case 'freie_masse_gesamt': {

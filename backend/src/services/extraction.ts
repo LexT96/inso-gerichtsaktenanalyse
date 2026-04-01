@@ -96,17 +96,12 @@ Antworte AUSSCHLIESSLICH mit validem JSON. Für jedes gefundene Feld:
   "geschaeftszweig": {"wert": "Feinwerkmechanikermeister", "quelle": "Seite X, Anlage 2"},
   "arbeitnehmer_anzahl": {"wert": 2, "quelle": "Seite X, Mitarbeiter"},
   "betriebsrat": {"wert": false, "quelle": "Seite X, Betriebsrat nein angekreuzt"},
-  "sv_rueckstaende_seit": {"wert": "01.04.2025", "quelle": "Seite X"},
-  "lohn_rueckstaende_seit": {"wert": "01.04.2025", "quelle": "Seite X"},
-  "miete_monatlich": {"wert": "1.561,87", "quelle": "Seite X"},
-  "vermieter": {"wert": "Andres & Massmann", "quelle": "Seite X"},
-  "mietrueckstaende": {"wert": "10.964,61", "quelle": "Seite X"},
   "finanzamt": {"wert": "Finanzamt Simmern-Zell", "quelle": "Seite X"},
+  "steuernummer": {"wert": "12/345/67890", "quelle": "Seite X"},
   "steuerberater": {"wert": "Kneip-Daute, Friedrich-Back-Str. 21, 56288 Kastellaun", "quelle": "Seite X"},
   "sozialversicherungstraeger": {"wert": "AOK, UKV Union Krankenversicherung AG", "quelle": "Seite X"},
   "letzter_jahresabschluss": {"wert": "31.12.2023", "quelle": "Seite X"},
-  "grundstueck": {"wert": "Zum Bocksbart 8, 1/4 Anteil, ca. 400.000 EUR", "quelle": "Seite X, Anlage 4"},
-  "sicherungsrechte": {"wert": "GEFA Bank, Maschine OKUMA GENOS, 56.179,88 EUR", "quelle": "Seite X, Anlage 4H"}
+  "bankverbindungen": {"wert": "Volksbank Rheinböllen eG, Sparkasse Mittelmosel", "quelle": "Seite X"}
 }
 
 Wenn ein Feld leer ist oder nicht lesbar: NICHT aufnehmen. Nur tatsächlich gelesene Werte.`;
@@ -134,9 +129,12 @@ async function extractHandwrittenFormFields(
   // Map page indices to actual page numbers for the prompt
   const pageMapping = formPages.map((p, i) => `PDF-Seite ${i + 1} = Originalseite ${p + 1}`).join(', ');
 
+  // Use Sonnet for handwriting OCR — Haiku lacks vision quality for handwritten forms
+  // But limit max_tokens since output is a small JSON object (~20 fields)
+  const handwritingModel = config.EXTRACTION_MODEL;
   const response = await callWithRetry(() => anthropic.messages.create({
-    model: config.EXTRACTION_MODEL,
-    max_tokens: 8192,
+    model: handwritingModel,
+    max_tokens: 4096,
     temperature: 0,
     messages: [{
       role: 'user' as const,
@@ -168,7 +166,11 @@ async function extractHandwrittenFormFields(
   const mergeField = (target: { wert: unknown; quelle: string } | undefined, key: string) => {
     const source = parsed[key];
     if (!source?.wert) return;
-    if (target && (target.wert === null || target.wert === undefined || target.wert === '')) {
+    if (!target) {
+      logger.warn('Handwriting merge: target undefined, cannot write', { key });
+      return;
+    }
+    if (target.wert === null || target.wert === undefined || target.wert === '') {
       target.wert = source.wert as string;
       target.quelle = `${source.quelle} (Handschrift-Extraktion)`;
       merged++;
@@ -227,11 +229,11 @@ const FEMALE_NAMES = new Set(['alexandra','andrea','angelika','anna','annette','
 function postProcessDefaults(result: ExtractionResult): ExtractionResult {
   const DEFAULT_QUELLE = 'Standard-Annahme (nicht in Akte erwähnt)';
 
-  // 1. Boolean defaults: internationaler_bezug / eigenverwaltung → false when not mentioned
-  if (!result.verfahrensdaten.internationaler_bezug?.wert && result.verfahrensdaten.internationaler_bezug?.wert !== false) {
+  // 1. Boolean defaults: internationaler_bezug / eigenverwaltung → false only when null/undefined (not when explicitly set)
+  if (result.verfahrensdaten.internationaler_bezug?.wert == null) {
     result.verfahrensdaten.internationaler_bezug = { wert: false, quelle: DEFAULT_QUELLE };
   }
-  if (!result.verfahrensdaten.eigenverwaltung?.wert && result.verfahrensdaten.eigenverwaltung?.wert !== false) {
+  if (result.verfahrensdaten.eigenverwaltung?.wert == null) {
     result.verfahrensdaten.eigenverwaltung = { wert: false, quelle: DEFAULT_QUELLE };
   }
 

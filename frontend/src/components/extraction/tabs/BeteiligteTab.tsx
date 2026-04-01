@@ -6,8 +6,8 @@ const EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' 
 
 const GUETERSTAND_LABELS: Record<Gueterstand, string> = {
   zugewinngemeinschaft: 'Zugewinngemeinschaft',
-  guetertrennung: 'Guetertrennung',
-  guetergemeinschaft: 'Guetergemeinschaft',
+  guetertrennung: 'Gütertrennung',
+  guetergemeinschaft: 'Gütergemeinschaft',
   unbekannt: 'Unbekannt',
 };
 
