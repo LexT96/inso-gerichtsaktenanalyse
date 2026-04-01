@@ -44,7 +44,6 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
           <DataField label="Name (Vertretung)" field={s?.name} fieldPath="schuldner.name" />
           <DataField label="Handelsregister-Nr." field={s?.handelsregisternummer} fieldPath="schuldner.handelsregisternummer" />
           <DataField label="Betriebsstätte" field={s?.betriebsstaette_adresse} fieldPath="schuldner.betriebsstaette_adresse" />
-          <DataField label="Aktuelle Adresse" field={s?.aktuelle_adresse} fieldPath="schuldner.aktuelle_adresse" />
         </Section>
       ) : (
         /* ─── Natürliche Person ─── */
