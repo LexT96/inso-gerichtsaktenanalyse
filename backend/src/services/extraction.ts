@@ -283,6 +283,32 @@ function postProcessDefaults(result: ExtractionResult): ExtractionResult {
     }
   }
 
+  // 6. Compute summe_aktiva if null but positions exist
+  if (result.aktiva?.positionen?.length && result.aktiva.summe_aktiva?.wert == null) {
+    const total = result.aktiva.positionen.reduce((sum, p) => {
+      const w = p.geschaetzter_wert?.wert;
+      return sum + (typeof w === 'number' ? w : 0);
+    }, 0);
+    if (total > 0) {
+      result.aktiva.summe_aktiva = { wert: total, quelle: 'Berechnet aus Einzelpositionen' };
+    }
+  }
+
+  // 7. Parse "ca. X" string amounts in einzelforderungen betrag
+  if (result.forderungen?.einzelforderungen) {
+    for (const ef of result.forderungen.einzelforderungen) {
+      const betragWert = ef.betrag?.wert;
+      if (typeof betragWert === 'string') {
+        // Parse strings like "ca. 25.000", "ca 35000", "~15.000"
+        const cleaned = String(betragWert).replace(/^(ca\.?\s*|~\s*|circa\s*|etwa\s*)/i, '').replace(/\./g, '').replace(',', '.').trim();
+        const num = parseFloat(cleaned);
+        if (!isNaN(num) && num > 0) {
+          (ef.betrag as { wert: unknown }).wert = num;
+        }
+      }
+    }
+  }
+
   logger.info('Post-processing defaults applied');
   return result;
 }
