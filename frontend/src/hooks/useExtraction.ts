@@ -247,11 +247,15 @@ export function useExtraction() {
         }));
         return;
       }
+      // Recompute letter statuses from current field values (may have been edited)
+      const result = data.result as ExtractionResult;
+      result.standardanschreiben = recomputeLetterStatuses(result);
+
       setState({
         loading: false,
         progress: '',
         progressPercent: 100,
-        result: data.result,
+        result,
         error: null,
         extractionId: data.id,
         statsFound: data.statsFound,
