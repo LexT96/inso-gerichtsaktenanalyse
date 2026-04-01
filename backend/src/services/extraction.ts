@@ -12,6 +12,7 @@ import { semanticVerify } from '../utils/semanticVerifier';
 import { extractAktiva } from '../utils/aktivaExtractor';
 import { analyzeAnfechtung } from '../utils/anfechtungsAnalyzer';
 import { enrichmentReview } from '../utils/enrichmentReview';
+import { PDFDocument } from 'pdf-lib';
 import type { ExtractionResult } from '../types/extraction';
 
 // Rate-limited providers (Langdock: 60K TPM) must always use chunked mode
@@ -32,6 +33,189 @@ function isEmpty(field: { wert?: unknown; quelle?: unknown } | null | undefined)
   if (!field) return true;
   const w = field.wert;
   return w === null || w === undefined || w === '';
+}
+
+// ─── Stage 3c: Focused handwriting extraction for Fragebogen pages ───
+
+const FRAGEBOGEN_MARKERS = [
+  'fragebogen',
+  'ermittlung der wirtschaftlichen',
+  'ergänzende betriebliche angaben',
+  'vermögensübersicht',
+  'ergänzungsblatt',
+];
+
+function detectFragebogenPages(pageTexts: string[]): number[] {
+  const pages: number[] = [];
+  for (let i = 0; i < pageTexts.length; i++) {
+    const lower = pageTexts[i].toLowerCase();
+    if (FRAGEBOGEN_MARKERS.some(m => lower.includes(m))) {
+      pages.push(i);
+    }
+  }
+  return pages;
+}
+
+async function extractPdfPages(pdfBuffer: Buffer, pageIndices: number[]): Promise<Buffer> {
+  const srcDoc = await PDFDocument.load(pdfBuffer);
+  const newDoc = await PDFDocument.create();
+  const copied = await newDoc.copyPages(srcDoc, pageIndices);
+  for (const page of copied) {
+    newDoc.addPage(page);
+  }
+  return Buffer.from(await newDoc.save());
+}
+
+const HANDWRITING_PROMPT = `Du bist ein OCR-Spezialist für handschriftlich ausgefüllte deutsche Insolvenz-Fragebögen.
+
+AUFGABE: Lies JEDES handschriftlich ausgefüllte Feld in diesen Formularseiten. Die Formulare sind vorgedruckt mit Feldnamen, und der Antragsteller hat die Werte HANDSCHRIFTLICH eingetragen.
+
+Lies besonders sorgfältig:
+- Name, Vorname, Geburtsdatum
+- Straße/Hausnummer, PLZ, Ort (Privatanschrift UND Firmenanschrift)
+- Telefonnummer, E-Mail-Adresse
+- Name der Firma/des Geschäftsbetriebs und dessen Anschrift
+- Geschäftszweig/Branche
+- Anzahl Mitarbeiter (Azubis, Teilzeit, Aushilfen)
+- Steuerberater (Name und Anschrift)
+- Sozialversicherungsträger (Krankenkasse)
+- Vermieter/Verpächter und Mietbetrag
+- Mietrückstände
+- Lohnrückstände seit wann, SV-Rückstände seit wann
+- Gerichtsvollzieher
+- Angekreuzte Checkboxen (☒ = ja, ☐ = nein)
+- Beträge in EUR (auch handgeschriebene Zahlen)
+- Grundstücke: Lage, Eigentumsanteil, Verkehrswert
+- Sicherungsrechte: Gegenstand, Gläubiger, Betrag
+
+Antworte AUSSCHLIESSLICH mit validem JSON. Für jedes gefundene Feld:
+{
+  "telefon": {"wert": "06545 9121110", "quelle": "Seite X, Fragebogen Telekommunikation"},
+  "email": {"wert": "info@example.de", "quelle": "Seite X, Fragebogen E-mail"},
+  "betriebsstaette_adresse": {"wert": "Musterstr. 1, 12345 Stadt", "quelle": "Seite X, Anlage 2"},
+  "geschaeftszweig": {"wert": "Feinwerkmechanikermeister", "quelle": "Seite X, Anlage 2"},
+  "arbeitnehmer_anzahl": {"wert": 2, "quelle": "Seite X, Mitarbeiter"},
+  "betriebsrat": {"wert": false, "quelle": "Seite X, Betriebsrat nein angekreuzt"},
+  "sv_rueckstaende_seit": {"wert": "01.04.2025", "quelle": "Seite X"},
+  "lohn_rueckstaende_seit": {"wert": "01.04.2025", "quelle": "Seite X"},
+  "miete_monatlich": {"wert": "1.561,87", "quelle": "Seite X"},
+  "vermieter": {"wert": "Andres & Massmann", "quelle": "Seite X"},
+  "mietrueckstaende": {"wert": "10.964,61", "quelle": "Seite X"},
+  "finanzamt": {"wert": "Finanzamt Simmern-Zell", "quelle": "Seite X"},
+  "steuerberater": {"wert": "Kneip-Daute, Friedrich-Back-Str. 21, 56288 Kastellaun", "quelle": "Seite X"},
+  "sozialversicherungstraeger": {"wert": "AOK, UKV Union Krankenversicherung AG", "quelle": "Seite X"},
+  "letzter_jahresabschluss": {"wert": "31.12.2023", "quelle": "Seite X"},
+  "grundstueck": {"wert": "Zum Bocksbart 8, 1/4 Anteil, ca. 400.000 EUR", "quelle": "Seite X, Anlage 4"},
+  "sicherungsrechte": {"wert": "GEFA Bank, Maschine OKUMA GENOS, 56.179,88 EUR", "quelle": "Seite X, Anlage 4H"}
+}
+
+Wenn ein Feld leer ist oder nicht lesbar: NICHT aufnehmen. Nur tatsächlich gelesene Werte.`;
+
+async function extractHandwrittenFormFields(
+  result: ExtractionResult,
+  pdfBuffer: Buffer,
+  pageTexts: string[]
+): Promise<ExtractionResult> {
+  const formPages = detectFragebogenPages(pageTexts);
+  if (formPages.length === 0) {
+    logger.info('No Fragebogen pages detected, skipping handwriting pass');
+    return result;
+  }
+
+  logger.info('Fragebogen pages detected for handwriting extraction', {
+    pages: formPages.map(p => p + 1),
+    count: formPages.length,
+  });
+
+  // Extract only the form pages as a mini-PDF
+  const miniPdf = await extractPdfPages(pdfBuffer, formPages);
+  const base64 = miniPdf.toString('base64');
+
+  // Map page indices to actual page numbers for the prompt
+  const pageMapping = formPages.map((p, i) => `PDF-Seite ${i + 1} = Originalseite ${p + 1}`).join(', ');
+
+  const response = await callWithRetry(() => anthropic.messages.create({
+    model: config.EXTRACTION_MODEL,
+    max_tokens: 8192,
+    temperature: 0,
+    messages: [{
+      role: 'user' as const,
+      content: [
+        { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+        { type: 'text' as const, text: `${HANDWRITING_PROMPT}\n\nSeitenzuordnung: ${pageMapping}\nBitte verwende die Originalseitennummern in der quelle.` },
+      ],
+    }],
+  }));
+
+  const text = response.content
+    .filter((c) => c.type === 'text')
+    .map((c) => (c as { text: string }).text)
+    .join('');
+
+  let parsed: Record<string, { wert: unknown; quelle: string }>;
+  try {
+    const jsonStr = extractJsonFromText(text);
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    logger.warn('Handwriting extraction JSON parse failed', { sample: text.slice(0, 300) });
+    return result;
+  }
+
+  // Merge into result — only fill fields that are currently empty
+  const s = result.schuldner;
+  let merged = 0;
+
+  const mergeField = (target: { wert: unknown; quelle: string } | undefined, key: string) => {
+    const source = parsed[key];
+    if (!source?.wert) return;
+    if (target && (target.wert === null || target.wert === undefined || target.wert === '')) {
+      target.wert = source.wert as string;
+      target.quelle = `${source.quelle} (Handschrift-Extraktion)`;
+      merged++;
+    }
+  };
+
+  mergeField(s.telefon, 'telefon');
+  mergeField(s.mobiltelefon, 'mobiltelefon');
+  mergeField(s.email, 'email');
+  mergeField(s.betriebsstaette_adresse, 'betriebsstaette_adresse');
+  mergeField(s.geschaeftszweig, 'geschaeftszweig');
+  mergeField(s.unternehmensgegenstand, 'unternehmensgegenstand');
+  mergeField(s.finanzamt, 'finanzamt');
+  mergeField(s.steuernummer, 'steuernummer');
+  mergeField(s.ust_id, 'ust_id');
+  mergeField(s.steuerberater, 'steuerberater');
+  mergeField(s.sozialversicherungstraeger, 'sozialversicherungstraeger');
+  mergeField(s.letzter_jahresabschluss, 'letzter_jahresabschluss');
+  mergeField(s.bankverbindungen, 'bankverbindungen');
+  mergeField(s.aktuelle_adresse, 'aktuelle_adresse');
+  mergeField(s.firma, 'firma');
+  mergeField(s.familienstand, 'familienstand');
+  mergeField(s.geschlecht, 'geschlecht');
+
+  // Numeric fields
+  if (parsed.arbeitnehmer_anzahl?.wert != null && isEmpty(s.arbeitnehmer_anzahl)) {
+    s.arbeitnehmer_anzahl = {
+      wert: Number(parsed.arbeitnehmer_anzahl.wert) || 0,
+      quelle: `${parsed.arbeitnehmer_anzahl.quelle} (Handschrift-Extraktion)`,
+    };
+    merged++;
+  }
+  if (parsed.betriebsrat?.wert != null && isEmpty(s.betriebsrat)) {
+    s.betriebsrat = {
+      wert: parsed.betriebsrat.wert === true || parsed.betriebsrat.wert === 'true' || parsed.betriebsrat.wert === 'ja',
+      quelle: `${parsed.betriebsrat.quelle} (Handschrift-Extraktion)`,
+    };
+    merged++;
+  }
+
+  logger.info('Handwriting extraction completed', {
+    fieldsFound: Object.keys(parsed).length,
+    merged,
+    formPages: formPages.length,
+  });
+
+  return result;
 }
 
 // ─── Post-processing: apply transparent defaults and inferences ───
@@ -304,6 +488,19 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
         }
       } catch (reErr) {
         logger.warn('Targeted re-extraction failed', { error: reErr instanceof Error ? reErr.message : String(reErr) });
+      }
+    }
+
+    // Stage 3c: Focused handwriting extraction for Fragebogen pages
+    // Claude's vision CAN read handwriting but misses details when processing 30+ pages at once.
+    // This pass sends ONLY the form pages with a focused prompt → dramatically better results.
+    const supportsNativePdf = !config.ANTHROPIC_BASE_URL;
+    if (supportsNativePdf && pdfBuffer) {
+      report('Handschriftliche Formulare werden gelesen…', 85);
+      try {
+        result = await extractHandwrittenFormFields(result, pdfBuffer, pageTexts);
+      } catch (err) {
+        logger.warn('Handwriting extraction failed, continuing', { error: err instanceof Error ? err.message : String(err) });
       }
     }
 
