@@ -71,6 +71,12 @@ const aktivumSchema = z.object({
     (v) => (typeof v === 'string' ? v.toLowerCase().trim() : v),
     aktivaKategorieSchema
   ),
+  liquidationswert: sourcedNumberSchema.optional(),
+  fortfuehrungswert: sourcedNumberSchema.optional(),
+  absonderung: sourcedNumberSchema.optional(),
+  aussonderung: sourcedNumberSchema.optional(),
+  freie_masse: sourcedNumberSchema.optional(),
+  sicherungsrechte: z.string().optional(),
 });
 
 const insolvenzgrundBewertungSchema = z.object({
@@ -132,7 +138,13 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). In a
     {
       "beschreibung": {"wert": "Beschreibung des Vermögenswerts", "quelle": "Seite X, Abschnitt"},
       "geschaetzter_wert": {"wert": 0, "quelle": "Seite X, Abschnitt"},
-      "kategorie": "immobilien"
+      "kategorie": "immobilien",
+      "liquidationswert": {"wert": 0, "quelle": ""},
+      "fortfuehrungswert": {"wert": 0, "quelle": ""},
+      "absonderung": {"wert": 0, "quelle": ""},
+      "aussonderung": {"wert": 0, "quelle": ""},
+      "freie_masse": {"wert": 0, "quelle": ""},
+      "sicherungsrechte": "z.B. Grundschuld zugunsten Sparkasse, Sicherungsübereignung zugunsten Bank"
     }
   ],
   "summe_aktiva": {"wert": 0, "quelle": "Seite X, Zusammenfassung"},
@@ -161,7 +173,12 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). In a
 REGELN FÜR VERMÖGENSWERTE:
 - Nur extrahieren, was tatsächlich im Dokument steht. Keine Werte erfinden.
 - Wenn keine Vermögenswerte gefunden werden, leere positionen-Liste zurückgeben.
-- geschaetzter_wert: Den im Dokument genannten Wert verwenden. Wenn kein Wert genannt, null setzen.
+- geschaetzter_wert: Den im Dokument genannten Wert verwenden (= Liquidationswert oder bester verfügbarer Wert). Wenn kein Wert genannt, null setzen.
+- liquidationswert / fortfuehrungswert: Wenn das Dokument beide Werte nennt, beide extrahieren. Sonst: liquidationswert = geschaetzter_wert, fortfuehrungswert leer.
+- absonderung: Wert der Absonderungsrechte (z.B. Grundschuld, Sicherungsübereignung) an diesem Vermögenswert. 0 wenn keine Absonderung.
+- aussonderung: Wert der Aussonderungsrechte (z.B. Eigentumsvorbehalt, Leasing) an diesem Vermögenswert. 0 wenn keine Aussonderung.
+- freie_masse: geschaetzter_wert - absonderung - aussonderung. Kann 0 sein wenn wertausschöpfend belastet.
+- sicherungsrechte: Textbeschreibung der Sicherheiten (z.B. "Grundschuld zugunsten Sparkasse Trier i.H.v. 154.000 EUR")
 - summe_aktiva: Gesamtsumme aller Aktiva berechnen oder aus Dokument übernehmen.
 - massekosten_schaetzung: Geschätzte Massekosten nach § 54 InsO (Gerichtskosten ca. 2.000-4.000 EUR + Verwaltervergütung nach InsVV).
 - Jede Position braucht eine kategorie aus der obigen Liste.

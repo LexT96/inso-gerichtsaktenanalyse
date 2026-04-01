@@ -7,6 +7,7 @@ export type {
   SourcedBoolean,
   Verfahrensdaten,
   Schuldner,
+  Gesellschafter,
   Antragsteller,
   Forderungen,
   ForderungsArt,

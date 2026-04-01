@@ -47,6 +47,23 @@ Datumsformat: TT.MM.JJJJ (z.B. 18.12.2025). Beträge: deutsche Schreibweise mit 
 
 WASSERZEICHEN: Viele Gerichtsakten enthalten diagonale Wasserzeichen (z.B. Name + Datum schräg über die Seite). IGNORIERE diese komplett — sie sind KEIN Akteninhalt. Extrahiere NUR den eigentlichen Dokumenttext.
 
+HANDSCHRIFTLICHE FORMULARE: Gerichtsakten enthalten oft handausgefüllte Fragebogen. Lies handschriftliche Einträge BESONDERS SORGFÄLTIG — sie enthalten wichtige Daten wie Telefon, E-Mail, Firma-Adresse, Steuerberater, SV-Träger, Anzahl Arbeitnehmer, Mietrückstände. Suche gezielt nach:
+- Fragebogen "Allgemeine Angaben" (Telefon-Nr, E-Mail, Familienstand, Firma-Name + Adresse)
+- Fragebogen "Geschäftsbetrieb" (Geschäftszweig, Mitarbeiter, Mietverhältnisse, Mietrückstände)
+- "Ergänzende betriebliche Angaben" (Anschrift Geschäftsbetrieb, SV-Träger, Betriebsrat, Buchführung/Steuerberater)
+- "Vermögensübersicht" (Grundstücke, Maschinen, Bankguthaben, Einkünfte)
+- betriebsstaette_adresse: Die Adresse des Geschäftsbetriebs/der Firma — NICHT die Privatanschrift. Steht oft auf Anlage 2 "Angaben zum Geschäftsbetrieb".
+
+UNTERNEHMENSDATEN (schuldner.*): Bei juristischen Personen (GmbH, AG, etc.) extrahiere zusätzlich:
+- satzungssitz vs. verwaltungssitz (können abweichen), unternehmensgegenstand (aus HR-Auszug), geschaeftszweig (WZ-Klassifikation falls vorhanden)
+- stammkapital, gesellschafter (Array mit {name, sitz, beteiligung}), geschaeftsfuehrer (Name, geb., § 181-Status), prokurist
+- gruendungsdatum, hr_eintragung_datum, groessenklasse_hgb (z.B. "Kleine Kapitalgesellschaft, § 267 Abs. 1 HGB"), dundo_versicherung
+- arbeitnehmer_anzahl, betriebsrat (true/false)
+- finanzamt, steuernummer, ust_id, wirtschaftsjahr, ust_versteuerung (Soll/Ist), steuerliche_organschaft, letzter_jahresabschluss
+- sozialversicherungstraeger (alle genannten SV-Träger), steuerberater (Name + Adresse), bankverbindungen (alle Konten mit IBAN/Kontonr.)
+Bei natürlichen Personen: telefon, email, insolvenzsonderkonto falls vorhanden.
+gesellschafter ist ein Array: [{"name": "KS Holding GmbH", "sitz": "66740 Saarlouis", "beteiligung": "39,5 %"}, ...]
+
 Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICHTIG: In allen String-Werten Anführungszeichen mit \\ escapen, keine Zeilenumbrüche innerhalb von Strings. Bei Zahlen: Nur 0 setzen, wenn der Wert tatsächlich 0 in der Akte steht — sonst null und quelle leer lassen. Verwende folgende Struktur:
 
 {
@@ -60,7 +77,9 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICH
     "eroeffnungsgrund": {"wert": "", "quelle": ""},
     "zustellungsdatum_schuldner": {"wert": "", "quelle": ""},
     "verfahrensstadium": {"wert": "", "quelle": ""},
-    "verfahrensart": {"wert": "", "quelle": ""}
+    "verfahrensart": {"wert": "", "quelle": ""},
+    "internationaler_bezug": {"wert": false, "quelle": ""},
+    "eigenverwaltung": {"wert": false, "quelle": ""}
   },
   "schuldner": {
     "name": {"wert": "", "quelle": ""},
@@ -77,7 +96,34 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICH
     "rechtsform": {"wert": "", "quelle": ""},
     "betriebsstaette_adresse": {"wert": "", "quelle": ""},
     "handelsregisternummer": {"wert": "", "quelle": ""},
+    "telefon": {"wert": "", "quelle": ""},
+    "email": {"wert": "", "quelle": ""},
     "kinder": [],
+    "satzungssitz": {"wert": "", "quelle": ""},
+    "verwaltungssitz": {"wert": "", "quelle": ""},
+    "unternehmensgegenstand": {"wert": "", "quelle": ""},
+    "geschaeftszweig": {"wert": "", "quelle": ""},
+    "stammkapital": {"wert": "", "quelle": ""},
+    "gesellschafter": [],
+    "geschaeftsfuehrer": {"wert": "", "quelle": ""},
+    "prokurist": {"wert": "", "quelle": ""},
+    "gruendungsdatum": {"wert": "", "quelle": ""},
+    "hr_eintragung_datum": {"wert": "", "quelle": ""},
+    "groessenklasse_hgb": {"wert": "", "quelle": ""},
+    "dundo_versicherung": {"wert": "", "quelle": ""},
+    "arbeitnehmer_anzahl": {"wert": 0, "quelle": ""},
+    "betriebsrat": {"wert": false, "quelle": ""},
+    "finanzamt": {"wert": "", "quelle": ""},
+    "steuernummer": {"wert": "", "quelle": ""},
+    "ust_id": {"wert": "", "quelle": ""},
+    "wirtschaftsjahr": {"wert": "", "quelle": ""},
+    "ust_versteuerung": {"wert": "", "quelle": ""},
+    "steuerliche_organschaft": {"wert": false, "quelle": ""},
+    "letzter_jahresabschluss": {"wert": "", "quelle": ""},
+    "sozialversicherungstraeger": {"wert": "", "quelle": ""},
+    "steuerberater": {"wert": "", "quelle": ""},
+    "bankverbindungen": {"wert": "", "quelle": ""},
+    "insolvenzsonderkonto": {"wert": "", "quelle": ""},
     "ehegatte": {
       "name": {"wert": "", "quelle": ""},
       "geburtsdatum": {"wert": "", "quelle": ""},

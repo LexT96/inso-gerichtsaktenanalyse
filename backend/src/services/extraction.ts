@@ -34,6 +34,73 @@ function isEmpty(field: { wert?: unknown; quelle?: unknown } | null | undefined)
   return w === null || w === undefined || w === '';
 }
 
+// ─── Post-processing: apply transparent defaults and inferences ───
+
+// Common German male/female first names for gender inference
+const MALE_NAMES = new Set(['alexander','andreas','bernd','christian','daniel','david','dirk','erik','frank','hans','heinrich','jan','jens','jörg','karl','klaus','lars','lukas','markus','martin','matthias','max','michael','nicolas','oliver','patrick','paul','peter','philipp','ralf','robert','stefan','sven','thomas','tobias','uwe','werner','wolfgang']);
+const FEMALE_NAMES = new Set(['alexandra','andrea','angelika','anna','annette','barbara','birgit','brigitte','carmen','charlotte','claudia','daniela','elke','eva','franziska','gabriele','heike','ines','julia','karen','kathrin','katja','kerstin','klara','laura','lisa','maria','marion','martina','monika','nadine','nicole','petra','sabine','sandra','sarah','silke','simone','stefanie','susanne','tanja','ulrike','ursula','yvonne']);
+
+function postProcessDefaults(result: ExtractionResult): ExtractionResult {
+  const DEFAULT_QUELLE = 'Standard-Annahme (nicht in Akte erwähnt)';
+
+  // 1. Boolean defaults: internationaler_bezug / eigenverwaltung → false when not mentioned
+  if (!result.verfahrensdaten.internationaler_bezug?.wert && result.verfahrensdaten.internationaler_bezug?.wert !== false) {
+    result.verfahrensdaten.internationaler_bezug = { wert: false, quelle: DEFAULT_QUELLE };
+  }
+  if (!result.verfahrensdaten.eigenverwaltung?.wert && result.verfahrensdaten.eigenverwaltung?.wert !== false) {
+    result.verfahrensdaten.eigenverwaltung = { wert: false, quelle: DEFAULT_QUELLE };
+  }
+
+  // 2. Gender inference from first name
+  const s = result.schuldner;
+  if (isEmpty(s.geschlecht) && s.vorname?.wert) {
+    const vn = String(s.vorname.wert).toLowerCase().trim().split(/[\s-]/)[0];
+    if (MALE_NAMES.has(vn)) {
+      s.geschlecht = { wert: 'männlich', quelle: `Abgeleitet aus Vorname "${s.vorname.wert}"` };
+    } else if (FEMALE_NAMES.has(vn)) {
+      s.geschlecht = { wert: 'weiblich', quelle: `Abgeleitet aus Vorname "${s.vorname.wert}"` };
+    }
+  }
+
+  // 3. Betriebsstätte fallback: if empty but firma address available in other fields
+  if (isEmpty(s.betriebsstaette_adresse) && s.firma?.wert) {
+    // Check if aktuelle_adresse differs from betriebsstaette — for nat. Personen,
+    // betriebsstaette might be in unternehmensgegenstand or zusammenfassung
+    const zf = result.zusammenfassung ?? [];
+    for (const z of zf) {
+      if (!z.wert) continue;
+      // Look for patterns like "Zur Oberen Heide 11" or business address mentions
+      const match = z.wert.match(/(?:Betriebsstätte|Betrieb|Firmensitz|Geschäftssitz|Unternehmen)[:\s]+([^,]+,\s*\d{5}\s+\w+)/i);
+      if (match) {
+        s.betriebsstaette_adresse = { wert: match[1].trim(), quelle: z.quelle || 'Zusammenfassung' };
+        break;
+      }
+    }
+  }
+
+  // 4. Betriebsrat default: false when not mentioned (only for entities/Einzelunternehmen with employees)
+  if (s.firma?.wert && isEmpty(s.betriebsrat)) {
+    s.betriebsrat = { wert: false, quelle: DEFAULT_QUELLE };
+  }
+
+  // 5. Arbeitnehmer: try to infer from betroffene_arbeitnehmer if schuldner field is empty
+  if (isEmpty(s.arbeitnehmer_anzahl)) {
+    const an = result.forderungen?.betroffene_arbeitnehmer;
+    if (an?.length) {
+      let total = 0;
+      for (const a of an) {
+        if (a && typeof a === 'object' && 'anzahl' in a) total += (a as { anzahl: number }).anzahl || 0;
+      }
+      if (total > 0) {
+        s.arbeitnehmer_anzahl = { wert: total, quelle: 'Abgeleitet aus betroffene Arbeitnehmer' };
+      }
+    }
+  }
+
+  logger.info('Post-processing defaults applied');
+  return result;
+}
+
 function computeStats(result: ExtractionResult): ExtractionStats {
   let found = 0;
   let missing = 0;
@@ -250,8 +317,10 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
       logger.warn('Enrichment review failed, continuing without', { error: err instanceof Error ? err.message : String(err) });
     }
 
-    report('Standardanschreiben werden geprüft…', 90);
+    report('Nachbearbeitung…', 89);
+    result = postProcessDefaults(result);
 
+    report('Standardanschreiben werden geprüft…', 90);
     result = validateLettersAgainstChecklists(result);
 
     const processingTimeMs = Date.now() - startTime;

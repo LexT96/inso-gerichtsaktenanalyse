@@ -536,6 +536,8 @@ const extractionResultSchemaInner = z.object({
       zustellungsdatum_schuldner: sourcedValueSchema.optional().default(defaultSourced),
       verfahrensstadium: sourcedValueSchema.optional().default(defaultSourced),
       verfahrensart: sourcedValueSchema.optional().default(defaultSourced),
+      internationaler_bezug: sourcedBooleanSchema.optional().default(defaultSourcedBool),
+      eigenverwaltung: sourcedBooleanSchema.optional().default(defaultSourcedBool),
     }))
     .optional()
     .default({}),
@@ -555,10 +557,46 @@ const extractionResultSchemaInner = z.object({
       rechtsform: sourcedValueSchema.optional().default(defaultSourced),
       betriebsstaette_adresse: sourcedValueSchema.optional().default(defaultSourced),
       handelsregisternummer: sourcedValueSchema.optional().default(defaultSourced),
+      telefon: sourcedValueSchema.optional().default(defaultSourced),
+      mobiltelefon: sourcedValueSchema.optional().default(defaultSourced),
+      email: sourcedValueSchema.optional().default(defaultSourced),
       kinder: z.preprocess(ensureArray, z.array(z.any())).optional().default([]),
+      // Erweiterte Daten (natürliche Person)
       ehegatte: ehegatteSchema.optional(),
       beschaeftigung: beschaeftigungSchema.optional(),
       pfaendungsberechnung: pfaendungsberechnungSchema.optional(),
+      // Unternehmensdaten (juristische Person / Einzelunternehmen)
+      satzungssitz: sourcedValueSchema.optional().default(defaultSourced),
+      verwaltungssitz: sourcedValueSchema.optional().default(defaultSourced),
+      unternehmensgegenstand: sourcedValueSchema.optional().default(defaultSourced),
+      geschaeftszweig: sourcedValueSchema.optional().default(defaultSourced),
+      stammkapital: sourcedValueSchema.optional().default(defaultSourced),
+      gesellschafter: z.preprocess(ensureArray, z.array(z.object({
+        name: z.string().default(''),
+        sitz: z.string().default(''),
+        beteiligung: z.string().default(''),
+      }))).optional().default([]),
+      geschaeftsfuehrer: sourcedValueSchema.optional().default(defaultSourced),
+      prokurist: sourcedValueSchema.optional().default(defaultSourced),
+      gruendungsdatum: sourcedValueSchema.optional().default(defaultSourced),
+      hr_eintragung_datum: sourcedValueSchema.optional().default(defaultSourced),
+      groessenklasse_hgb: sourcedValueSchema.optional().default(defaultSourced),
+      dundo_versicherung: sourcedValueSchema.optional().default(defaultSourced),
+      arbeitnehmer_anzahl: sourcedNumberSchema.optional().default(defaultSourcedNum),
+      betriebsrat: sourcedBooleanSchema.optional().default(defaultSourcedBool),
+      // Steuerliche Angaben
+      finanzamt: sourcedValueSchema.optional().default(defaultSourced),
+      steuernummer: sourcedValueSchema.optional().default(defaultSourced),
+      ust_id: sourcedValueSchema.optional().default(defaultSourced),
+      wirtschaftsjahr: sourcedValueSchema.optional().default(defaultSourced),
+      ust_versteuerung: sourcedValueSchema.optional().default(defaultSourced),
+      steuerliche_organschaft: sourcedBooleanSchema.optional().default(defaultSourcedBool),
+      letzter_jahresabschluss: sourcedValueSchema.optional().default(defaultSourced),
+      // Sonstige
+      sozialversicherungstraeger: sourcedValueSchema.optional().default(defaultSourced),
+      steuerberater: sourcedValueSchema.optional().default(defaultSourced),
+      bankverbindungen: sourcedValueSchema.optional().default(defaultSourced),
+      insolvenzsonderkonto: sourcedValueSchema.optional().default(defaultSourced),
     }))
     .optional()
     .default({}),

@@ -33,6 +33,14 @@ export interface Verfahrensdaten {
   zustellungsdatum_schuldner: SourcedValue;
   verfahrensstadium?: SourcedValue;
   verfahrensart?: SourcedValue;
+  internationaler_bezug?: SourcedBoolean;
+  eigenverwaltung?: SourcedBoolean;
+}
+
+export interface Gesellschafter {
+  name: string;
+  sitz: string;
+  beteiligung: string;
 }
 
 export interface Schuldner {
@@ -51,10 +59,41 @@ export interface Schuldner {
   betriebsstaette_adresse: SourcedValue;
   handelsregisternummer: SourcedValue;
   kinder: Array<string | SourcedValue>;
-  // Erweiterte Daten
+  telefon?: SourcedValue;
+  mobiltelefon?: SourcedValue;
+  email?: SourcedValue;
+  // Erweiterte Daten (natürliche Person)
   ehegatte?: Ehegatte;
   beschaeftigung?: Beschaeftigung;
   pfaendungsberechnung?: Pfaendungsberechnung;
+  // Unternehmensdaten (juristische Person / Einzelunternehmen)
+  satzungssitz?: SourcedValue;
+  verwaltungssitz?: SourcedValue;
+  unternehmensgegenstand?: SourcedValue;
+  geschaeftszweig?: SourcedValue;
+  stammkapital?: SourcedValue;
+  gesellschafter?: Gesellschafter[];
+  geschaeftsfuehrer?: SourcedValue;
+  prokurist?: SourcedValue;
+  gruendungsdatum?: SourcedValue;
+  hr_eintragung_datum?: SourcedValue;
+  groessenklasse_hgb?: SourcedValue;
+  dundo_versicherung?: SourcedValue;
+  arbeitnehmer_anzahl?: SourcedNumber;
+  betriebsrat?: SourcedBoolean;
+  // Steuerliche Angaben
+  finanzamt?: SourcedValue;
+  steuernummer?: SourcedValue;
+  ust_id?: SourcedValue;
+  wirtschaftsjahr?: SourcedValue;
+  ust_versteuerung?: SourcedValue;
+  steuerliche_organschaft?: SourcedBoolean;
+  letzter_jahresabschluss?: SourcedValue;
+  // Sonstige
+  sozialversicherungstraeger?: SourcedValue;
+  steuerberater?: SourcedValue;
+  bankverbindungen?: SourcedValue;
+  insolvenzsonderkonto?: SourcedValue;
 }
 
 export interface Antragsteller {
@@ -196,6 +235,12 @@ export interface Aktivum {
   beschreibung: SourcedValue;
   geschaetzter_wert: SourcedNumber;
   kategorie: AktivaKategorie;
+  liquidationswert?: SourcedNumber;
+  fortfuehrungswert?: SourcedNumber;
+  absonderung?: SourcedNumber;
+  aussonderung?: SourcedNumber;
+  freie_masse?: SourcedNumber;
+  sicherungsrechte?: string;
 }
 
 export type InsolvenzgrundStatus = 'ja' | 'nein' | 'offen';

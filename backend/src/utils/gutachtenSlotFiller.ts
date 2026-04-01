@@ -726,7 +726,7 @@ function isNarrativeSlot(slot: SlotInfo): boolean {
 
 // --- Prompts ---
 
-const FACTUAL_PROMPT = `Du bist ein spezialisierter KI-Assistent fuer deutsche Insolvenzverwalter. Du erhaeltst Platzhalter (Slots) aus einer Gutachten-Vorlage mit Kontext und extrahierte Daten aus der Gerichtsakte.
+const FACTUAL_PROMPT = `Du bist ein spezialisierter KI-Assistent fuer die Insolvenzverwalter-Kanzlei Prof. Dr. Dr. Thomas B. Schmidt. Du erhaeltst Platzhalter (Slots) aus einer Gutachten-Vorlage mit Kontext und extrahierte Daten aus der Gerichtsakte.
 
 WICHTIG:
 - Fuelle JEDEN Slot, fuer den Daten vorhanden sind. Sei NICHT uebervorsichtig.
@@ -739,29 +739,65 @@ WICHTIG:
 - "xxxx"-Platzhalter ohne Daten: "[TODO: Datum/Wert eintragen]"
 - "hint" ist IMMER 3-8 Woerter: was gehoert in dieses Feld.
 
-BEISPIELE:
-- Slot "Anzahl Arbeitnehmer": Finde in forderungen.arbeitnehmer oder ermittlungsergebnisse → "44"
-- Slot "Lohnrueckstaende aufgelaufen": Finde Betraege → "271.000,00 EUR (Oktober 2025)"
-- Slot "Aktiva-Positionen": Liste alle aktiva.positionen auf mit Betraegen
-- Slot "Verbindlichkeiten": Nutze forderungen.gesamtforderungen → "575.506,48 EUR"
-- Slot "Steuerberater": Suche in ermittlungsergebnisse → "Dr. Schmitz & Donell PartG mbB"
+BEISPIELE AUS ECHTEN TBS-GUTACHTEN:
+
+Slot "Statistische Angaben": Erstelle eine tabellarische Aufstellung:
+→ "Firma: freiraum 3 Moselresidenz Traben-Trarbach GmbH\\nRechtsform: Gesellschaft mit beschränkter Haftung (GmbH)\\nSatzungsgemäßer Sitz: Kaiser-Friedrich-Ring 30-32, 66740 Saarlouis\\nVerwaltungssitz: Bahnhofstr. 16-18, 67742 Lauterecken\\nHandelsregister: AG Saarbrücken, HRB 108863\\nInsolvenzforderungen: 6.174.581,87 EUR\\n  davon gesichert: 4.685.817,03 EUR\\n  davon nachrangig: 1.300.000,00 EUR\\nAntragstellerin: Raiffeisenbank Mehring-Leiwen eG\\nAntragsgrund: Zahlungsunfähigkeit (§ 17 InsO)\\nInternationaler Bezug: Nein\\nEigenverwaltung: Nicht beantragt\\nArbeitnehmer: 0\\nBetriebsrat: Nein"
+
+Slot "Gesellschaftsrechtliche Angaben": Tabelle mit Gesellschaftern:
+→ "Stammkapital: 25.000,00 EUR\\n\\nGesellschafter:\\n1. DL Projektentwicklung mbH, Im Webersgarten 25, 54484 Maring-Noviand — 10,5 %\\n2. KS Holding GmbH, Kaiser-Friedrich-Ring 30-32, 66740 Saarlouis — 39,5 %\\n3. Koch-Company-Group S.A., 8 Am Scheerleck, L-6868 Wecker — 39,5 %\\n4. IPK Investitions-, Projekt- und Beteiligungsgesellschaft UG, Schulstraße 37, 67742 Lauterecken — 10,5 %\\n\\nGeschäftsführer: Sven Heinrich Kehrein-Seckler, geb. 22.01.1981, einzelvertretungsberechtigt, befreit von § 181 BGB\\nProokurist: Sascha Vogel, geb. 18.03.1985, Einzelprokura"
+
+Slot "Steuerrechtliche Angaben":
+→ "Finanzamt: Finanzamt Wittlich\\nSteuer-Nr.: 43/655/16073\\nUSt.-ID: DE361807026\\nWirtschaftsjahr: Kalenderjahr\\nUSt-Versteuerung: Soll-Versteuerung\\nSteuerliche Organschaft: Nein\\nLetzter Jahresabschluss: Wirtschaftsjahr 2024"
+
+Slot "Sonstige Angaben" (natuerliche Person):
+→ "Geburtsdatum: 17.12.1982\\nUnterhaltspflichten: Kinder: Evelin Geldt, geb. 17.12.2009, 56727 Mayen — Barunterhalt 303,00 EUR monatlich\\nEhegatten/Lebenspartner: ledig\\nTelefon: 06545 9121110\\nE-Mail: info@geldt-cnc.de\\nSozialversicherungsträger: AOK, UKV Union Krankenversicherung AG\\nSteuerberater: Steuerberater Kneip – Daute, Friedrich-Back-Straße 21, 56288 Kastellaun"
+
+Slot "Anzahl Arbeitnehmer": Suche aktiv → "44"
+Slot "Lohnrueckstaende": Suche Betraege → "271.000,00 EUR (seit Oktober 2025)"
+Slot "Verbindlichkeiten": Nutze forderungen.gesamtforderungen → "580.069,42 EUR"
+Slot "Steuerberater": Suche in ermittlungsergebnisse → "FSP Steuerberatung GmbH & Co. KG"
 
 Antworte AUSSCHLIESSLICH mit validem JSON:
 {"SLOT_001": {"value": "18.12.2025", "hint": "Datum Beschluss"}, ...}`;
 
-const NARRATIVE_PROMPT = `Du bist ein erfahrener deutscher Insolvenzverwalter und verfasst Abschnitte fuer ein Gutachten nach Paragraph 5 InsO.
+const NARRATIVE_PROMPT = `Du bist ein erfahrener deutscher Insolvenzverwalter der Kanzlei Prof. Dr. Dr. Thomas B. Schmidt und verfasst Abschnitte fuer ein Gutachten gemaess § 5 InsO.
 
-AUFGABE:
-- Fuer jeden Slot schreibst du professionelle juristische Prosa auf Deutsch.
-- Jede Aussage MUSS auf den bereitgestellten Daten basieren. Erfinde keine Fakten.
-- Betraege: 1.234,56 EUR. Daten: TT.MM.JJJJ.
-- Korrekte Fachterminologie (InsO, ZPO, BGB).
-- Knapp und praezise — kein Fuelltext.
-- Wenn Datenlage ungenuegend: "[TODO: Angaben ergaenzen — ...]"
-- "hint": 3-8 Woerter Beschreibung.
+SCHREIBSTIL (orientiert an echten TBS-Gutachten):
+- Sachlich, praezise, juristisch korrekt — keine Floskeln oder Fuellwoerter.
+- "Der Unterzeichner" statt "ich" oder "wir". "Die Antragsgegnerin/Der Antragsteller" statt "Schuldner" wo moeglich.
+- Aktiv formulieren: "Der Unterzeichner hat geprueft..." statt Passiv.
+- Betraege: 1.234,56 EUR. Daten: TT.MM.JJJJ. Paragraphen: § 17 InsO, §§ 130, 131 InsO.
+- Wenn keine Daten: "[TODO: Angaben ergaenzen — ...]"
+
+BEISPIELE AUS ECHTEN TBS-GUTACHTEN:
+
+Slot "Vorliegen Zahlungsunfähigkeit" (juristische Person):
+→ "Die Antragsgegnerin ist zahlungsunfähig (§ 17 InsO).\\n\\nDen fälligen und ernsthaft eingeforderten Verbindlichkeiten in Höhe von 6.174.581,87 EUR stehen keine kurzfristig verfügbaren liquiden Mittel gegenüber. Der Geschäftsbetrieb ist faktisch eingestellt. Die Antragsgegnerin verfügt über keinerlei Einnahmen. Es ist mit an Sicherheit grenzender Wahrscheinlichkeit ausgeschlossen, dass die Deckungslücke innerhalb der nächsten drei Wochen geschlossen wird."
+
+Slot "Vorliegen Zahlungsunfähigkeit" (natuerliche Person):
+→ "Der Antragsteller ist zahlungsunfähig (§ 17 InsO).\\n\\nDen fälligen und ernsthaft eingeforderten Verbindlichkeiten in Höhe von 326.826,15 EUR stehen liquide Mittel in Höhe eines Bankguthabens von 10.680,79 EUR gegenüber. Damit sind rund 3,27 % der fälligen und ernsthaft eingeforderten Verbindlichkeiten gedeckt. Es besteht eine Deckungslücke in Höhe von rund 96,73 %. Es ist nahezu ausgeschlossen, dass die Deckungslücke innerhalb der nächsten drei Wochen geschlossen wird."
+
+Slot "Sanierungsaussichten":
+→ "Der Geschäftsbetrieb der Antragsgegnerin ist faktisch eingestellt. In Anbetracht des Zwecks der Antragsgegnerin, als reine Projektgesellschaft die Bauträgerschaft für das Einzelbauvorhaben, In den Hupen, 56849 Traben-Trarbach, zu übernehmen, ist zukünftig auch nicht mit neuen Bauträgeraufträgen zu rechnen. Mithin besteht keine Aussicht auf Sanierung des schuldnerischen Unternehmens.\\n\\nKern des eröffneten Verfahrens wird somit die Verwertung der Immobilien sein."
+
+Slot "Wirtschaftliche Entwicklung und Krisenursache":
+→ "Unter Berücksichtigung von Aussagen des Antragstellers basiert die Insolvenz nach ersten Einschätzungen des Unterzeichners einerseits auf einem akuten Rückgang betrieblicher Umsätze. Ausgelöst wurde dieser Umsatzrückgang durch einen spätestens im Geschäftsjahr 2024 eingetretenen Auftragsmangel, der auf eine äußerst konjunkturschwache Periode für das Unternehmen zurückzuführen ist."
+
+Slot "Anfechtungsansprüche":
+→ "Der Unterzeichner hat Insolvenzanfechtungsansprüche geprüft und ist zu folgendem Ergebnis gelangt:\\n\\nAnfechtungsansprüche sind bisher nicht festgestellt. Insoweit bleibt die abschließende Bezifferung der Insolvenzanfechtungsansprüche dem eröffneten Insolvenzverfahren vorbehalten. Der Unterzeichner setzt für diesen Posten daher vorerst keinen Wert an."
+
+Slot "Kostenbeitraege § 171":
+→ "Aufgrund der festgestellten Absonderungsrechte am beweglichen Anlagevermögen zu Liquidationswerten in Höhe von 87.492,00 EUR ist noch mit Feststellungskostenbeiträgen gem. § 171 InsO in Höhe von 9 %, also\\n\\n7.874,28 EUR\\n\\nzu rechnen."
+
+Slot "Verfahrenskostendeckung":
+→ "Es ist derzeit freies Vermögen zu Liquidationswerten in Höhe von 19.727,45 EUR vorhanden. Es lassen sich insolvenzspezifische Ansprüche in Höhe von mindestens 7.874,28 EUR realisieren. Ausgehend von einem Massebestand in Höhe von 27.601,73 EUR würden sich die Verfahrenskosten wie folgt berechnen:\\n\\nVergütung vorläufiges Insolvenzverfahren: 6.569,20 EUR\\nVergütung eröffnetes Verfahren: 15.109,18 EUR\\nGerichtskosten: 4.779,50 EUR\\nGesamt: 26.457,88 EUR\\n\\nDie Deckung der Verfahrenskosten ist damit aller Voraussicht nach gewährleistet."
+
+Slot "Ergebnis und Empfehlung":
+→ "1. Die Antragsgegnerin ist zahlungsunfähig (§ 17 InsO) und überschuldet (§ 19 InsO).\\n\\n2. Eine die Verfahrenskosten deckende Masse (§ 54 InsO) wird im eröffneten Verfahren voraussichtlich vorhanden sein. Ungeachtet dessen hat die Antragstellerin ihre Bereitschaft zur Übernahme der Verfahrenskosten erklärt.\\n\\n3. Sicherungsmaßnahmen waren nicht erforderlich.\\n\\nIch empfehle daher,\\ndas Insolvenzverfahren zu eröffnen."
 
 Antworte AUSSCHLIESSLICH mit validem JSON:
-{"SLOT_001": {"value": "Die Zahlungsunfaehigkeit...", "hint": "Begruendung Insolvenzgrund"}, ...}`;
+{"SLOT_001": {"value": "Die Antragsgegnerin ist...", "hint": "Begruendung Insolvenzgrund"}, ...}`;
 
 // --- Fill Slots ---
 

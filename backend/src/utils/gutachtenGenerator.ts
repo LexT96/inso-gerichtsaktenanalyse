@@ -130,6 +130,85 @@ const GUETERSTAND_LABELS: Record<string, string> = {
   unbekannt: 'unbekannt',
 };
 
+/** Search ermittlungsergebnisse and zusammenfassung for a keyword pattern (fallback for fields not yet directly extracted) */
+function searchErmittlungenAndZusammenfassung(result: ExtractionResult, kw: RegExp): string {
+  // Search ermittlungsergebnisse fields
+  const erm = result.ermittlungsergebnisse as unknown as Record<string, unknown>;
+  for (const [k, v] of Object.entries(erm || {})) {
+    if (kw.test(k) && v && typeof v === 'object' && 'wert' in v) {
+      const val = (v as { wert: unknown }).wert;
+      if (val != null && val !== '') return String(val);
+    }
+  }
+  // Search zusammenfassung
+  for (const z of (result.zusammenfassung ?? [])) {
+    if (z.wert && kw.test(z.wert)) {
+      return z.wert.length > 80 ? z.wert.slice(0, 80) + '…' : z.wert;
+    }
+  }
+  return '';
+}
+
+/** InsVV § 2 Abs. 1 Regelvergütung + GKG Gerichtskosten */
+function berechneVerfahrenskosten(berechnungsgrundlage: number): {
+  verguetung_vorlaeufig: number;
+  verguetung_eroeffnet: number;
+  gerichtskosten: number;
+  gesamt: number;
+} {
+  const STUFEN = [
+    { bis: 25_000, satz: 0.40 },
+    { bis: 50_000, satz: 0.25 },
+    { bis: 250_000, satz: 0.07 },
+    { bis: 500_000, satz: 0.03 },
+    { bis: 25_000_000, satz: 0.02 },
+    { bis: 50_000_000, satz: 0.01 },
+    { bis: Infinity, satz: 0.005 },
+  ];
+  let verguetung = 0;
+  let rest = Math.max(0, berechnungsgrundlage);
+  let prevBis = 0;
+  for (const { bis, satz } of STUFEN) {
+    const stufenBreite = bis === Infinity ? rest : bis - prevBis;
+    const stufenBetrag = Math.min(rest, stufenBreite);
+    if (stufenBetrag <= 0) break;
+    verguetung += stufenBetrag * satz;
+    rest -= stufenBetrag;
+    prevBis = bis === Infinity ? prevBis : bis;
+  }
+  verguetung = Math.max(verguetung, 1000); // § 2 Abs. 2 InsVV Mindestvergütung
+
+  // GKG KV Nr. 2310 (vereinfachte Stufentabelle, Stand 2025)
+  const GKG: [number, number][] = [
+    [500, 38], [1000, 58], [1500, 78], [2000, 98], [3000, 119],
+    [4000, 140], [5000, 161], [6000, 182], [7000, 203], [8000, 224],
+    [9000, 245], [10000, 266], [13000, 295], [16000, 324], [19000, 353],
+    [22000, 382], [25000, 411], [30000, 449], [35000, 487], [40000, 525],
+    [45000, 563], [50000, 601], [65000, 733], [80000, 865], [95000, 997],
+    [110000, 1129], [125000, 1261], [140000, 1393], [155000, 1525],
+    [170000, 1657], [185000, 1789], [200000, 1921], [230000, 2119],
+    [260000, 2317], [290000, 2515], [320000, 2713], [350000, 2911],
+    [380000, 3109], [410000, 3307], [440000, 3505], [470000, 3703],
+    [500000, 3901],
+  ];
+  let gebuehr = 3901;
+  for (const [grenze, wert] of GKG) {
+    if (berechnungsgrundlage <= grenze) { gebuehr = wert; break; }
+  }
+  const gerichtskosten = Math.round(gebuehr * 1.5 * 100) / 100;
+
+  const r = (n: number) => Math.round(n * 100) / 100;
+  // Vorläufig: 25% der Regelvergütung (§ 11 Abs. 1 S. 2 InsVV)
+  const vorl = r(verguetung * 0.25);
+  const eroff = r(verguetung);
+  return {
+    verguetung_vorlaeufig: vorl,
+    verguetung_eroeffnet: eroff,
+    gerichtskosten,
+    gesamt: r(vorl + eroff + gerichtskosten),
+  };
+}
+
 function computeGutachtenField(
   key: string,
   result: ExtractionResult,
@@ -198,6 +277,10 @@ function computeGutachtenField(
     case 'schuldner_der_die':
       if (juristischOderGesellschaft) return 'die';
       return weiblichSchuldner ? 'die' : 'der';
+
+    case 'schuldner_dem_der':
+      if (juristischOderGesellschaft) return 'der';
+      return weiblichSchuldner ? 'der' : 'dem';
 
     case 'schuldner_der_die_gross':
       if (juristischOderGesellschaft) return 'Die';
@@ -277,6 +360,9 @@ function computeGutachtenField(
 
     // --- Table cell fields (new) ---
     case 'arbeitnehmer_anzahl': {
+      // Prefer direct field, fallback to betroffene_arbeitnehmer count
+      const directCount = result.schuldner?.arbeitnehmer_anzahl?.wert;
+      if (directCount != null && directCount > 0) return String(directCount);
       const an = result.forderungen?.betroffene_arbeitnehmer;
       if (an?.length) {
         const total = an.reduce((s: number, a: unknown) => {
@@ -288,53 +374,65 @@ function computeGutachtenField(
       return '';
     }
 
-    case 'finanzamt':
-    case 'steuernummer':
-    case 'letzter_jahresabschluss':
-    case 'steuerberater':
-    case 'gerichtsvollzieher':
-    case 'sv_traeger':
+    // --- Direct schuldner fields with ermittlungsergebnisse fallback ---
+    case 'finanzamt': {
+      const v = result.schuldner?.finanzamt?.wert;
+      if (v) return v;
+      return searchErmittlungenAndZusammenfassung(result, /finanzamt/i);
+    }
+    case 'steuernummer': {
+      const v = result.schuldner?.steuernummer?.wert;
+      if (v) return v;
+      return searchErmittlungenAndZusammenfassung(result, /steuer.?n/i);
+    }
+    case 'letzter_jahresabschluss': {
+      const v = result.schuldner?.letzter_jahresabschluss?.wert;
+      if (v) return v;
+      return searchErmittlungenAndZusammenfassung(result, /jahresabschluss|bilanz/i);
+    }
+    case 'steuerberater': {
+      const v = result.schuldner?.steuerberater?.wert;
+      if (v) return v;
+      return searchErmittlungenAndZusammenfassung(result, /steuerberater/i);
+    }
+    case 'gerichtsvollzieher': {
+      const v = result.ermittlungsergebnisse?.gerichtsvollzieher?.name?.wert;
+      if (v) return v;
+      return searchErmittlungenAndZusammenfassung(result, /gerichtsvollzieher/i);
+    }
+    case 'sv_traeger': {
+      const v = result.schuldner?.sozialversicherungstraeger?.wert;
+      if (v) return v;
+      return searchErmittlungenAndZusammenfassung(result, /sozialversicherung|krankenkasse/i);
+    }
     case 'ausbildung':
-    case 'groessenklasse':
-    case 'gruendung':
+      return searchErmittlungenAndZusammenfassung(result, /ausbildung|beruf/i);
+
+    case 'groessenklasse': {
+      const v = result.schuldner?.groessenklasse_hgb?.wert;
+      if (v) return v;
+      return searchErmittlungenAndZusammenfassung(result, /gr.{0,3}.enklasse|267.*hgb/i);
+    }
+    case 'gruendung': {
+      const v = result.schuldner?.gruendungsdatum?.wert;
+      if (v) return v;
+      return searchErmittlungenAndZusammenfassung(result, /gr.{0,3}ndung|gegr.{0,3}ndet/i);
+    }
     case 'gesellschafter': {
-      // These are extracted by the ermittlungsergebnisse or zusammenfassung
-      // Search zusammenfassung for relevant info
-      const zf = result.zusammenfassung ?? [];
-      const keywords: Record<string, RegExp> = {
-        finanzamt: /finanzamt/i,
-        steuernummer: /steuer.?n/i,
-        letzter_jahresabschluss: /jahresabschluss|bilanz/i,
-        steuerberater: /steuerberater/i,
-        gerichtsvollzieher: /gerichtsvollzieher/i,
-        sv_traeger: /sozialversicherung|krankenkasse/i,
-        ausbildung: /ausbildung|beruf/i,
-        groessenklasse: /gr.{0,3}.enklasse|267.*hgb/i,
-        gruendung: /gr.{0,3}ndung|gegr.{0,3}ndet/i,
-        gesellschafter: /gesellschafter|anteilseigner/i,
-      };
-      const kw = keywords[key];
-      if (kw) {
-        // Search ermittlungsergebnisse fields
-        const erm = result.ermittlungsergebnisse as unknown as Record<string, unknown>;
-        for (const [k, v] of Object.entries(erm || {})) {
-          if (kw.test(k) && v && typeof v === 'object' && 'wert' in v) {
-            const val = (v as { wert: unknown }).wert;
-            if (val != null && val !== '') return String(val);
-          }
-        }
-        // Search zusammenfassung
-        for (const z of zf) {
-          if (z.wert && kw.test(z.wert)) {
-            // Extract the relevant part
-            return z.wert.length > 80 ? z.wert.slice(0, 80) + '…' : z.wert;
-          }
-        }
+      // Prefer structured gesellschafter array
+      const gs = result.schuldner?.gesellschafter;
+      if (gs?.length) {
+        return gs.map((g, i) =>
+          `${i + 1}. ${g.name}${g.sitz ? ', ' + g.sitz : ''}${g.beteiligung ? ' — ' + g.beteiligung : ''}`
+        ).join('\n');
       }
-      return '';
+      return searchErmittlungenAndZusammenfassung(result, /gesellschafter|anteilseigner/i);
     }
 
     case 'bankverbindungen': {
+      // Prefer schuldner.bankverbindungen, fallback to antragsteller
+      const bv = result.schuldner?.bankverbindungen?.wert;
+      if (bv) return bv;
       const iban = getByPath(result, 'antragsteller.bankverbindung_iban.wert');
       const bic = getByPath(result, 'antragsteller.bankverbindung_bic.wert');
       if (iban) return bic ? `${iban} (BIC: ${bic})` : iban;
@@ -351,6 +449,38 @@ function computeGutachtenField(
         if (von && (!earliest || von < earliest)) earliest = von;
       }
       return earliest || '';
+    }
+
+    // --- Verfahrenskostenberechnung (InsVV) ---
+    case 'verfahrenskosten_berechnung': {
+      // Berechnungsgrundlage = freie Masse (Aktiva - Absonderung - Aussonderung)
+      const summeAktiva = safeNum(result.aktiva?.summe_aktiva?.wert);
+      if (summeAktiva <= 0) return '';
+      const vk = berechneVerfahrenskosten(summeAktiva);
+      return [
+        `Vergütung vorläufiges Insolvenzverfahren: ${formatEUR(vk.verguetung_vorlaeufig)}`,
+        `Vergütung eröffnetes Verfahren: ${formatEUR(vk.verguetung_eroeffnet)}`,
+        `Gerichtskosten: ${formatEUR(vk.gerichtskosten)}`,
+        `Gesamt: ${formatEUR(vk.gesamt)}`,
+      ].join('\n');
+    }
+
+    case 'verfahrenskosten_gesamt': {
+      const s = safeNum(result.aktiva?.summe_aktiva?.wert);
+      if (s <= 0) return '';
+      return formatEUR(berechneVerfahrenskosten(s).gesamt);
+    }
+
+    case 'freie_masse_gesamt': {
+      const positionen = result.aktiva?.positionen ?? [];
+      const total = positionen.reduce((s, p) => {
+        if (p.freie_masse?.wert != null) return s + safeNum(p.freie_masse.wert);
+        const w = safeNum(p.geschaetzter_wert?.wert);
+        const ab = safeNum(p.absonderung?.wert);
+        const au = safeNum(p.aussonderung?.wert);
+        return s + Math.max(0, w - ab - au);
+      }, 0);
+      return total > 0 ? formatEUR(total) : '';
     }
 
     // --- Verwalter gender variants ---
@@ -575,6 +705,17 @@ function buildAktivaTable(result: ExtractionResult): string {
   const positionen = result.aktiva?.positionen ?? [];
   if (positionen.length === 0) return '';
 
+  // Check if any position has the extended fields (absonderung/aussonderung)
+  const hasExtended = positionen.some(p =>
+    p.absonderung?.wert != null || p.aussonderung?.wert != null || p.freie_masse?.wert != null
+  );
+
+  if (hasExtended) {
+    // ─── Real Gutachten format: 5-column table ───
+    return buildAktivaTableExtended(positionen, result);
+  }
+
+  // ─── Legacy format: 3-column table ───
   const rows: string[] = [];
   rows.push(tblRow([
     tblCell('Kategorie', { bold: true, width: 1200, shading: 'F2F2F2' }),
@@ -627,6 +768,73 @@ function buildAktivaTable(result: ExtractionResult): string {
   return wrapTable(rows);
 }
 
+/** Build Aktiva table matching real TBS Gutachten: Bezeichnung | Wert | Absonderung | Aussonderung | Freie Masse */
+function buildAktivaTableExtended(
+  positionen: import('../types/extraction').Aktivum[],
+  result: ExtractionResult
+): string {
+  const fmtEUR = (v: number | null | undefined) => v != null && v > 0 ? formatEUR(v) : '0,00';
+
+  // Group: 1. Anlagevermögen, 2. Umlaufvermögen
+  const anlage = ['immobilien', 'fahrzeuge', 'bewegliches_vermoegen', 'geschaeftsausstattung', 'wertpapiere_beteiligungen', 'lebensversicherungen'];
+  const umlauf = ['forderungen_schuldner', 'bankguthaben', 'steuererstattungen', 'einkommen'];
+
+  const anlagePos = positionen.filter(p => anlage.includes(p.kategorie));
+  const umlaufPos = positionen.filter(p => umlauf.includes(p.kategorie));
+
+  const headerRow = tblRow([
+    tblCell('Bezeichnung', { bold: true, width: 1800, shading: 'C00000' }),
+    tblCell('Wert (EUR)', { bold: true, rightAlign: true, width: 800, shading: 'C00000' }),
+    tblCell('Absonderung', { bold: true, rightAlign: true, width: 800, shading: 'C00000' }),
+    tblCell('Aussonderung', { bold: true, rightAlign: true, width: 800, shading: 'C00000' }),
+    tblCell('Freie Masse', { bold: true, rightAlign: true, width: 800, shading: 'C00000' }),
+  ], true);
+
+  const rows: string[] = [headerRow];
+
+  const addGroup = (label: string, items: typeof positionen) => {
+    if (items.length === 0) return;
+    let grpWert = 0, grpAbs = 0, grpAus = 0, grpFrei = 0;
+    for (const p of items) {
+      const w = safeNum(p.liquidationswert?.wert ?? p.geschaetzter_wert?.wert);
+      const a = safeNum(p.absonderung?.wert);
+      const au = safeNum(p.aussonderung?.wert);
+      const f = p.freie_masse?.wert != null ? safeNum(p.freie_masse.wert) : Math.max(0, w - a - au);
+      grpWert += w; grpAbs += a; grpAus += au; grpFrei += f;
+      rows.push(tblRow([
+        tblCell(String(p.beschreibung?.wert || KATEGORIE_LABELS[p.kategorie] || p.kategorie)),
+        tblCell(fmtEUR(w), { rightAlign: true }),
+        tblCell(fmtEUR(a), { rightAlign: true }),
+        tblCell(fmtEUR(au), { rightAlign: true }),
+        tblCell(fmtEUR(f), { rightAlign: true }),
+      ]));
+    }
+    // Group subtotal
+    rows.push(tblRow([
+      tblCell(label, { bold: true, shading: 'F2F2F2' }),
+      tblCell(fmtEUR(grpWert), { bold: true, rightAlign: true, shading: 'F2F2F2' }),
+      tblCell(fmtEUR(grpAbs), { bold: true, rightAlign: true, shading: 'F2F2F2' }),
+      tblCell(fmtEUR(grpAus), { bold: true, rightAlign: true, shading: 'F2F2F2' }),
+      tblCell(fmtEUR(grpFrei), { bold: true, rightAlign: true, shading: 'F2F2F2' }),
+    ]));
+    return { wert: grpWert, abs: grpAbs, aus: grpAus, frei: grpFrei };
+  };
+
+  const a1 = addGroup('1. Anlagevermögen (Gesamt)', anlagePos) || { wert: 0, abs: 0, aus: 0, frei: 0 };
+  const a2 = addGroup('2. Umlaufvermögen (Gesamt)', umlaufPos) || { wert: 0, abs: 0, aus: 0, frei: 0 };
+
+  // Grand total
+  rows.push(tblRow([
+    tblCell('\u03A3', { bold: true, shading: 'E8E8E8' }),
+    tblCell(fmtEUR(a1.wert + a2.wert), { bold: true, rightAlign: true, shading: 'E8E8E8' }),
+    tblCell(fmtEUR(a1.abs + a2.abs), { bold: true, rightAlign: true, shading: 'E8E8E8' }),
+    tblCell(fmtEUR(a1.aus + a2.aus), { bold: true, rightAlign: true, shading: 'E8E8E8' }),
+    tblCell(fmtEUR(a1.frei + a2.frei), { bold: true, rightAlign: true, shading: 'E8E8E8' }),
+  ]));
+
+  return wrapTable(rows);
+}
+
 function buildAnfechtungTable(result: ExtractionResult): string {
   const vorgaenge = result.anfechtung?.vorgaenge ?? [];
   if (vorgaenge.length === 0) return '';
@@ -670,9 +878,42 @@ function buildAnfechtungTable(result: ExtractionResult): string {
   return wrapTable(rows);
 }
 
+/** Passiva table matching real Gutachten: Gläubiger | Betrag in EUR */
+function buildPassivaTable(result: ExtractionResult): string {
+  const ef = result.forderungen?.einzelforderungen ?? [];
+  if (ef.length === 0) return '';
+
+  const rows: string[] = [];
+  rows.push(tblRow([
+    tblCell('Gläubiger', { bold: true, width: 3500, shading: 'C00000' }),
+    tblCell('Betrag in EUR', { bold: true, rightAlign: true, width: 1200, shading: 'C00000' }),
+  ], true));
+
+  for (const f of ef) {
+    const betrag = safeNum(f.betrag?.wert);
+    rows.push(tblRow([
+      tblCell(String(f.glaeubiger?.wert || '\u2014')),
+      tblCell(betrag > 0 ? formatEUR(betrag, false) : '\u2014', { rightAlign: true }),
+    ]));
+  }
+
+  const gesamt = result.forderungen?.gesamtforderungen?.wert;
+  const total = gesamt != null ? formatEUR(gesamt, false) : formatEUR(
+    ef.reduce((s, f) => s + safeNum(f.betrag?.wert), 0), false
+  );
+  rows.push(tblRow([
+    tblCell('\u03A3', { bold: true, shading: 'E8E8E8' }),
+    tblCell(total, { bold: true, rightAlign: true, shading: 'E8E8E8' }),
+  ]));
+
+  return wrapTable(rows);
+}
+
 const TABLE_PATTERNS: { pattern: RegExp; builder: (r: ExtractionResult) => string }[] = [
   { pattern: /\[(?:Tabelle[:\s]*)?Gl.{0,10}ubiger/i, builder: buildGlaeubigerTable },
   { pattern: /\[(?:Tabelle[:\s]*)?Forderung/i, builder: buildGlaeubigerTable },
+  { pattern: /\[(?:Tabelle[:\s]*)?Passiva/i, builder: buildPassivaTable },
+  { pattern: /\[\[SLOT_\d+:\s*Tabelle\]\]/i, builder: buildPassivaTable }, // Generic [[SLOT: Tabelle]] → Passiva
   { pattern: /\[(?:Tabelle[:\s]*)?Aktiva/i, builder: buildAktivaTable },
   { pattern: /\[(?:Tabelle[:\s]*)?Verm.{0,10}gen/i, builder: buildAktivaTable },
   { pattern: /\[(?:Tabelle[:\s]*)?Anfechtung/i, builder: buildAnfechtungTable },

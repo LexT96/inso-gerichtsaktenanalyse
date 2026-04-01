@@ -38,13 +38,66 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
     <>
       {isEntity ? (
         /* ─── Juristische Person / Gesellschaft ─── */
+        <>
         <Section title="Schuldner — Unternehmen" icon="●">
           <DataField label="Firma" field={s?.firma} fieldPath="schuldner.firma" />
           <DataField label="Rechtsform" field={s?.rechtsform} fieldPath="schuldner.rechtsform" />
-          <DataField label="Name (Vertretung)" field={s?.name} fieldPath="schuldner.name" />
           <DataField label="Handelsregister-Nr." field={s?.handelsregisternummer} fieldPath="schuldner.handelsregisternummer" />
+          {s?.satzungssitz?.wert && <DataField label="Satzungssitz" field={s.satzungssitz} fieldPath="schuldner.satzungssitz" />}
+          {s?.verwaltungssitz?.wert && <DataField label="Verwaltungssitz" field={s.verwaltungssitz} fieldPath="schuldner.verwaltungssitz" />}
           <DataField label="Betriebsstätte" field={s?.betriebsstaette_adresse} fieldPath="schuldner.betriebsstaette_adresse" />
+          {s?.unternehmensgegenstand?.wert && <DataField label="Unternehmensgegenstand" field={s.unternehmensgegenstand} fieldPath="schuldner.unternehmensgegenstand" />}
+          {s?.geschaeftszweig?.wert && <DataField label="Geschäftszweig" field={s.geschaeftszweig} fieldPath="schuldner.geschaeftszweig" />}
+          {s?.gruendungsdatum?.wert && <DataField label="Gründung" field={s.gruendungsdatum} fieldPath="schuldner.gruendungsdatum" />}
+          {s?.groessenklasse_hgb?.wert && <DataField label="Größenklasse HGB" field={s.groessenklasse_hgb} fieldPath="schuldner.groessenklasse_hgb" />}
+          {s?.arbeitnehmer_anzahl?.wert != null && <DataField label="Arbeitnehmer" field={{ wert: String(s.arbeitnehmer_anzahl.wert), quelle: s.arbeitnehmer_anzahl.quelle }} fieldPath="schuldner.arbeitnehmer_anzahl" />}
+          {s?.betriebsrat?.wert != null && <DataField label="Betriebsrat" field={{ wert: s.betriebsrat.wert ? 'Ja' : 'Nein', quelle: s.betriebsrat.quelle }} fieldPath="schuldner.betriebsrat" />}
+          {s?.dundo_versicherung?.wert && <DataField label="D&O Versicherung" field={s.dundo_versicherung} fieldPath="schuldner.dundo_versicherung" />}
         </Section>
+        {/* Gesellschaftsrechtliche Angaben */}
+        {(s?.stammkapital?.wert || s?.geschaeftsfuehrer?.wert || (s?.gesellschafter && s.gesellschafter.length > 0)) && (
+          <Section title="Gesellschaftsrechtliche Angaben" icon="▤" defaultOpen={false}>
+            {s?.stammkapital?.wert && <DataField label="Stammkapital" field={s.stammkapital} fieldPath="schuldner.stammkapital" />}
+            {s?.geschaeftsfuehrer?.wert && <DataField label="Geschäftsführer" field={s.geschaeftsfuehrer} fieldPath="schuldner.geschaeftsfuehrer" />}
+            {s?.prokurist?.wert && <DataField label="Prokurist" field={s.prokurist} fieldPath="schuldner.prokurist" />}
+            {s?.gesellschafter && s.gesellschafter.length > 0 && (
+              <div className="py-1.5 border-b border-border">
+                <span className="text-[11px] text-text-dim block mb-1">Gesellschafter</span>
+                <div className="space-y-0.5">
+                  {s.gesellschafter.map((g, i) => (
+                    <div key={i} className="text-[11px] text-text flex justify-between">
+                      <span>{g.name}{g.sitz ? `, ${g.sitz}` : ''}</span>
+                      <span className="text-text-muted font-mono">{g.beteiligung}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Section>
+        )}
+        {/* Steuerliche Angaben */}
+        {(s?.finanzamt?.wert || s?.steuernummer?.wert || s?.steuerberater?.wert) && (
+          <Section title="Steuerliche Angaben" icon="▥" defaultOpen={false}>
+            {s?.finanzamt?.wert && <DataField label="Finanzamt" field={s.finanzamt} fieldPath="schuldner.finanzamt" />}
+            {s?.steuernummer?.wert && <DataField label="Steuer-Nr." field={s.steuernummer} fieldPath="schuldner.steuernummer" />}
+            {s?.ust_id?.wert && <DataField label="USt-ID" field={s.ust_id} fieldPath="schuldner.ust_id" />}
+            {s?.wirtschaftsjahr?.wert && <DataField label="Wirtschaftsjahr" field={s.wirtschaftsjahr} fieldPath="schuldner.wirtschaftsjahr" />}
+            {s?.ust_versteuerung?.wert && <DataField label="USt-Versteuerung" field={s.ust_versteuerung} fieldPath="schuldner.ust_versteuerung" />}
+            {s?.letzter_jahresabschluss?.wert && <DataField label="Letzter Jahresabschluss" field={s.letzter_jahresabschluss} fieldPath="schuldner.letzter_jahresabschluss" />}
+            {s?.steuerberater?.wert && <DataField label="Steuerberater" field={s.steuerberater} fieldPath="schuldner.steuerberater" />}
+          </Section>
+        )}
+        {/* Sonstige Angaben */}
+        {(s?.sozialversicherungstraeger?.wert || s?.bankverbindungen?.wert || s?.telefon?.wert) && (
+          <Section title="Sonstige Angaben" icon="◇" defaultOpen={false}>
+            {s?.telefon?.wert && <DataField label="Telefon" field={s.telefon} fieldPath="schuldner.telefon" />}
+            {s?.email?.wert && <DataField label="E-Mail" field={s.email} fieldPath="schuldner.email" />}
+            {s?.sozialversicherungstraeger?.wert && <DataField label="SV-Träger" field={s.sozialversicherungstraeger} fieldPath="schuldner.sozialversicherungstraeger" />}
+            {s?.bankverbindungen?.wert && <DataField label="Bankverbindungen" field={s.bankverbindungen} fieldPath="schuldner.bankverbindungen" />}
+            {s?.insolvenzsonderkonto?.wert && <DataField label="Insolvenzsonderkonto" field={s.insolvenzsonderkonto} fieldPath="schuldner.insolvenzsonderkonto" />}
+          </Section>
+        )}
+        </>
       ) : (
         /* ─── Natürliche Person ─── */
         <>
@@ -57,6 +110,8 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
             <DataField label="Staatsangehörigkeit" field={s?.staatsangehoerigkeit} fieldPath="schuldner.staatsangehoerigkeit" />
             <DataField label="Familienstand" field={s?.familienstand} fieldPath="schuldner.familienstand" />
             <DataField label="Geschlecht" field={s?.geschlecht} fieldPath="schuldner.geschlecht" />
+            {s?.telefon?.wert && <DataField label="Telefon" field={s.telefon} fieldPath="schuldner.telefon" />}
+            {s?.email?.wert && <DataField label="E-Mail" field={s.email} fieldPath="schuldner.email" />}
           </Section>
           <Section title="Schuldner — Adresse & Betrieb" icon="▫">
             <DataField label="Aktuelle Adresse" field={s?.aktuelle_adresse} fieldPath="schuldner.aktuelle_adresse" />
@@ -66,9 +121,24 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
                 <DataField label="Rechtsform" field={s?.rechtsform} fieldPath="schuldner.rechtsform" />
                 <DataField label="Betriebsstätte" field={s?.betriebsstaette_adresse} fieldPath="schuldner.betriebsstaette_adresse" />
                 <DataField label="Handelsregister-Nr." field={s?.handelsregisternummer} fieldPath="schuldner.handelsregisternummer" />
+                {s?.unternehmensgegenstand?.wert && <DataField label="Unternehmensgegenstand" field={s.unternehmensgegenstand} fieldPath="schuldner.unternehmensgegenstand" />}
+                {s?.arbeitnehmer_anzahl?.wert != null && <DataField label="Arbeitnehmer" field={{ wert: String(s.arbeitnehmer_anzahl.wert), quelle: s.arbeitnehmer_anzahl.quelle }} fieldPath="schuldner.arbeitnehmer_anzahl" />}
               </>
             )}
           </Section>
+          {/* Steuerliche & Sonstige Angaben (natürliche Person) */}
+          {(s?.finanzamt?.wert || s?.steuerberater?.wert || s?.sozialversicherungstraeger?.wert || s?.bankverbindungen?.wert) && (
+            <Section title="Steuerliche & Sonstige Angaben" icon="▥" defaultOpen={false}>
+              {s?.finanzamt?.wert && <DataField label="Finanzamt" field={s.finanzamt} fieldPath="schuldner.finanzamt" />}
+              {s?.steuernummer?.wert && <DataField label="Steuer-Nr." field={s.steuernummer} fieldPath="schuldner.steuernummer" />}
+              {s?.ust_id?.wert && <DataField label="USt-ID" field={s.ust_id} fieldPath="schuldner.ust_id" />}
+              {s?.letzter_jahresabschluss?.wert && <DataField label="Letzter Jahresabschluss" field={s.letzter_jahresabschluss} fieldPath="schuldner.letzter_jahresabschluss" />}
+              {s?.steuerberater?.wert && <DataField label="Steuerberater" field={s.steuerberater} fieldPath="schuldner.steuerberater" />}
+              {s?.sozialversicherungstraeger?.wert && <DataField label="SV-Träger" field={s.sozialversicherungstraeger} fieldPath="schuldner.sozialversicherungstraeger" />}
+              {s?.bankverbindungen?.wert && <DataField label="Bankverbindungen" field={s.bankverbindungen} fieldPath="schuldner.bankverbindungen" />}
+              {s?.insolvenzsonderkonto?.wert && <DataField label="Insolvenzsonderkonto" field={s.insolvenzsonderkonto} fieldPath="schuldner.insolvenzsonderkonto" />}
+            </Section>
+          )}
         </>
       )}
       {s?.fruehere_adressen?.length > 0 && (
