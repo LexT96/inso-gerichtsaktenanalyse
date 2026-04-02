@@ -620,7 +620,7 @@ export function processDocxParagraphs(
       if (!firstDone) {
         result = result.replace(
           part.full,
-          () => `<w:t xml:space="preserve">${escapeXml(replaced)}</w:t>`
+          () => `<w:t xml:space="preserve">${escapeXml(unescapeXmlEntities(replaced))}</w:t>`
         );
         firstDone = true;
       } else {
