@@ -20,6 +20,7 @@
     "KI_Schuldner_Schuldnerin": { "computed": "schuldner_schuldnerin" },
     "KI_Schuldner_der_die": { "computed": "schuldner_der_die" },
     "KI_Schuldner_dem_der": { "computed": "schuldner_dem_der" },
+    "KI_Schuldner_des_der": { "computed": "schuldner_des_der" },
     "KI_Schuldners_Schuldnerin": { "computed": "schuldners_schuldnerin" },
     "KI_SCHULDNER_GESCHAEFTSFUEHRER": { "input": "geschaeftsfuehrer" },
     "KI_Schuldner_Name": { "path": "schuldner.name.wert" },
@@ -89,6 +90,7 @@
     "KI_Gruendung": { "computed": "gruendung" },
     "KI_HR_Eintragung": { "path": "schuldner.handelsregisternummer.wert" },
 
+    "KI_Verwalter_Titel": { "input": "verwalter_titel" },
     "KI_Verwalter_Name": { "path": "gutachterbestellung.gutachter_name.wert" },
     "KI_Verwalter_Adr": { "path": "gutachterbestellung.gutachter_adresse.wert" },
     "KI_Verwalter_Diktatzeichen": { "input": "verwalter_diktatzeichen" },

@@ -300,6 +300,10 @@ function computeGutachtenField(
       if (juristischOderGesellschaft) return 'der';
       return weiblichSchuldner ? 'der' : 'dem';
 
+    case 'schuldner_des_der':
+      if (juristischOderGesellschaft) return 'der';
+      return weiblichSchuldner ? 'der' : 'des';
+
     case 'schuldner_der_die_gross':
       if (juristischOderGesellschaft) return 'Die';
       return weiblichSchuldner ? 'Die' : 'Der';
