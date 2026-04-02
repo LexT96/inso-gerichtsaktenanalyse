@@ -740,12 +740,12 @@ const FACTUAL_PROMPT = `Du bist ein spezialisierter KI-Assistent fuer die Insolv
 
 WICHTIG:
 - Fuelle JEDEN Slot, fuer den Daten vorhanden sind. Sei NICHT uebervorsichtig.
+- KEINE ECKIGEN KLAMMERN um Werte! Schreibe "5" NICHT "[5]". Schreibe "Nein" NICHT "[Nein]". Die Werte werden direkt in das Dokument eingefuegt.
 - Suche AKTIV in den Daten nach passenden Werten. Wenn der Slot "Arbeitnehmer" erwaehnt, suche in forderungen.arbeitnehmer, ermittlungsergebnisse, zusammenfassung etc.
 - Wenn der Slot eine Tabelle oder Liste erwartet (Aktiva, Passiva, Forderungen), erstelle eine formatierte Aufstellung aus den Daten.
 - Betraege IMMER im Format 1.234,56 EUR. ABER: Wenn der Kontext nach dem Slot bereits "EUR" enthaelt (z.B. "[[SLOT_xxx]] EUR"), dann NUR die Zahl ohne "EUR" (z.B. "1.234,56").
 - Daten IMMER als TT.MM.JJJJ.
-- NUR wenn wirklich KEINE passenden Daten existieren: "[TODO: ...]" mit Beschreibung was fehlt.
-- Redaktionelle Anweisungen ([wenn...], [ggf....]): "[TODO: ...]"
+- NUR wenn wirklich KEINE passenden Daten existieren: "[TODO: ...]" mit Beschreibung was fehlt. NUR [TODO:...] darf eckige Klammern haben.
 - "xxxx"-Platzhalter ohne Daten: "[TODO: Datum/Wert eintragen]"
 - "hint" ist IMMER 3-8 Woerter: was gehoert in dieses Feld.
 
@@ -778,6 +778,7 @@ SCHREIBSTIL (orientiert an echten TBS-Gutachten):
 - "Der Unterzeichner" statt "ich" oder "wir". "Die Antragsgegnerin/Der Antragsteller" statt "Schuldner" wo moeglich.
 - Aktiv formulieren: "Der Unterzeichner hat geprueft..." statt Passiv.
 - Betraege: 1.234,56 EUR. Daten: TT.MM.JJJJ. Paragraphen: § 17 InsO, §§ 130, 131 InsO.
+- KEINE ECKIGEN KLAMMERN um Werte oder Saetze! Text wird direkt ins Dokument eingefuegt. NUR [TODO:...] darf Klammern haben.
 - Wenn keine Daten: "[TODO: Angaben ergaenzen — ...]"
 
 BEISPIELE AUS ECHTEN TBS-GUTACHTEN:
@@ -943,7 +944,7 @@ async function fillSlotBatch(
       // Strip ALL [...] brackets from values — AI wraps values in brackets
       // e.g. "[5] Arbeitnehmer" → "5 Arbeitnehmer", "[7.000 EUR]" → "7.000 EUR"
       // But preserve [TODO:...] markers
-      value = value.replace(/\[(?!TODO:)([^\]]*)\]/g, '$1');
+      value = value.replace(/\[(?!TODO:|SLOT_|\[)([^\]]*)\]/g, '$1');
       // Unescape XML entities that the AI may have included literally
       value = unescapeXmlEntities(value);
       resultMap.set(s.id, { value, hint });
