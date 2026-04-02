@@ -313,14 +313,14 @@ function buildPreFillMatchers(): SlotMatcher[] {
     },
     // --- Branche ---
     {
-      patterns: [/branche|gesch.{0,5}ftst.{0,5}tigkeit|unternehmensgegenstand/i],
+      patterns: [/branche|gesch.{0,5}ftst.{0,5}tigkeit|unternehmensgegenstand|Geschäftszweig/i],
       extract: (r) => {
-        // Try zusammenfassung for business description
-        const zf = r.zusammenfassung;
-        if (zf?.length) {
-          const biz = zf.find(z => /branche|gegenstand|t.{0,3}tigkeit|gesch.{0,3}fts/i.test(z.wert || ''));
-          if (biz?.wert) return biz.wert;
-        }
+        // Prefer direct geschaeftszweig field
+        const gz = r.schuldner?.geschaeftszweig?.wert;
+        if (gz) return String(gz);
+        // Fallback to unternehmensgegenstand
+        const ug = r.schuldner?.unternehmensgegenstand?.wert;
+        if (ug) return String(ug);
         return null;
       },
       hint: 'Branche',
@@ -362,6 +362,12 @@ function fmtEUR(value: unknown, slot: SlotInfo): string {
 }
 
 /** Pre-fill slots deterministically from extraction data */
+/** Unescape XML entities that may appear in extraction data or AI output */
+function unescapeXmlEntities(s: string): string {
+  return s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&apos;/g, "'").replace(/&quot;/g, '"');
+}
+
 function preFillSlots(
   slots: SlotInfo[],
   result: ExtractionResult
@@ -377,7 +383,8 @@ function preFillSlots(
         const value = matcher.extract(result);
         if (value) {
           // Strip "EUR" suffix if template already has it
-          const cleanValue = contextHasEurSuffix(slot) ? value.replace(/\s*EUR$/i, '') : value;
+          let cleanValue = contextHasEurSuffix(slot) ? value.replace(/\s*EUR$/i, '') : value;
+          cleanValue = unescapeXmlEntities(cleanValue);
           filled.set(slot.id, { value: cleanValue, hint: matcher.hint });
           break;
         }
@@ -938,8 +945,7 @@ async function fillSlotBatch(
         value = value.slice(1, -1);
       }
       // Unescape XML entities that the AI may have included literally
-      value = value.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-        .replace(/&apos;/g, "'").replace(/&quot;/g, '"');
+      value = unescapeXmlEntities(value);
       resultMap.set(s.id, { value, hint });
     }
     return resultMap;
