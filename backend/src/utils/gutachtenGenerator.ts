@@ -1391,6 +1391,16 @@ export function generateGutachtenFinal(
 
     // Also apply remaining slots normally (those without tracked changes)
     finalXml = applySlots(finalXml, finalSlots);
+
+    // Convert any remaining [[SLOT_NNN...]] markers to [TODO: description]
+    finalXml = processDocxParagraphs(
+      finalXml,
+      (text) => text.includes('[[SLOT_'),
+      (text) => text.replace(/\[\[SLOT_\d{3}(?::([^\]]+))?\]\]/g, (_match, desc) => {
+        return desc ? `[TODO: ${desc.trim()}]` : '[TODO: Angabe erforderlich]';
+      })
+    );
+
     zip.file(partName, finalXml);
   }
 
