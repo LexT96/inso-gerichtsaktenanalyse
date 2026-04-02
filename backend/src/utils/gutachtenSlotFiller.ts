@@ -385,6 +385,8 @@ function preFillSlots(
           // Strip "EUR" suffix if template already has it
           let cleanValue = contextHasEurSuffix(slot) ? value.replace(/\s*EUR$/i, '') : value;
           cleanValue = unescapeXmlEntities(cleanValue);
+          // Strip [...] brackets (but preserve [TODO:...])
+          cleanValue = cleanValue.replace(/\[(?!TODO:)([^\]]*)\]/g, '$1');
           filled.set(slot.id, { value: cleanValue, hint: matcher.hint });
           break;
         }
@@ -938,12 +940,10 @@ async function fillSlotBatch(
       const entry = parsed[s.id];
       let value = entry && typeof entry === 'object' ? (entry.value ?? '') : String(entry ?? '');
       const hint = entry && typeof entry === 'object' ? (entry.hint ?? '') : '';
-      // Strip wrapping brackets from values — AI sometimes wraps values in [...]
-      // e.g. "[5]" → "5", "[7.000,00 EUR]" → "7.000,00 EUR"
+      // Strip ALL [...] brackets from values — AI wraps values in brackets
+      // e.g. "[5] Arbeitnehmer" → "5 Arbeitnehmer", "[7.000 EUR]" → "7.000 EUR"
       // But preserve [TODO:...] markers
-      if (value.startsWith('[') && value.endsWith(']') && !value.startsWith('[TODO:')) {
-        value = value.slice(1, -1);
-      }
+      value = value.replace(/\[(?!TODO:)([^\]]*)\]/g, '$1');
       // Unescape XML entities that the AI may have included literally
       value = unescapeXmlEntities(value);
       resultMap.set(s.id, { value, hint });
