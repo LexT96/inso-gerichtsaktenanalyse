@@ -84,9 +84,10 @@ export function applySlots(
     xml,
     (text) => text.includes('[[SLOT_'),
     (text) => {
-      return text.replace(/\[\[SLOT_\d{3}\]\]/g, (match) => {
-        const id = match.slice(2, -2);
-        return slotMap.get(id) ?? match;
+      return text.replace(/\[\[SLOT_\d{3}(?::[^\]]+)?\]\]/g, (match) => {
+        const idMatch = match.match(/SLOT_\d{3}/);
+        if (!idMatch) return match;
+        return slotMap.get(idMatch[0]) ?? match;
       });
     }
   );

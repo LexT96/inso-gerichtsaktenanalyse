@@ -1155,23 +1155,87 @@ function cleanupTemplateInstructions(xml: string, result: ExtractionResult): str
 
 // --- XML field replacement (handles Word run-splitting) ---
 
+// --- Track Changes (Änderungen nachverfolgen) ---
+// Wraps AI-filled text in <w:ins>/<w:del> so Word shows them as tracked changes.
+// The lawyer can Accept All or review each change individually.
+
+let _revisionId = 100; // Start high to avoid conflicts with existing revision IDs
+function nextRevisionId(): number { return _revisionId++; }
+
+const TRACK_CHANGES_AUTHOR = 'KI-Assistent';
+const TRACK_CHANGES_DATE = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+
+/** Build a <w:ins> tracked insertion run */
+function trackInsert(text: string, rprXml?: string): string {
+  const id = nextRevisionId();
+  const rpr = rprXml ? `<w:rPr>${rprXml}</w:rPr>` : '';
+  return `<w:ins w:id="${id}" w:author="${escapeXml(TRACK_CHANGES_AUTHOR)}" w:date="${TRACK_CHANGES_DATE}"><w:r>${rpr}<w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:ins>`;
+}
+
+/** Build a <w:del> tracked deletion run */
+function trackDelete(text: string, rprXml?: string): string {
+  const id = nextRevisionId();
+  const rpr = rprXml ? `<w:rPr>${rprXml}</w:rPr>` : '';
+  return `<w:del w:id="${id}" w:author="${escapeXml(TRACK_CHANGES_AUTHOR)}" w:date="${TRACK_CHANGES_DATE}"><w:r>${rpr}<w:delText xml:space="preserve">${escapeXml(text)}</w:delText></w:r></w:del>`;
+}
+
+/**
+ * Replace KI_* fields with tracked changes.
+ * For each paragraph containing KI_* placeholders:
+ * - The original text (with placeholders) is wrapped in <w:del>
+ * - The replaced text (with values) is wrapped in <w:ins>
+ */
 function replaceFieldsInXml(xml: string, replacements: Record<string, string>): string {
   const sortedKeys = Object.keys(replacements).sort((a, b) => b.length - a.length);
 
-  return processDocxParagraphs(
-    xml,
-    (text) => text.includes('KI_'),
-    (text) => {
-      let replaced = text;
-      for (const key of sortedKeys) {
-        const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(escaped + '(?:_\\d+)?', 'g');
-        replaced = replaced.replace(regex, replacements[key] ?? '');
-      }
-      replaced = replaced.replace(/KI_[\w\u00C0-\u024F]+/g, '');
-      return replaced;
+  return xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, (paragraph) => {
+    const textParts: { full: string; text: string }[] = [];
+    const tRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+    let match;
+    while ((match = tRegex.exec(paragraph)) !== null) {
+      textParts.push({ full: match[0], text: match[1] });
     }
-  );
+    if (textParts.length === 0) return paragraph;
+
+    const fullText = textParts.map(p => p.text).join('');
+    if (!fullText.includes('KI_')) return paragraph;
+
+    // Compute replacement
+    let replaced = fullText;
+    for (const key of sortedKeys) {
+      const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped + '(?:_\\d+)?', 'g');
+      replaced = replaced.replace(regex, replacements[key] ?? '');
+    }
+    replaced = replaced.replace(/KI_[\w\u00C0-\u024F]+/g, '');
+
+    // If nothing changed (all replacements were empty), skip
+    if (replaced.trim() === '' && fullText.trim() === '') return paragraph;
+    // If text is identical after replacement, no track change needed
+    if (replaced === fullText) return paragraph;
+
+    // Extract rPr from first run for formatting consistency
+    const rprMatch = paragraph.match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);
+    const rprXml = rprMatch ? rprMatch[1] : '';
+
+    // Build tracked change: delete original, insert replacement
+    let result = paragraph;
+    let firstDone = false;
+    for (const part of textParts) {
+      if (!firstDone) {
+        // Replace first text run with del + ins
+        result = result.replace(
+          part.full,
+          () => trackDelete(fullText, rprXml) + trackInsert(replaced, rprXml)
+        );
+        firstDone = true;
+      } else {
+        // Remove subsequent runs (content already in the tracked change)
+        result = result.replace(part.full, () => '<w:t></w:t>');
+      }
+    }
+    return result;
+  });
 }
 
 // --- Shared: load and prepare template ZIP with KI_* replaced ---
@@ -1244,12 +1308,39 @@ export function generateGutachtenFinal(
   finalSlots: { id: string; value: string }[]
 ): Buffer {
   const { zip } = loadAndPrepareTemplate(result, userInputs);
+  const slotMap = new Map(finalSlots.map(s => [s.id, s.value]));
 
   for (const partName of XML_PARTS) {
     const file = zip.file(partName);
     if (!file) continue;
-    const { xml: slottedXml } = extractSlots(file.asText());
-    const finalXml = applySlots(slottedXml, finalSlots);
+    const { xml: slottedXml, slots } = extractSlots(file.asText());
+
+    // Apply slots with Track Changes: wrap each replacement in <w:ins>/<w:del>
+    let finalXml = slottedXml;
+    for (const slot of slots) {
+      const value = slotMap.get(slot.id);
+      if (!value) continue;
+
+      const marker = `[[${slot.id}]]`;
+      // Find the <w:t> containing this slot marker and wrap in tracked change
+      const markerEscaped = escapeXml(marker);
+      finalXml = finalXml.replace(
+        new RegExp(`(<w:t[^>]*>)([^<]*${markerEscaped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^<]*)(</w:t>)`),
+        (_match, openTag, textContent, closeTag) => {
+          // Extract rPr from the parent <w:r> if available
+          const rprMatch = finalXml.slice(Math.max(0, finalXml.indexOf(_match) - 500), finalXml.indexOf(_match)).match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);
+          const rprXml = rprMatch ? rprMatch[1] : '';
+
+          const originalText = textContent.replace(markerEscaped, slot.original || marker);
+          const replacedText = textContent.replace(markerEscaped, escapeXml(value));
+
+          return trackDelete(originalText, rprXml) + trackInsert(replacedText, rprXml);
+        }
+      );
+    }
+
+    // Also apply remaining slots normally (those without tracked changes)
+    finalXml = applySlots(finalXml, finalSlots);
     zip.file(partName, finalXml);
   }
 
