@@ -937,6 +937,9 @@ async function fillSlotBatch(
       if (value.startsWith('[') && value.endsWith(']') && !value.startsWith('[TODO:')) {
         value = value.slice(1, -1);
       }
+      // Unescape XML entities that the AI may have included literally
+      value = value.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&apos;/g, "'").replace(/&quot;/g, '"');
       resultMap.set(s.id, { value, hint });
     }
     return resultMap;
