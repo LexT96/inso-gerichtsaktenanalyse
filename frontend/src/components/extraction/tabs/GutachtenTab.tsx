@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { DataField } from '../DataField';
 import { Section } from '../Section';
 import { FieldChecklist } from '../FieldChecklist';
-import { GutachtenDialog } from '../GutachtenDialog';
+import { GutachtenWizard } from '../GutachtenWizard';
 import type { ExtractionResult, Pruefstatus } from '../../../types/extraction';
 
 interface GutachtenTabProps {
@@ -178,9 +178,10 @@ export function GutachtenTab({ result, extractionId, onUpdateField }: GutachtenT
 
       {/* Dialog */}
       {showDialog && (
-        <GutachtenDialog
+        <GutachtenWizard
           result={result}
           extractionId={extractionId}
+          onUpdateField={onUpdateField}
           onClose={() => setShowDialog(false)}
         />
       )}
