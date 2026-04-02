@@ -19,7 +19,10 @@ function crossValidate(r: ExtractionResult): Warnung[] {
   const einzelforderungen = r.forderungen?.einzelforderungen ?? [];
   const gesamtExtrahiert = r.forderungen?.gesamtforderungen?.wert;
   if (einzelforderungen.length > 0 && gesamtExtrahiert != null) {
-    const summeBerechnet = einzelforderungen.reduce((s, f) => s + (f.betrag?.wert ?? 0), 0);
+    const summeBerechnet = einzelforderungen.reduce((s, f) => {
+      const w = f.betrag?.wert;
+      return s + (typeof w === 'number' ? w : 0);
+    }, 0);
     if (summeBerechnet > 0 && Math.abs(summeBerechnet - gesamtExtrahiert) > 1) {
       warnungen.push({
         typ: 'warnung',
@@ -63,7 +66,10 @@ function crossValidate(r: ExtractionResult): Warnung[] {
   const positionen = r.aktiva?.positionen ?? [];
   const summeAktivaExtrahiert = r.aktiva?.summe_aktiva?.wert;
   if (positionen.length > 0 && summeAktivaExtrahiert != null) {
-    const summePositionen = positionen.reduce((s, p) => s + (p.geschaetzter_wert?.wert ?? 0), 0);
+    const summePositionen = positionen.reduce((s, p) => {
+      const w = p.geschaetzter_wert?.wert;
+      return s + (typeof w === 'number' ? w : 0);
+    }, 0);
     if (summePositionen > 0 && Math.abs(summePositionen - summeAktivaExtrahiert) > 1) {
       warnungen.push({
         typ: 'warnung',
