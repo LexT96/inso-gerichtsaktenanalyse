@@ -37,3 +37,17 @@ export type {
   Beschaeftigung,
   Pfaendungsberechnung,
 } from '@shared/types/extraction';
+
+export interface VerwalterProfile {
+  id: number;
+  name: string;
+  titel: string;
+  geschlecht: 'maennlich' | 'weiblich';
+  diktatzeichen: string;
+  sachbearbeiter_name: string;
+  sachbearbeiter_email: string;
+  sachbearbeiter_durchwahl: string;
+  standort: string;
+  anderkonto_iban: string;
+  anderkonto_bank: string;
+}
