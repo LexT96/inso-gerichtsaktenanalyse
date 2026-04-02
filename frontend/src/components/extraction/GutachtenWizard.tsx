@@ -110,8 +110,29 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
       verwalter_diktatzeichen: selectedVerwalter?.diktatzeichen || '',
       verwalter_geschlecht: selectedVerwalter?.geschlecht || 'maennlich',
     };
-    if (anderkontoIban.trim()) body.anderkonto_iban = anderkontoIban.trim();
-    if (anderkontoBank.trim()) body.anderkonto_bank = anderkontoBank.trim();
+    // Pass Verwalter profile data to override extraction values
+    if (selectedVerwalter?.name) body.verwalter_name = selectedVerwalter.name;
+    if (selectedVerwalter?.titel) body.verwalter_titel = selectedVerwalter.titel;
+    if (selectedVerwalter?.standort) body.verwalter_standort = selectedVerwalter.standort;
+    // Kanzlei name is always the same; address depends on standort
+    body.verwalter_kanzlei = 'Prof. Dr. Dr. Thomas B. Schmidt Insolvenzverwalter Rechtsanwälte Partnerschaft mbB';
+    const STANDORT_ADRESSEN: Record<string, string> = {
+      'Zell/Mosel': 'Schlossstraße 7, 56856 Zell',
+      'Trier': 'Balduinstraße 22-24, 54290 Trier',
+      'Wiesbaden': 'Luisenstraße 7, 65185 Wiesbaden',
+      'Koblenz': 'Löhrstraße 99, 56068 Koblenz',
+      'Bad Kreuznach': 'Kurhausstraße 15, 55543 Bad Kreuznach',
+    };
+    const adresse = STANDORT_ADRESSEN[selectedVerwalter?.standort || ''] || 'Schlossstraße 7, 56856 Zell';
+    body.verwalter_adresse = adresse;
+    if (selectedVerwalter?.sachbearbeiter_name) body.sachbearbeiter_name = selectedVerwalter.sachbearbeiter_name;
+    if (selectedVerwalter?.sachbearbeiter_email) body.sachbearbeiter_email = selectedVerwalter.sachbearbeiter_email;
+    if (selectedVerwalter?.sachbearbeiter_durchwahl) body.sachbearbeiter_durchwahl = selectedVerwalter.sachbearbeiter_durchwahl;
+    // Anderkonto: prefer wizard input, fallback to profile
+    const iban = anderkontoIban.trim() || selectedVerwalter?.anderkonto_iban || '';
+    const bank = anderkontoBank.trim() || selectedVerwalter?.anderkonto_bank || '';
+    if (iban) body.anderkonto_iban = iban;
+    if (bank) body.anderkonto_bank = bank;
     if (isJuristisch && geschaeftsfuehrer.trim()) body.geschaeftsfuehrer = geschaeftsfuehrer.trim();
     if (isNatuerlich && lastGavv.trim()) body.last_gavv = lastGavv.trim();
     return body;

@@ -24,6 +24,17 @@ export interface GutachtenUserInputs {
   anderkonto_bank?: string;
   geschaeftsfuehrer?: string;
   last_gavv?: string;
+  // Verwalter profile overrides (from persisted profiles)
+  verwalter_name?: string;
+  verwalter_titel?: string;
+  verwalter_adresse?: string;
+  verwalter_kanzlei?: string;
+  verwalter_telefon?: string;
+  verwalter_email?: string;
+  verwalter_standort?: string;
+  sachbearbeiter_name?: string;
+  sachbearbeiter_email?: string;
+  sachbearbeiter_durchwahl?: string;
 }
 
 export type TemplateType = 'natuerliche_person' | 'juristische_person' | 'personengesellschaft';
@@ -552,6 +563,24 @@ export function buildReplacements(
       const inputKey = def.input as keyof GutachtenUserInputs;
       replacements[feld] = (userInputs[inputKey] as string) ?? '';
     }
+  }
+
+  // Override with Verwalter profile data when provided (takes precedence over extraction)
+  if (userInputs.verwalter_name) {
+    replacements['KI_Verwalter_Name'] = userInputs.verwalter_name;
+    replacements['KI_Verwalter_Unterzeichner'] = userInputs.verwalter_name;
+  }
+  if (userInputs.verwalter_adresse) {
+    replacements['KI_Verwalter_Adr'] = userInputs.verwalter_adresse;
+  }
+  if (userInputs.verwalter_kanzlei) {
+    replacements['KI_Gutachter_Kanzlei'] = userInputs.verwalter_kanzlei;
+  }
+  if (userInputs.verwalter_telefon) {
+    replacements['KI_Gutachter_Telefon'] = userInputs.verwalter_telefon;
+  }
+  if (userInputs.verwalter_email) {
+    replacements['KI_Gutachter_Email'] = userInputs.verwalter_email;
   }
 
   return replacements;
