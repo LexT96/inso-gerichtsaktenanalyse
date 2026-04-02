@@ -1203,7 +1203,9 @@ const TRACK_CHANGES_DATE = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 function trackInsert(text: string, rprXml?: string): string {
   const id = nextRevisionId();
   const rpr = rprXml ? `<w:rPr>${rprXml}</w:rPr>` : '';
-  return `<w:ins w:id="${id}" w:author="${escapeXml(TRACK_CHANGES_AUTHOR)}" w:date="${TRACK_CHANGES_DATE}"><w:r>${rpr}<w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:ins>`;
+  // Strip [...] brackets from inserted text (AI artifacts) — preserve [TODO:] and [[SLOT_]]
+  const cleaned = text.replace(/\[(?!TODO:|SLOT_|\[)([^\]]*)\]/g, '$1');
+  return `<w:ins w:id="${id}" w:author="${escapeXml(TRACK_CHANGES_AUTHOR)}" w:date="${TRACK_CHANGES_DATE}"><w:r>${rpr}<w:t xml:space="preserve">${escapeXml(cleaned)}</w:t></w:r></w:ins>`;
 }
 
 /** Build a <w:del> tracked deletion run */
