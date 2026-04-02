@@ -929,8 +929,14 @@ async function fillSlotBatch(
     const resultMap = new Map<string, { value: string; hint: string }>();
     for (const s of slots) {
       const entry = parsed[s.id];
-      const value = entry && typeof entry === 'object' ? (entry.value ?? '') : String(entry ?? '');
+      let value = entry && typeof entry === 'object' ? (entry.value ?? '') : String(entry ?? '');
       const hint = entry && typeof entry === 'object' ? (entry.hint ?? '') : '';
+      // Strip wrapping brackets from values — AI sometimes wraps values in [...]
+      // e.g. "[5]" → "5", "[7.000,00 EUR]" → "7.000,00 EUR"
+      // But preserve [TODO:...] markers
+      if (value.startsWith('[') && value.endsWith(']') && !value.startsWith('[TODO:')) {
+        value = value.slice(1, -1);
+      }
       resultMap.set(s.id, { value, hint });
     }
     return resultMap;

@@ -405,7 +405,8 @@ function computeGutachtenField(
     case 'steuernummer': {
       const v = result.schuldner?.steuernummer?.wert;
       if (v) return v;
-      return searchErmittlungenAndZusammenfassung(result, /steuer.?n/i);
+      // Don't fall back to zusammenfassung — "Steuer" matches too broadly
+      return '';
     }
     case 'letzter_jahresabschluss': {
       const v = result.schuldner?.letzter_jahresabschluss?.wert;
