@@ -74,7 +74,12 @@ function getByPath(obj: unknown, dotPath: string): string {
 // --- Utility: XML escaping ---
 
 export function escapeXml(str: string): string {
-  return str
+  // First unescape any pre-escaped entities to avoid double-escaping
+  // (AI outputs &apos; literally, which would become &amp;apos;)
+  const unescaped = str
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&apos;/g, "'").replace(/&quot;/g, '"');
+  return unescaped
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
