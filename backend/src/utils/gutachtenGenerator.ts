@@ -4,8 +4,15 @@ import path from 'path';
 import type { ExtractionResult } from '../types/extraction';
 import { extractSlots, fillSlots, applySlots, type GutachtenSlot, type SlotInfo } from './gutachtenSlotFiller';
 
-// __dirname at runtime = dist/utils/ or src/utils/ — 3 levels up = project root
-const TEMPLATES_DIR = path.resolve(process.cwd(), 'gutachtenvorlagen');
+// Find gutachtenvorlagen/ — could be at cwd (Docker) or one level up (dev from backend/)
+function findTemplatesDir(): string {
+  for (const base of [process.cwd(), path.resolve(process.cwd(), '..')]) {
+    const candidate = path.join(base, 'gutachtenvorlagen');
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return path.resolve(process.cwd(), 'gutachtenvorlagen'); // fallback
+}
+const TEMPLATES_DIR = findTemplatesDir();
 const MAPPING_PATH = path.join(TEMPLATES_DIR, 'gutachten-mapping.json');
 
 // --- Types ---
