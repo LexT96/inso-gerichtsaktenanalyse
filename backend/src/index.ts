@@ -13,6 +13,7 @@ import historyRoutes from './routes/history';
 import generateLetterRoutes from './routes/generateLetter';
 import generateGutachtenRoutes from './routes/generateGutachten';
 import fieldUpdateRoutes from './routes/fieldUpdate';
+import verwalterRoutes from './routes/verwalter';
 import bcrypt from 'bcrypt';
 
 const app = express();
@@ -33,6 +34,7 @@ app.use('/api/history', historyRoutes);
 app.use('/api/generate-letter', generateLetterRoutes);
 app.use('/api/generate-gutachten', generateGutachtenRoutes);
 app.use('/api/extractions', fieldUpdateRoutes);
+app.use('/api/verwalter', verwalterRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
