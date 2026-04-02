@@ -1199,12 +1199,21 @@ function nextRevisionId(): number { return _revisionId++; }
 const TRACK_CHANGES_AUTHOR = 'KI-Assistent';
 const TRACK_CHANGES_DATE = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 
+/** Unescape XML entities that AI may have pre-escaped */
+function unescapeXmlEntities(s: string): string {
+  return s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&apos;/g, "'").replace(/&quot;/g, '"');
+}
+
 /** Build a <w:ins> tracked insertion run */
 function trackInsert(text: string, rprXml?: string): string {
   const id = nextRevisionId();
   const rpr = rprXml ? `<w:rPr>${rprXml}</w:rPr>` : '';
-  // Strip [...] brackets from inserted text (AI artifacts) — preserve [TODO:] and [[SLOT_]]
-  const cleaned = text.replace(/\[(?!TODO:|SLOT_|\[)([^\]]*)\]/g, '$1');
+  // 1. Unescape any pre-escaped XML entities (AI outputs &apos; literally)
+  // 2. Strip [...] brackets (AI artifacts) — preserve [TODO:] and [[SLOT_]]
+  // 3. escapeXml re-escapes properly for Word XML
+  let cleaned = unescapeXmlEntities(text);
+  cleaned = cleaned.replace(/\[(?!TODO:|SLOT_|\[)([^\]]*)\]/g, '$1');
   return `<w:ins w:id="${id}" w:author="${escapeXml(TRACK_CHANGES_AUTHOR)}" w:date="${TRACK_CHANGES_DATE}"><w:r>${rpr}<w:t xml:space="preserve">${escapeXml(cleaned)}</w:t></w:r></w:ins>`;
 }
 
