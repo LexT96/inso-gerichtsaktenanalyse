@@ -325,6 +325,98 @@ function buildPreFillMatchers(): SlotMatcher[] {
       },
       hint: 'Branche',
     },
+    // --- USt-ID ---
+    {
+      patterns: [/ust.?id|umsatzsteuer.?id/i],
+      extract: (r) => sv(r.schuldner?.ust_id),
+      hint: 'USt-ID',
+    },
+    // --- USt-Versteuerung ---
+    {
+      patterns: [/ust.?versteuerung|soll.?versteuerung|ist.?versteuerung/i],
+      extract: (r) => sv(r.schuldner?.ust_versteuerung) || 'Kalenderjahr',
+      hint: 'USt-Versteuerung',
+    },
+    // --- Geburtsort ---
+    {
+      patterns: [/geburtsort/i],
+      extract: (r) => sv(r.schuldner?.geburtsort),
+      hint: 'Geburtsort',
+    },
+    // --- Kassenbestand ---
+    {
+      patterns: [/kassenbestand|barkasse/i],
+      extract: () => '0,00 EUR',
+      hint: 'Kassenbestand',
+    },
+    // --- Anderkonto / Insolvenzsonderkonto ---
+    {
+      patterns: [/anderkonto|insolvenzsonderkonto|sonderkonto/i],
+      extract: (r) => sv(r.schuldner?.insolvenzsonderkonto),
+      hint: 'Anderkonto',
+    },
+    // --- Vergütung vorläufiges Verfahren ---
+    {
+      patterns: [/verg.{0,5}tung vorl.{0,5}ufig/i],
+      extract: (r) => {
+        const pos = r.aktiva?.positionen ?? [];
+        const bg = pos.reduce((s, p) => {
+          if (p.freie_masse?.wert != null) return s + (Number(p.freie_masse.wert) || 0);
+          const w = Number(p.geschaetzter_wert?.wert) || 0;
+          const ab = Number(p.absonderung?.wert) || 0;
+          const au = Number(p.aussonderung?.wert) || 0;
+          return s + Math.max(0, w - ab - au);
+        }, 0) || (Number(r.aktiva?.summe_aktiva?.wert) || 0);
+        if (bg <= 0) return null;
+        // InsVV § 11: 25% of Regelvergütung
+        const STUFEN = [{bis:25000,satz:0.40},{bis:50000,satz:0.25},{bis:250000,satz:0.07},{bis:500000,satz:0.03},{bis:25000000,satz:0.02}];
+        let v = 0, rest = bg, prev = 0;
+        for (const {bis,satz} of STUFEN) { const b = Math.min(rest, bis-prev); if (b<=0) break; v += b*satz; rest -= b; prev = bis; }
+        v = Math.max(v, 1000);
+        return formatEUR(Math.round(v * 0.25 * 100) / 100);
+      },
+      hint: 'Vergütung vorl. Verfahren',
+    },
+    // --- Vergütung eröffnetes Verfahren ---
+    {
+      patterns: [/verg.{0,5}tung er.{0,5}ffnet/i],
+      extract: (r) => {
+        const pos = r.aktiva?.positionen ?? [];
+        const bg = pos.reduce((s, p) => {
+          if (p.freie_masse?.wert != null) return s + (Number(p.freie_masse.wert) || 0);
+          const w = Number(p.geschaetzter_wert?.wert) || 0;
+          const ab = Number(p.absonderung?.wert) || 0;
+          const au = Number(p.aussonderung?.wert) || 0;
+          return s + Math.max(0, w - ab - au);
+        }, 0) || (Number(r.aktiva?.summe_aktiva?.wert) || 0);
+        if (bg <= 0) return null;
+        const STUFEN = [{bis:25000,satz:0.40},{bis:50000,satz:0.25},{bis:250000,satz:0.07},{bis:500000,satz:0.03},{bis:25000000,satz:0.02}];
+        let v = 0, rest = bg, prev = 0;
+        for (const {bis,satz} of STUFEN) { const b = Math.min(rest, bis-prev); if (b<=0) break; v += b*satz; rest -= b; prev = bis; }
+        v = Math.max(v, 1000);
+        return formatEUR(Math.round(v * 100) / 100);
+      },
+      hint: 'Vergütung eröffnetes Verfahren',
+    },
+    // --- Gerichtskosten ---
+    {
+      patterns: [/gerichtskosten/i],
+      extract: (r) => {
+        const bg = Number(r.aktiva?.summe_aktiva?.wert) || 0;
+        if (bg <= 0) return null;
+        const GKG: [number,number][] = [[500,38],[1000,58],[1500,78],[2000,98],[3000,119],[4000,140],[5000,161],[6000,182],[7000,203],[8000,224],[9000,245],[10000,266],[13000,295],[16000,324],[19000,353],[22000,382],[25000,411],[30000,449],[35000,487],[40000,525],[45000,563],[50000,601],[65000,733],[80000,865],[95000,997],[110000,1129],[125000,1261],[140000,1393],[155000,1525],[170000,1657],[185000,1789],[200000,1921],[230000,2119],[260000,2317],[290000,2515],[320000,2713],[350000,2911],[380000,3109],[410000,3307],[440000,3505],[470000,3703],[500000,3901]];
+        let g = 3901;
+        for (const [grenze,wert] of GKG) { if (bg <= grenze) { g = wert; break; } }
+        return formatEUR(Math.round(g * 1.5 * 100) / 100);
+      },
+      hint: 'Gerichtskosten',
+    },
+    // --- Aktiva positions: "nicht vorhanden" default for empty categories ---
+    {
+      patterns: [/anteile.*verbundene|beteiligungen.*beschreibung|wertpapiere.*anlagev|unfertige.*erzeugnisse|fertige.*erzeugnisse|forderungen.*verbundene|forderungen.*beteiligungs|wertpapiere.*umlaufv/i],
+      extract: () => 'Nicht vorhanden.',
+      hint: 'Vermögensposition',
+    },
     // --- Finanzstatus / Bilanz ---
     {
       patterns: [/bilanz|finanzstatus|stichtagsbezogen/i],
