@@ -1017,7 +1017,11 @@ function hasSelbststaendigeTaetigkeit(result: ExtractionResult): boolean {
 }
 
 function hasInternationalerBezug(result: ExtractionResult): boolean {
-  // Check for non-German nationality or foreign addresses
+  // Primary: use explicit extraction field
+  const ib = result.verfahrensdaten?.internationaler_bezug?.wert;
+  if (ib === true) return true;
+  if (ib === false) return false;
+  // Fallback (field not extracted): check for non-German nationality or foreign addresses
   const staat = String(result.schuldner?.staatsangehoerigkeit?.wert || '').toLowerCase();
   if (staat && staat !== 'deutsch' && staat !== 'deutschland' && staat !== 'german') return true;
   const geburtsland = String(result.schuldner?.geburtsland?.wert || '').toLowerCase();
@@ -1239,15 +1243,16 @@ function replaceFieldsInXml(xml: string, replacements: Record<string, string>): 
   const sortedKeys = Object.keys(replacements).sort((a, b) => b.length - a.length);
 
   return xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, (paragraph) => {
-    const textParts: { full: string; text: string }[] = [];
+    // Collect text from all <w:t> elements
     const tRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+    const texts: string[] = [];
     let match;
     while ((match = tRegex.exec(paragraph)) !== null) {
-      textParts.push({ full: match[0], text: match[1] });
+      texts.push(match[1]);
     }
-    if (textParts.length === 0) return paragraph;
+    if (texts.length === 0) return paragraph;
 
-    const fullText = textParts.map(p => p.text).join('');
+    const fullText = texts.join('');
     if (!fullText.includes('KI_')) return paragraph;
 
     // Compute replacement
@@ -1259,31 +1264,23 @@ function replaceFieldsInXml(xml: string, replacements: Record<string, string>): 
     }
     replaced = replaced.replace(/KI_[\w\u00C0-\u024F]+/g, '');
 
-    // If nothing changed (all replacements were empty), skip
     if (replaced.trim() === '' && fullText.trim() === '') return paragraph;
-    // If text is identical after replacement, no track change needed
     if (replaced === fullText) return paragraph;
 
     // Extract rPr from first run for formatting consistency
     const rprMatch = paragraph.match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);
     const rprXml = rprMatch ? rprMatch[1] : '';
 
-    // Build tracked change: delete original, insert replacement
+    // Replace ALL <w:r> elements with tracked change (del + ins at paragraph level)
+    // Remove all existing runs, then insert del+ins as siblings inside <w:p>
     let result = paragraph;
-    let firstDone = false;
-    for (const part of textParts) {
-      if (!firstDone) {
-        // Replace first text run with del + ins
-        result = result.replace(
-          part.full,
-          () => trackDelete(fullText, rprXml) + trackInsert(replaced, rprXml)
-        );
-        firstDone = true;
-      } else {
-        // Remove subsequent runs (content already in the tracked change)
-        result = result.replace(part.full, () => '<w:t></w:t>');
-      }
-    }
+    // Remove all <w:r>...</w:r> elements
+    result = result.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, '');
+    // Insert tracked change before closing </w:p>
+    result = result.replace(
+      /<\/w:p>/,
+      () => trackDelete(fullText, rprXml) + trackInsert(replaced, rprXml) + '</w:p>'
+    );
     return result;
   });
 }

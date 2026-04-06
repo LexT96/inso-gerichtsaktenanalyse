@@ -523,21 +523,29 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
         let recovered = 0;
         for (const [path, value] of Object.entries(reParsed)) {
           if (!value?.wert || !value?.quelle) continue;
-          // Navigate to the field and set it
-          const parts = path.split('.');
+          // Navigate to the field — supports both dot notation and bracket notation
+          // e.g. "forderungen.einzelforderungen[0].betrag"
+          const segments = path.replace(/\[(\d+)\]/g, '.$1').split('.');
           let obj: unknown = result;
-          for (let i = 0; i < parts.length - 1; i++) {
-            if (obj && typeof obj === 'object') obj = (obj as Record<string, unknown>)[parts[i]];
-            else break;
+          for (let i = 0; i < segments.length - 1; i++) {
+            if (obj && typeof obj === 'object') {
+              const key = segments[i];
+              if (Array.isArray(obj)) {
+                obj = obj[Number(key)];
+              } else {
+                obj = (obj as Record<string, unknown>)[key];
+              }
+            } else break;
           }
           if (obj && typeof obj === 'object') {
-            const lastKey = parts[parts.length - 1];
-            const field = (obj as Record<string, unknown>)[lastKey];
+            const lastKey = segments[segments.length - 1];
+            const container = Array.isArray(obj) ? obj[Number(lastKey)] : (obj as Record<string, unknown>)[lastKey];
+            const field = container;
             if (field && typeof field === 'object' && 'wert' in (field as object)) {
               const f = field as { wert: unknown; quelle: string; verifiziert?: boolean };
               f.wert = value.wert;
               f.quelle = value.quelle;
-              f.verifiziert = undefined; // Needs re-verification
+              f.verifiziert = undefined;
               recovered++;
             }
           }
