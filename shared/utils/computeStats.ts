@@ -125,17 +125,21 @@ export function computeExtractionStats(result: ExtractionResult): ExtractionStat
     return false;
   };
 
+  // Optional nested sub-objects that vary by model output — never count in stats
+  const SKIP_SUB_OBJECTS = new Set([
+    'ehegatte', 'beschaeftigung', 'pfaendungsberechnung',
+  ]);
+
   const walkObj = (obj: Record<string, unknown>, prefix: string): void => {
     if (!obj) return;
     for (const [key, value] of Object.entries(obj)) {
-      if (Array.isArray(value)) continue; // Skip arrays (einzelforderungen, aktiva.positionen)
+      if (Array.isArray(value)) continue;
+      if (SKIP_SUB_OBJECTS.has(key)) continue;
       if (value && typeof value === 'object') {
         const v = value as Record<string, unknown>;
         if ('wert' in v) {
           countField(key, value, prefix);
         } else {
-          // Skip entirely empty sub-objects (e.g. ehegatte with all null fields)
-          // so they don't inflate the missing count when the model creates empty stubs
           if (!hasAnyFilled(v)) continue;
           walkObj(v, prefix ? `${prefix}.${key}` : key);
         }
