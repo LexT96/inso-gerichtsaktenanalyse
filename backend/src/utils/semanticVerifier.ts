@@ -61,6 +61,18 @@ function wertIsEmpty(wert: unknown): boolean {
 // - Synthesized text fields (summaries of multiple values, not verbatim quotes)
 const SKIP_VERIFICATION_PATHS = new Set([
   'schuldner.pfaendungsberechnung.pfaendbarer_betrag',
+  // Computed/inferred fields — not verbatim in documents, verifier rejects unfairly
+  'schuldner.arbeitnehmer_anzahl',       // Often inferred from context, not stated as number
+  'schuldner.betriebsrat',               // Boolean derived from checkbox
+  'schuldner.steuerliche_organschaft',    // Boolean derived from checkbox
+  'forderungen.gesicherte_forderungen',   // Computed sum, not stated verbatim
+  'forderungen.ungesicherte_forderungen', // Computed sum
+  'aktiva.summe_aktiva',                  // Computed sum of positions
+  'aktiva.massekosten_schaetzung',        // Estimated, not in document
+  'anfechtung.gesamtpotenzial',           // Estimated sum
+  'verfahrensdaten.eroeffnungsgrund',     // Legal classification, often paraphrased
+  'verfahrensdaten.internationaler_bezug', // Boolean inference
+  'verfahrensdaten.eigenverwaltung',      // Boolean inference
 ]);
 
 // Suffix patterns: fields ending with these within arrays are skipped

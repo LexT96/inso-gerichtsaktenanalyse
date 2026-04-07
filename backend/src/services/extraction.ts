@@ -452,7 +452,7 @@ export async function processExtraction(
 
     // Stage 3b: Targeted re-extraction for fields removed by verifier
     // Research shows guided re-extraction recovers 5-15% of lost fields
-    if (verifyResult.removedPaths.length > 0 && verifyResult.removedPaths.length <= 10) {
+    if (verifyResult.removedPaths.length > 0 && verifyResult.removedPaths.length <= 20) {
       report('Fehlende Felder werden nachextrahiert…', 82);
       logger.info('Targeted re-extraction', { removedPaths: verifyResult.removedPaths });
       try {
