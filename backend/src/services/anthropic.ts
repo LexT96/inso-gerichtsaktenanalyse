@@ -4,17 +4,16 @@ import { config } from '../config';
 import { extractionResultSchema } from '../utils/validation';
 import { logger } from '../utils/logger';
 import { parallelLimitSettled } from '../utils/parallel';
+import { detectProvider, supportsNativePdf as providerSupportsNativePdf, getAnthropicClient, getVertexClient } from './extractionProvider';
 import type { DocumentSegment } from '../utils/documentAnalyzer';
 import type { ExtractionResult, Standardanschreiben, FehlendInfo } from '../types/extraction';
 
-export const anthropic = new Anthropic({
-  apiKey: config.ANTHROPIC_API_KEY,
-  ...(config.ANTHROPIC_BASE_URL ? { baseURL: config.ANTHROPIC_BASE_URL } : {}),
-});
+// Use the provider layer's client — works for direct, Vertex, and Langdock
+export const anthropic = getAnthropicClient();
 
-// Detect rate-limited providers (Langdock: 60K TPM)
-const isRateLimitedProvider = (): boolean =>
-  Boolean(config.ANTHROPIC_BASE_URL?.includes('langdock'));
+// Detect rate-limited providers
+import { isRateLimited } from './extractionProvider';
+const isRateLimitedProvider = (): boolean => isRateLimited(detectProvider());
 
 // Delay between API calls for rate-limited providers (wait for TPM window to reset)
 const RATE_LIMITED_DELAY_MS = 62_000; // 62s — just over 1 minute TPM window
@@ -695,7 +694,9 @@ async function callClaudeStreaming(params: {
     streamParams.temperature = 0;
   }
 
-  const stream = anthropic.messages.stream(streamParams as unknown as Anthropic.MessageStreamParams);
+  // Use Vertex client if configured, otherwise direct Anthropic
+  const client = detectProvider() === 'vertex' ? getVertexClient() : anthropic;
+  const stream = (client as unknown as Anthropic).messages.stream(streamParams as unknown as Anthropic.MessageStreamParams);
   const finalMessage = await stream.finalMessage();
 
   const text = finalMessage.content
@@ -776,8 +777,8 @@ export async function extractComprehensive(
 
   // For small-medium PDFs (<=500 pages): use native PDF mode if buffer available
   // Native PDF mode requires direct Anthropic API — proxies like Langdock don't support it
-  const supportsNativePdf = !config.ANTHROPIC_BASE_URL;
-  if (supportsNativePdf && pdfBuffer && pageTexts.length <= 500) {
+  const nativePdfSupported = providerSupportsNativePdf(detectProvider());
+  if (nativePdfSupported && pdfBuffer && pageTexts.length <= 500) {
     const base64 = pdfBuffer.toString('base64');
     logger.info('Starte umfassende Extraktion (PDF-Modus)', { pages: pageTexts.length });
 

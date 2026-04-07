@@ -1,6 +1,7 @@
 import path from 'path';
 import { extractComprehensive, extractFromPageTexts, anthropic, callWithRetry, extractJsonFromText, EXTRACTION_PROMPT } from './anthropic';
-import { extractWithOpenAI, isOpenAIConfigured } from './openaiExtractor';
+import { extractWithOpenAI } from './openaiExtractor';
+import { detectProvider, supportsNativePdf, isRateLimited, logProviderConfig } from './extractionProvider';
 import { computeExtractionStats } from '../utils/computeStats';
 import { config } from '../config';
 import { extractTextPerPage } from './pdfProcessor';
@@ -17,9 +18,7 @@ import { enrichmentReview } from '../utils/enrichmentReview';
 import { PDFDocument } from 'pdf-lib';
 import type { ExtractionResult } from '../types/extraction';
 
-// Rate-limited providers (Langdock: 60K TPM) must always use chunked mode
-const isRateLimitedProvider = (): boolean =>
-  Boolean(config.ANTHROPIC_BASE_URL?.includes('langdock'));
+const isRateLimitedProvider = (): boolean => isRateLimited(detectProvider());
 
 const LARGE_PDF_THRESHOLD = 500; // pages — above this, use chunked fallback
 // For rate-limited providers, force chunked mode for any PDF
@@ -389,12 +388,16 @@ export async function processExtraction(
     // chunked fallback with separate aktiva/anfechtung for very large PDFs
     let result: ExtractionResult;
 
-    if (isOpenAIConfigured()) {
-      // OpenAI/GPT extraction — native PDF input, auto-chunks for large files
+    const provider = detectProvider();
+    logProviderConfig();
+
+    if (provider === 'openai') {
+      // OpenAI/GPT extraction — vision via images, auto-chunks for large files
       report(`GPT-Extraktion (${pageCount} S.)… (Stufe 2/3)`, 35);
-      logger.info('Using OpenAI extraction provider', { model: process.env.OPENAI_MODEL || 'gpt-5.4' });
       result = await extractWithOpenAI(pdfBuffer, pageTexts, EXTRACTION_PROMPT, documentMap, segments);
     } else if (pageCount <= effectiveThreshold()) {
+      // Anthropic/Vertex/Langdock — uses Anthropic SDK (direct, Vertex, or proxy)
+      // Native PDF mode for anthropic + vertex; text mode for langdock
       // Single comprehensive call — extracts base data + aktiva + anfechtung
       report(`Vollständige Analyse (${pageCount} S.)… (Stufe 2/3)`, 35);
       result = await extractComprehensive(pdfBuffer, pageTexts, documentMap);
@@ -521,8 +524,7 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
     // Stage 3c: Focused handwriting extraction for Fragebogen pages
     // Claude's vision CAN read handwriting but misses details when processing 30+ pages at once.
     // This pass sends ONLY the form pages with a focused prompt → dramatically better results.
-    const supportsNativePdf = !config.ANTHROPIC_BASE_URL;
-    if (supportsNativePdf && pdfBuffer) {
+    if (supportsNativePdf(provider) && pdfBuffer) {
       report('Handschriftliche Formulare werden gelesen…', 85);
       try {
         result = await extractHandwrittenFormFields(result, pdfBuffer, pageTexts);
