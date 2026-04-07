@@ -14,7 +14,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-RUN apk add --no-cache tini
+# Python + pymupdf for GPT-5.4 PDF-to-image conversion
+RUN apk add --no-cache tini python3 py3-pip && \
+    pip3 install --break-system-packages pymupdf
 
 COPY backend/package.json backend/package-lock.json* ./
 RUN npm install --omit=dev
