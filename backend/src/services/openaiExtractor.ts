@@ -38,13 +38,15 @@ async function extractPdfPages(pdfBuffer: Buffer, pageIndices: number[]): Promis
   return Buffer.from(await newDoc.save());
 }
 
-/** Call GPT with PDF pages as images via Chat Completions API */
+/** Call GPT with PDF pages as images via Chat Completions API.
+ *  pageNumberOffset: 1-based page number of the first image (for correct quelle references) */
 async function callGptWithImages(
   client: OpenAI,
   model: string,
   pdfBuffer: Buffer,
   maxPages: number,
   prompt: string,
+  pageNumberOffset = 1,
 ): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
   const { execFileSync } = await import('child_process');
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-img-'));
@@ -68,8 +70,11 @@ doc.close()
     ];
 
     const files = fs.readdirSync(tmpDir).filter(f => f.endsWith('.jpg')).sort();
-    for (const file of files) {
-      const b64 = fs.readFileSync(path.join(tmpDir, file)).toString('base64');
+    for (let idx = 0; idx < files.length; idx++) {
+      const pageNum = pageNumberOffset + idx;
+      // Label each image with its authoritative PDF page number
+      content.push({ type: 'text', text: `=== SEITE ${pageNum} === Verwende genau "Seite ${pageNum}, ..." für Fundstellen aus dem folgenden Bild.` });
+      const b64 = fs.readFileSync(path.join(tmpDir, files[idx])).toString('base64');
       content.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'high' } });
     }
 
@@ -267,8 +272,10 @@ export async function extractWithOpenAI(
       const chunkPdf = await extractPdfPages(pdfBuffer, chunk.pages);
       const chunkPrompt = prompt + `\n\nDieses PDF enthält die Seiten ${chunk.pages[0] + 1}-${chunk.pages[chunk.pages.length - 1] + 1} der Gesamtakte. Extrahiere ALLE Informationen die auf diesen Seiten zu finden sind.`;
 
+      // Pass the 1-based page number of the first page in this chunk
+      const chunkPageOffset = chunk.pages[0] + 1;
       const { text, inputTokens, outputTokens } = await callGptWithImages(
-        client, model, chunkPdf, 70, chunkPrompt
+        client, model, chunkPdf, 70, chunkPrompt, chunkPageOffset
       );
 
       logger.info(`Chunk "${chunk.name}" completed`, { pages: chunk.pages.length, inputTokens, outputTokens });
