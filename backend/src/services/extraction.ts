@@ -1,6 +1,7 @@
 import path from 'path';
 import { extractComprehensive, extractFromPageTexts, anthropic, callWithRetry, extractJsonFromText, EXTRACTION_PROMPT } from './anthropic';
 import { extractWithOpenAI, isOpenAIConfigured } from './openaiExtractor';
+import { computeExtractionStats } from '../utils/computeStats';
 import { config } from '../config';
 import { extractTextPerPage } from './pdfProcessor';
 import { getDb } from '../db/database';
@@ -24,11 +25,7 @@ const LARGE_PDF_THRESHOLD = 500; // pages — above this, use chunked fallback
 // For rate-limited providers, force chunked mode for any PDF
 const effectiveThreshold = (): number => isRateLimitedProvider() ? 0 : LARGE_PDF_THRESHOLD;
 
-interface ExtractionStats {
-  found: number;
-  missing: number;
-  lettersReady: number;
-}
+import type { ExtractionStats } from '../utils/computeStats';
 
 function isEmpty(field: { wert?: unknown; quelle?: unknown } | null | undefined): boolean {
   if (!field) return true;
@@ -339,50 +336,6 @@ function isJuristischePersonResult(result: ExtractionResult): boolean {
   return /gmbh|ug\b|ag\b|se\b|kg\b|ohg|gbr|partg|e\.?\s?v|stiftung|genossenschaft|kgaa/i.test(rf);
 }
 
-function computeStats(result: ExtractionResult): ExtractionStats {
-  let found = 0;
-  let missing = 0;
-  const isEntity = isJuristischePersonResult(result);
-
-  const walkObj = (obj: Record<string, unknown>, parentKey?: string): void => {
-    if (!obj) return;
-    for (const [key, value] of Object.entries(obj)) {
-      if (Array.isArray(value)) continue;
-      if (value && typeof value === 'object') {
-        const v = value as Record<string, unknown>;
-        if ('wert' in v || 'quelle' in v) {
-          // Skip entity-irrelevant fields
-          if (!isEntity && ENTITY_ONLY_FIELDS.has(key)) continue;
-          if (isEntity && PERSON_ONLY_FIELDS.has(key)) continue;
-          // Skip optional fields that shouldn't count as missing
-          if (OPTIONAL_STATS_FIELDS.has(key) && isEmpty(v as { wert?: unknown })) continue;
-
-          isEmpty(v as { wert?: unknown; quelle?: unknown }) ? missing++ : found++;
-        } else {
-          walkObj(v as Record<string, unknown>, key);
-        }
-      }
-    }
-  };
-
-  walkObj(result.verfahrensdaten as unknown as Record<string, unknown>);
-  walkObj(result.schuldner as unknown as Record<string, unknown>);
-  walkObj(result.antragsteller as unknown as Record<string, unknown>);
-  walkObj(result.forderungen as unknown as Record<string, unknown>);
-  // Also walk each einzelforderung (walkObj skips arrays by default)
-  if (result.forderungen?.einzelforderungen) {
-    for (const ef of result.forderungen.einzelforderungen) {
-      walkObj(ef as unknown as Record<string, unknown>);
-    }
-  }
-  walkObj(result.gutachterbestellung as unknown as Record<string, unknown>);
-
-  const lettersReady = (result.standardanschreiben || [])
-    .filter(l => l.status === 'bereit').length;
-
-  return { found, missing, lettersReady };
-}
-
 export type ProgressCallback = (message: string, percent: number) => void;
 
 export async function processExtraction(
@@ -595,7 +548,7 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
     result = validateLettersAgainstChecklists(result);
 
     const processingTimeMs = Date.now() - startTime;
-    const stats = computeStats(result);
+    const stats = computeExtractionStats(result);
 
     db.prepare(
       `UPDATE extractions SET
