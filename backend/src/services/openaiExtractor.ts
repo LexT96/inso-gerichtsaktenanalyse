@@ -5,6 +5,9 @@
  */
 
 import OpenAI from 'openai';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import { PDFDocument } from 'pdf-lib';
 import { logger } from '../utils/logger';
 import { extractionResultSchema } from '../utils/validation';
@@ -26,20 +29,6 @@ function getOpenAI(): OpenAI {
   return openaiClient;
 }
 
-/** Upload a PDF buffer as an OpenAI file and return the file ID */
-async function uploadPdf(client: OpenAI, pdfBuffer: Buffer, name: string): Promise<string> {
-  const file = await client.files.create({
-    file: new File([pdfBuffer], name, { type: 'application/pdf' }),
-    purpose: 'assistants',
-  });
-  return file.id;
-}
-
-/** Delete an uploaded file (cleanup) */
-async function deleteFile(client: OpenAI, fileId: string): Promise<void> {
-  try { await client.files.delete(fileId); } catch { /* ignore */ }
-}
-
 /** Extract a range of pages from a PDF buffer as a new PDF */
 async function extractPdfPages(pdfBuffer: Buffer, pageIndices: number[]): Promise<Buffer> {
   const srcDoc = await PDFDocument.load(pdfBuffer);
@@ -49,41 +38,62 @@ async function extractPdfPages(pdfBuffer: Buffer, pageIndices: number[]): Promis
   return Buffer.from(await newDoc.save());
 }
 
-/** Call GPT with a PDF file and extraction prompt, return raw text */
-async function callGptWithPdf(
+/** Call GPT with PDF pages as images via Chat Completions API */
+async function callGptWithImages(
   client: OpenAI,
   model: string,
   pdfBuffer: Buffer,
-  pdfName: string,
+  maxPages: number,
   prompt: string,
 ): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
-  // Upload PDF
-  const fileId = await uploadPdf(client, pdfBuffer, pdfName);
+  const { execFileSync } = await import('child_process');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-img-'));
+  const pdfPath = path.join(tmpDir, 'input.pdf');
+  fs.writeFileSync(pdfPath, pdfBuffer);
 
   try {
-    const response = await client.responses.create({
-      model,
-      input: [
-        { role: 'user', content: [
-          { type: 'input_file', file_id: fileId },
-          { type: 'input_text', text: prompt },
-        ]},
-      ],
-      text: { format: { type: 'text' } },
-      reasoning: { effort: (process.env.OPENAI_REASONING_EFFORT as string) || 'high' },
-      max_output_tokens: 32000,
-    } as Parameters<typeof client.responses.create>[0]);
+    // Convert PDF to JPEG via pymupdf
+    const script = `
+import fitz, sys, os
+doc = fitz.open(sys.argv[1])
+for i in range(min(len(doc), int(sys.argv[3]))):
+    pix = doc[i].get_pixmap(dpi=150)
+    pix.save(os.path.join(sys.argv[2], f'page_{i:04d}.jpg'))
+doc.close()
+`;
+    execFileSync('python3', ['-c', script, pdfPath, tmpDir, String(maxPages)], { timeout: 60000 });
 
-    const text = response.output_text || '';
+    const content: OpenAI.Chat.ChatCompletionContentPart[] = [
+      { type: 'text', text: prompt },
+    ];
+
+    const files = fs.readdirSync(tmpDir).filter(f => f.endsWith('.jpg')).sort();
+    for (const file of files) {
+      const b64 = fs.readFileSync(path.join(tmpDir, file)).toString('base64');
+      content.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'high' } });
+    }
+
+    logger.info('Sending images to GPT', { pages: files.length, model });
+
+    const response = await client.chat.completions.create({
+      model,
+      messages: [{ role: 'user', content }],
+      max_completion_tokens: 32000,
+    });
+
+    const text = response.choices[0]?.message?.content || '';
     const usage = response.usage;
 
     return {
       text,
-      inputTokens: usage?.input_tokens ?? 0,
-      outputTokens: usage?.output_tokens ?? 0,
+      inputTokens: usage?.prompt_tokens ?? 0,
+      outputTokens: usage?.completion_tokens ?? 0,
     };
   } finally {
-    await deleteFile(client, fileId);
+    try {
+      for (const f of fs.readdirSync(tmpDir)) fs.unlinkSync(path.join(tmpDir, f));
+      fs.rmdirSync(tmpDir);
+    } catch { /* ignore */ }
   }
 }
 
@@ -195,8 +205,8 @@ export async function extractWithOpenAI(
     logger.info('OpenAI extraction: single PDF call', { model, pages: pageCount });
     const startTime = Date.now();
 
-    const { text, inputTokens, outputTokens } = await callGptWithPdf(
-      client, model, pdfBuffer, 'gerichtsakte.pdf', prompt
+    const { text, inputTokens, outputTokens } = await callGptWithImages(
+      client, model, pdfBuffer, CHUNK_PAGE_THRESHOLD, prompt
     );
 
     logger.info('OpenAI extraction completed', {
@@ -257,8 +267,8 @@ export async function extractWithOpenAI(
       const chunkPdf = await extractPdfPages(pdfBuffer, chunk.pages);
       const chunkPrompt = prompt + `\n\nDieses PDF enthält die Seiten ${chunk.pages[0] + 1}-${chunk.pages[chunk.pages.length - 1] + 1} der Gesamtakte. Extrahiere ALLE Informationen die auf diesen Seiten zu finden sind.`;
 
-      const { text, inputTokens, outputTokens } = await callGptWithPdf(
-        client, model, chunkPdf, `chunk_${chunk.name}.pdf`, chunkPrompt
+      const { text, inputTokens, outputTokens } = await callGptWithImages(
+        client, model, chunkPdf, 70, chunkPrompt
       );
 
       logger.info(`Chunk "${chunk.name}" completed`, { pages: chunk.pages.length, inputTokens, outputTokens });
