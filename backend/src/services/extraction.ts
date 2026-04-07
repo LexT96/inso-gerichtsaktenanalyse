@@ -437,10 +437,10 @@ export async function processExtraction(
     let result: ExtractionResult;
 
     if (isOpenAIConfigured()) {
-      // OpenAI/GPT extraction — single vision call with PDF-as-images
+      // OpenAI/GPT extraction — native PDF input, auto-chunks for large files
       report(`GPT-Extraktion (${pageCount} S.)… (Stufe 2/3)`, 35);
       logger.info('Using OpenAI extraction provider', { model: process.env.OPENAI_MODEL || 'gpt-5.4' });
-      result = await extractWithOpenAI(pdfBuffer, pageTexts, EXTRACTION_PROMPT, documentMap);
+      result = await extractWithOpenAI(pdfBuffer, pageTexts, EXTRACTION_PROMPT, documentMap, segments);
     } else if (pageCount <= effectiveThreshold()) {
       // Single comprehensive call — extracts base data + aktiva + anfechtung
       report(`Vollständige Analyse (${pageCount} S.)… (Stufe 2/3)`, 35);
