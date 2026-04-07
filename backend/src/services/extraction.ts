@@ -1,5 +1,6 @@
 import path from 'path';
-import { extractComprehensive, extractFromPageTexts, anthropic, callWithRetry, extractJsonFromText } from './anthropic';
+import { extractComprehensive, extractFromPageTexts, anthropic, callWithRetry, extractJsonFromText, EXTRACTION_PROMPT } from './anthropic';
+import { extractWithOpenAI, isOpenAIConfigured } from './openaiExtractor';
 import { config } from '../config';
 import { extractTextPerPage } from './pdfProcessor';
 import { getDb } from '../db/database';
@@ -435,7 +436,12 @@ export async function processExtraction(
     // chunked fallback with separate aktiva/anfechtung for very large PDFs
     let result: ExtractionResult;
 
-    if (pageCount <= effectiveThreshold()) {
+    if (isOpenAIConfigured()) {
+      // OpenAI/GPT extraction — single vision call with PDF-as-images
+      report(`GPT-Extraktion (${pageCount} S.)… (Stufe 2/3)`, 35);
+      logger.info('Using OpenAI extraction provider', { model: process.env.OPENAI_MODEL || 'gpt-5.4' });
+      result = await extractWithOpenAI(pdfBuffer, pageTexts, EXTRACTION_PROMPT, documentMap);
+    } else if (pageCount <= effectiveThreshold()) {
       // Single comprehensive call — extracts base data + aktiva + anfechtung
       report(`Vollständige Analyse (${pageCount} S.)… (Stufe 2/3)`, 35);
       result = await extractComprehensive(pdfBuffer, pageTexts, documentMap);
