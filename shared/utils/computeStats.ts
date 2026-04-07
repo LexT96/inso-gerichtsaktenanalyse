@@ -114,6 +114,17 @@ export function computeExtractionStats(result: ExtractionResult): ExtractionStat
     fields.push({ path, label, value: wert, filled: !empty });
   };
 
+  // Check if a sub-object has ANY non-empty SourcedValue field
+  const hasAnyFilled = (obj: Record<string, unknown>): boolean => {
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === 'object' && 'wert' in value) {
+        const v = value as { wert?: unknown };
+        if (v.wert != null && v.wert !== '') return true;
+      }
+    }
+    return false;
+  };
+
   const walkObj = (obj: Record<string, unknown>, prefix: string): void => {
     if (!obj) return;
     for (const [key, value] of Object.entries(obj)) {
@@ -123,6 +134,9 @@ export function computeExtractionStats(result: ExtractionResult): ExtractionStat
         if ('wert' in v) {
           countField(key, value, prefix);
         } else {
+          // Skip entirely empty sub-objects (e.g. ehegatte with all null fields)
+          // so they don't inflate the missing count when the model creates empty stubs
+          if (!hasAnyFilled(v)) continue;
           walkObj(v, prefix ? `${prefix}.${key}` : key);
         }
       }
