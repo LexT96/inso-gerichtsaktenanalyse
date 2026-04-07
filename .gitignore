@@ -9,3 +9,8 @@ backend/uploads/*
 !backend/uploads/.gitkeep
 .DS_Store
 *.log
+.promptfoo/
+promptfoo-output/
+data/
+backend/data/pdfs/
+backend/data/logs/*.gz
