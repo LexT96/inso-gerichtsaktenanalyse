@@ -71,7 +71,6 @@ async function callGptWithPdf(
       ],
       text: { format: { type: 'text' } },
       reasoning: { effort: 'xhigh' },
-      temperature: 0,
       max_output_tokens: 32000,
     } as Parameters<typeof client.responses.create>[0]);
 
