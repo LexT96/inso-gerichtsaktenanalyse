@@ -21,7 +21,7 @@ function getOpenAI(): OpenAI {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY not set');
     const baseURL = process.env.OPENAI_BASE_URL;
-    openaiClient = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
+    openaiClient = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}), timeout: 600_000 });
   }
   return openaiClient;
 }
@@ -70,7 +70,7 @@ async function callGptWithPdf(
         ]},
       ],
       text: { format: { type: 'text' } },
-      reasoning: { effort: 'xhigh' },
+      reasoning: { effort: (process.env.OPENAI_REASONING_EFFORT as string) || 'high' },
       max_output_tokens: 32000,
     } as Parameters<typeof client.responses.create>[0]);
 
