@@ -1,0 +1,116 @@
+# TBS Aktenanalyse — Promptfoo Regression Tests
+#
+# Tests the full 4-stage extraction pipeline against golden JSONs.
+# Run: npx promptfoo eval
+# View: npx promptfoo view
+
+description: 'TBS Insolvenz-Extraktor Regression Tests'
+
+providers:
+  - id: 'exec: npx tsx backend/src/scripts/promptfoo-provider.ts'
+    label: 'TBS Extraction Pipeline'
+
+prompts:
+  - '{{pdf_path}}'
+
+defaultTest:
+  options:
+    # Extraction can take several minutes per PDF
+    timeout: 600000
+    transform: 'JSON.parse(output)'
+
+tests:
+  # ── Test 1: Gutes Beispiel (GmbH / juristische Person) ──
+  - description: 'Gerichtsakte gutes Beispiel — coboworx GmbH'
+    vars:
+      pdf_path: './testdokumente/Gerichtsakte (gutes Beispiel).pdf'
+    assert:
+      # Verfahrensdaten
+      - type: javascript
+        value: |
+          const r = output;
+          return r.verfahrensdaten?.gericht?.wert?.includes('Wittlich') || { pass: false, reason: `Gericht expected to contain "Wittlich", got: "${r.verfahrensdaten?.gericht?.wert}"` };
+      - type: javascript
+        value: |
+          const r = output;
+          return r.verfahrensdaten?.antragsdatum?.wert === '22.10.2025' || { pass: false, reason: `Antragsdatum expected "22.10.2025", got: "${r.verfahrensdaten?.antragsdatum?.wert}"` };
+
+      # Schuldner
+      - type: javascript
+        value: |
+          const r = output;
+          return r.schuldner?.name?.wert === 'coboworx GmbH' || { pass: false, reason: `Schuldner Name expected "coboworx GmbH", got: "${r.schuldner?.name?.wert}"` };
+      - type: javascript
+        value: |
+          const r = output;
+          const rf = r.schuldner?.rechtsform?.wert;
+          return rf?.includes('GmbH') || { pass: false, reason: `Rechtsform expected to contain "GmbH", got: "${rf}"` };
+
+      # Forderungen
+      - type: javascript
+        value: |
+          const r = output;
+          const count = r.forderungen?.einzelforderungen?.length ?? 0;
+          return count >= 15 || { pass: false, reason: `Einzelforderungen: expected >= 15, got ${count}` };
+      - type: javascript
+        value: |
+          const r = output;
+          const total = r.forderungen?.gesamtforderungen?.wert;
+          if (typeof total !== 'number') return { pass: false, reason: `Gesamtforderungen should be a number, got: ${typeof total} (${total})` };
+          const diff = Math.abs(total - 575506.48);
+          return diff < 1000 || { pass: false, reason: `Gesamtforderungen expected ~575506.48, got ${total} (diff: ${diff})` };
+
+      # Structural checks
+      - type: javascript
+        value: |
+          const r = output;
+          return r.aktiva !== undefined || { pass: false, reason: 'Aktiva section missing from extraction' };
+      - type: javascript
+        value: |
+          const r = output;
+          return r.anfechtung !== undefined || { pass: false, reason: 'Anfechtung section missing from extraction' };
+
+  # ── Test 2: Schlechtes Beispiel (natürliche Person) ──
+  - description: 'Gerichtsakte schlechtes Beispiel — Bayar, Mehmet'
+    vars:
+      pdf_path: './testdokumente/Gerichtakte (schlechtes Beispiel).pdf'
+    assert:
+      # Verfahrensdaten
+      - type: javascript
+        value: |
+          const r = output;
+          return r.verfahrensdaten?.aktenzeichen?.wert === '23 IN 165/25' || { pass: false, reason: `Aktenzeichen expected "23 IN 165/25", got: "${r.verfahrensdaten?.aktenzeichen?.wert}"` };
+      - type: javascript
+        value: |
+          const r = output;
+          return r.verfahrensdaten?.gericht?.wert?.includes('Trier') || { pass: false, reason: `Gericht expected to contain "Trier", got: "${r.verfahrensdaten?.gericht?.wert}"` };
+      - type: javascript
+        value: |
+          const r = output;
+          return r.verfahrensdaten?.antragsdatum?.wert === '25.11.2025' || { pass: false, reason: `Antragsdatum expected "25.11.2025", got: "${r.verfahrensdaten?.antragsdatum?.wert}"` };
+
+      # Schuldner
+      - type: javascript
+        value: |
+          const r = output;
+          return r.schuldner?.name?.wert === 'Bayar' || { pass: false, reason: `Schuldner Name expected "Bayar", got: "${r.schuldner?.name?.wert}"` };
+      - type: javascript
+        value: |
+          const r = output;
+          return r.schuldner?.vorname?.wert === 'Mehmet' || { pass: false, reason: `Schuldner Vorname expected "Mehmet", got: "${r.schuldner?.vorname?.wert}"` };
+      - type: javascript
+        value: |
+          const r = output;
+          return r.schuldner?.geburtsdatum?.wert === '01.03.1982' || { pass: false, reason: `Geburtsdatum expected "01.03.1982", got: "${r.schuldner?.geburtsdatum?.wert}"` };
+
+      # Zustellungsdatum (critical for legal deadlines)
+      - type: javascript
+        value: |
+          const r = output;
+          return r.verfahrensdaten?.zustellungsdatum_schuldner?.wert === '27.11.2025' || { pass: false, reason: `Zustellungsdatum expected "27.11.2025", got: "${r.verfahrensdaten?.zustellungsdatum_schuldner?.wert}"` };
+
+      # Structural completeness
+      - type: javascript
+        value: |
+          const r = output;
+          return r.schuldner !== undefined && r.verfahrensdaten !== undefined || { pass: false, reason: 'Missing top-level sections' };

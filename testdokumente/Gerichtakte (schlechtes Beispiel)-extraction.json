@@ -2,7 +2,7 @@
   "verfahrensdaten": {
     "aktenzeichen": {
       "wert": "23 IN 165/25",
-      "quelle": "Seite 28, Beschluss vom 18.12.2025",
+      "quelle": "Seite 1, Aktenkopfzeile",
       "verifiziert": true
     },
     "gericht": {
@@ -26,35 +26,52 @@
       "verifiziert": true
     },
     "antragsart": {
-      "wert": "Fremdantrag auf Eröffnung des Insolvenzverfahrens, Regelinsolvenz gem. § 14 InsO",
+      "wert": "Gläubigerantrag (Fremdantrag) gem. § 14 InsO",
       "quelle": "Seite 4, Insolvenzantrag der HEK",
       "verifiziert": true
     },
     "eroeffnungsgrund": {
-      "wert": "Zahlungsunfähigkeit wegen fortgesetzter Nichtzahlung von Sozialversicherungsbeiträgen (§ 14 Abs. 1 InsO)",
-      "quelle": "Seite 5, Begründung des Insolvenzantrags",
-      "verifiziert": true
+      "wert": "Zahlungsunfähigkeit - fortgesetzte Nichtzahlung der Sozialversicherungsbeiträge",
+      "quelle": "Seite 5, Begründung Insolvenzantrag"
     },
     "zustellungsdatum_schuldner": {
       "wert": "27.11.2025",
-      "quelle": "Seite 20, Zustellungsurkunde (Feld 1.3: Schreiben vom 27.11.2025)",
+      "quelle": "Seite 20, Zustellungsurkunde - Feld 1.2 und Kopfzeile",
       "verifiziert": true
+    },
+    "verfahrensstadium": {
+      "wert": "Eröffnungsverfahren",
+      "quelle": "Seite 28, Beschluss vom 18.12.2025",
+      "verifiziert": true
+    },
+    "verfahrensart": {
+      "wert": "Regelinsolvenz",
+      "quelle": "Seite 4, Insolvenzantrag der HEK",
+      "verifiziert": true
+    },
+    "internationaler_bezug": {
+      "wert": false,
+      "quelle": ""
+    },
+    "eigenverwaltung": {
+      "wert": false,
+      "quelle": ""
     }
   },
   "schuldner": {
     "name": {
       "wert": "Bayar",
-      "quelle": "Seite 28, Beschluss vom 18.12.2025",
+      "quelle": "Seite 12, Meldeauskunft Zentrale Verwaltung",
       "verifiziert": true
     },
     "vorname": {
       "wert": "Mehmet",
-      "quelle": "Seite 28, Beschluss vom 18.12.2025",
+      "quelle": "Seite 12, Meldeauskunft Zentrale Verwaltung",
       "verifiziert": true
     },
     "geburtsdatum": {
       "wert": "01.03.1982",
-      "quelle": "Seite 28, Beschluss vom 18.12.2025",
+      "quelle": "Seite 12, Meldeauskunft Zentrale Verwaltung",
       "verifiziert": true
     },
     "geburtsort": {
@@ -83,81 +100,70 @@
       "verifiziert": true
     },
     "aktuelle_adresse": {
-      "wert": "Niederstraße 87, 54293 Trier",
-      "quelle": "Seite 13, Meldeauskunft (frühere Anschrift mit Abmeldung 01.07.2021)",
+      "wert": "Niederstraße 118, 54293 Trier",
+      "quelle": "Seite 12, Meldeauskunft Hauptwohnung Feld",
       "verifiziert": true
     },
     "fruehere_adressen": [
       {
-        "adresse": "Niederstraße 87, 54293 Trier",
-        "einzug": "08.06.2015",
-        "auszug": "01.07.2021",
-        "quelle": "Seite 13, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Niederstraße 87, 54293 Trier (08.06.2015 - 01.07.2021)",
+        "quelle": "Seite 13, Meldeauskunft",
+        "verifiziert": true
       },
       {
-        "adresse": "Saargemünder Straße 215, 66119 Saarbrücken OT St.Arnual",
-        "einzug": "15.05.2014",
-        "auszug": "08.06.2015",
-        "quelle": "Seite 13, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Saargemünder Straße 215, 66119 Saarbrücken OT St.Arnual (15.05.2014 - 08.06.2015)",
+        "quelle": "Seite 13, Meldeauskunft",
+        "verifiziert": true
       },
       {
-        "adresse": "Himmeroder Straße 35, 54516 Wittlich",
-        "einzug": "30.07.2012",
-        "auszug": "15.05.2014",
-        "quelle": "Seite 13, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Himmeroder Straße 35, 54516 Wittlich (30.07.2012 - 15.05.2014)",
+        "quelle": "Seite 13, Meldeauskunft",
+        "verifiziert": true
       },
       {
-        "adresse": "Mittlere Kordel 3, 54516 Wittlich",
-        "einzug": "01.01.2012",
-        "auszug": "30.07.2012",
-        "quelle": "Seite 13, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Mittlere Kordel 3, 54516 Wittlich (01.01.2012 - 30.07.2012)",
+        "quelle": "Seite 13, Meldeauskunft",
+        "verifiziert": true
       },
       {
-        "adresse": "Kirchgasse 1, 54349 Trittenheim",
-        "einzug": "31.05.2011",
-        "auszug": "01.01.2012",
-        "quelle": "Seite 13, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Kirchgasse 1, 54349 Trittenheim (31.05.2011 - 01.01.2012)",
+        "quelle": "Seite 13, Meldeauskunft",
+        "verifiziert": true
       },
       {
-        "adresse": "Breslauer Straße 10, 54516 Wittlich",
-        "einzug": "09.10.2009",
-        "auszug": "31.05.2011",
-        "quelle": "Seite 13, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Breslauer Straße 10, 54516 Wittlich (09.10.2009 - 31.05.2011)",
+        "quelle": "Seite 13, Meldeauskunft",
+        "verifiziert": true
       },
       {
-        "adresse": "Neustraße 26, 54516 Wittlich",
-        "einzug": "01.03.2009",
-        "auszug": "09.10.2009",
-        "quelle": "Seite 13, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Neustraße 26, 54516 Wittlich (01.03.2009 - 09.10.2009)",
+        "quelle": "Seite 13, Meldeauskunft",
+        "verifiziert": true
       },
       {
-        "adresse": "Untere Kordel 10, 54516 Wittlich",
-        "einzug": "01.09.2006",
-        "auszug": "01.03.2009",
-        "quelle": "Seite 13, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Untere Kordel 10, 54516 Wittlich (01.09.2006 - 01.03.2009)",
+        "quelle": "Seite 13, Meldeauskunft",
+        "verifiziert": true
       },
       {
-        "adresse": "Mötscher Straße 36, 54634 Bitburg",
-        "einzug": "01.10.2000",
-        "auszug": "01.09.2006",
-        "quelle": "Seite 14, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Mötscher Straße 36, 54634 Bitburg (01.10.2000 - 01.09.2006)",
+        "quelle": "Seite 14, Meldeauskunft",
+        "verifiziert": true
       },
       {
-        "adresse": "Von-Humboldt-Straße 11, 54634 Bitburg",
-        "einzug": "15.10.1998",
-        "auszug": "01.10.2000",
-        "quelle": "Seite 14, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Von-Humboldt-Straße 11, 54634 Bitburg (15.10.1998 - 01.10.2000)",
+        "quelle": "Seite 14, Meldeauskunft",
+        "verifiziert": true
       },
       {
-        "adresse": "Brodenheckstraße 1, 54634 Bitburg",
-        "einzug": "20.04.1998",
-        "auszug": "15.10.1998",
-        "quelle": "Seite 14, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Brodenheckstraße 1, 54634 Bitburg (20.04.1998 - 15.10.1998)",
+        "quelle": "Seite 14, Meldeauskunft",
+        "verifiziert": true
       }
     ],
     "firma": {
       "wert": "Pizza Kebaphaus Alt Ehrang",
-      "quelle": "Seite 28, Beschluss vom 18.12.2025",
+      "quelle": "Seite 4, Insolvenzantrag der HEK",
       "verifiziert": true
     },
     "rechtsform": {
@@ -166,33 +172,196 @@
       "verifiziert": true
     },
     "betriebsstaette_adresse": {
-      "wert": "",
-      "quelle": ""
+      "wert": "Niederstraße 118, 54293 Trier",
+      "quelle": "Seite 12, Meldeauskunft - Hauptwohnung/aktuell angemeldete Adresse",
+      "verifiziert": true
     },
     "handelsregisternummer": {
       "wert": "",
       "quelle": ""
     },
+    "telefon": {
+      "wert": "",
+      "quelle": ""
+    },
+    "mobiltelefon": {
+      "wert": null,
+      "quelle": ""
+    },
+    "email": {
+      "wert": "",
+      "quelle": ""
+    },
     "kinder": [
       {
-        "name": "Bayar, Miran",
-        "geburtsdatum": "08.08.2024",
-        "geschlecht": "männlich",
-        "anschrift": "Niederstraße 118, 1. OG Mitte, 54293 Trier",
-        "quelle": "Seite 14, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Bayar, Miran, geb. 08.08.2024, männlich, 54293 Trier, Niederstraße 118, 1. OG Mitte",
+        "quelle": "Seite 14, Meldeauskunft Zentrale Verwaltung",
+        "verifiziert": true
       },
       {
-        "name": "Bayar, Melek",
-        "geburtsdatum": "07.02.2017",
-        "geschlecht": "weiblich",
-        "anschrift": "Niederstraße 118, 1. OG Mitte, 54293 Trier",
-        "quelle": "Seite 14, Meldeauskunft Zentrale Verwaltung"
+        "wert": "Bayar, Melek, geb. 07.02.2017, weiblich, 54293 Trier, Niederstraße 118, 1. OG Mitte",
+        "quelle": "Seite 14, Meldeauskunft Zentrale Verwaltung",
+        "verifiziert": true
       }
-    ]
+    ],
+    "ehegatte": {
+      "name": {
+        "wert": "",
+        "quelle": ""
+      },
+      "geburtsdatum": {
+        "wert": "",
+        "quelle": ""
+      },
+      "gueterstand": "unbekannt",
+      "gemeinsames_eigentum": {
+        "wert": "",
+        "quelle": ""
+      }
+    },
+    "beschaeftigung": {
+      "arbeitgeber": {
+        "wert": "Selbständig - Inhaber Pizza Kebaphaus Alt Ehrang",
+        "quelle": "Seite 4, Insolvenzantrag der HEK",
+        "verifiziert": true
+      },
+      "arbeitgeber_adresse": {
+        "wert": "Niederstraße 118, 54293 Trier",
+        "quelle": "Seite 12, Meldeauskunft",
+        "verifiziert": true
+      },
+      "nettoeinkommen": {
+        "wert": "649,05 Euro monatlich",
+        "quelle": "Seite 5, Begründung des Insolvenzantrags"
+      },
+      "beschaeftigt_seit": {
+        "wert": "",
+        "quelle": ""
+      },
+      "art": {
+        "wert": "Selbständig",
+        "quelle": "Seite 4, Insolvenzantrag der HEK",
+        "verifiziert": true
+      }
+    },
+    "pfaendungsberechnung": {
+      "nettoeinkommen": {
+        "wert": null,
+        "quelle": ""
+      },
+      "unterhaltspflichten": {
+        "wert": 2,
+        "quelle": "Seite 14, Meldeauskunft - 2 minderjährige Kinder",
+        "verifiziert": true
+      },
+      "pfaendbarer_betrag": {
+        "wert": null,
+        "quelle": ""
+      }
+    },
+    "satzungssitz": {
+      "wert": "",
+      "quelle": ""
+    },
+    "verwaltungssitz": {
+      "wert": "",
+      "quelle": ""
+    },
+    "unternehmensgegenstand": {
+      "wert": "",
+      "quelle": ""
+    },
+    "geschaeftszweig": {
+      "wert": "Gastronomie (Pizza/Kebab)",
+      "quelle": "Seite 4, Insolvenzantrag der HEK - Pizza Kebaphaus Alt Ehrang",
+      "verifiziert": true
+    },
+    "stammkapital": {
+      "wert": "",
+      "quelle": ""
+    },
+    "gesellschafter": [],
+    "geschaeftsfuehrer": {
+      "wert": "",
+      "quelle": ""
+    },
+    "prokurist": {
+      "wert": "",
+      "quelle": ""
+    },
+    "gruendungsdatum": {
+      "wert": "",
+      "quelle": ""
+    },
+    "hr_eintragung_datum": {
+      "wert": "",
+      "quelle": ""
+    },
+    "groessenklasse_hgb": {
+      "wert": "",
+      "quelle": ""
+    },
+    "dundo_versicherung": {
+      "wert": "",
+      "quelle": ""
+    },
+    "arbeitnehmer_anzahl": {
+      "wert": 1,
+      "quelle": "Abgeleitet aus betroffene Arbeitnehmer"
+    },
+    "betriebsrat": {
+      "wert": false,
+      "quelle": ""
+    },
+    "finanzamt": {
+      "wert": "",
+      "quelle": ""
+    },
+    "steuernummer": {
+      "wert": "",
+      "quelle": ""
+    },
+    "ust_id": {
+      "wert": "",
+      "quelle": ""
+    },
+    "wirtschaftsjahr": {
+      "wert": "",
+      "quelle": ""
+    },
+    "ust_versteuerung": {
+      "wert": "",
+      "quelle": ""
+    },
+    "steuerliche_organschaft": {
+      "wert": false,
+      "quelle": ""
+    },
+    "letzter_jahresabschluss": {
+      "wert": "",
+      "quelle": ""
+    },
+    "sozialversicherungstraeger": {
+      "wert": "HEK - Hanseatische Krankenkasse",
+      "quelle": "Seite 4, Insolvenzantrag der HEK",
+      "verifiziert": true
+    },
+    "steuerberater": {
+      "wert": "",
+      "quelle": ""
+    },
+    "bankverbindungen": {
+      "wert": "",
+      "quelle": ""
+    },
+    "insolvenzsonderkonto": {
+      "wert": "",
+      "quelle": ""
+    }
   },
   "antragsteller": {
     "name": {
-      "wert": "HEK - Hanseatische Krankenkasse, vertreten durch den Vorstand",
+      "wert": "HEK - Hanseatische Krankenkasse",
       "quelle": "Seite 4, Insolvenzantrag der HEK",
       "verifiziert": true
     },
@@ -202,7 +371,7 @@
       "verifiziert": true
     },
     "ansprechpartner": {
-      "wert": "T. Ritter",
+      "wert": "Herr T. Ritter",
       "quelle": "Seite 4, Insolvenzantrag der HEK",
       "verifiziert": true
     },
@@ -228,72 +397,107 @@
     },
     "bankverbindung_iban": {
       "wert": "DE64 2005 0550 1045 1301 33",
-      "quelle": "Seite 10, Leistungsbescheid der HEK",
+      "quelle": "Seite 4, Insolvenzantrag der HEK",
       "verifiziert": true
     },
     "bankverbindung_bic": {
       "wert": "HASPDEHHXXX",
-      "quelle": "Seite 10, Leistungsbescheid der HEK",
+      "quelle": "Seite 4, Insolvenzantrag der HEK",
       "verifiziert": true
     }
   },
   "forderungen": {
-    "hauptforderung_beitraege": {
-      "wert": 5104.34,
-      "quelle": "Seite 5, Begründung des Insolvenzantrags",
+    "einzelforderungen": [
+      {
+        "glaeubiger": {
+          "wert": "HEK - Hanseatische Krankenkasse",
+          "quelle": "Seite 5, Begründung Insolvenzantrag",
+          "verifiziert": true
+        },
+        "art": "sozialversicherung",
+        "rang": "§38 Insolvenzforderung",
+        "betrag": {
+          "wert": 5765.34,
+          "quelle": "Seite 5, Begründung Insolvenzantrag",
+          "verifiziert": true
+        },
+        "zeitraum_von": {
+          "wert": "01.11.2024",
+          "quelle": "Seite 5, Begründung Insolvenzantrag",
+          "verifiziert": true
+        },
+        "zeitraum_bis": {
+          "wert": "30.11.2025",
+          "quelle": "Seite 5, Begründung Insolvenzantrag",
+          "verifiziert": true
+        },
+        "titel": {
+          "wert": "SV-Beiträge für Mitglied Daniela-Adelina Mitache: Beiträge zur Sozialversicherung 5.104,34 EUR (01.11.2024-30.11.2024 sowie 01.01.2025-31.08.2025) + Säumniszuschläge bis 26.11.2025: 387,50 EUR + Mahngebühren und Kosten der Zwangsvollstreckung: 57,50 EUR + Kosten des Insolvenzantrages: 216,00 EUR. Laufende monatliche Beiträge ab 26.11.2025: 649,05 EUR",
+          "quelle": "Seite 5, Begründung Insolvenzantrag"
+        },
+        "ist_antragsteller": true
+      }
+    ],
+    "gesamtforderungen": {
+      "wert": 5765.34,
+      "quelle": "Seite 5, Begründung Insolvenzantrag",
       "verifiziert": true
+    },
+    "gesicherte_forderungen": {
+      "wert": 0,
+      "quelle": ""
+    },
+    "ungesicherte_forderungen": {
+      "wert": 5765.34,
+      "quelle": "Seite 5, Begründung Insolvenzantrag"
+    },
+    "hauptforderung_beitraege": {
+      "wert": null,
+      "quelle": ""
     },
     "saeumniszuschlaege": {
-      "wert": 387.5,
-      "quelle": "Seite 5, Begründung des Insolvenzantrags",
-      "verifiziert": true
+      "wert": null,
+      "quelle": ""
     },
     "mahngebuehren": {
-      "wert": "57,50",
-      "quelle": "Seite 5, Begründung des Insolvenzantrags",
-      "verifiziert": true
+      "wert": null,
+      "quelle": ""
     },
     "vollstreckungskosten": {
-      "wert": "42,00",
-      "quelle": "Seite 10, Leistungsbescheid der HEK",
-      "verifiziert": true
+      "wert": null,
+      "quelle": ""
     },
     "antragskosten": {
-      "wert": 216,
-      "quelle": "Seite 5, Begründung des Insolvenzantrags",
-      "verifiziert": true
+      "wert": null,
+      "quelle": ""
     },
     "gesamtforderung": {
-      "wert": 5765.34,
-      "quelle": "Seite 5, Begründung des Insolvenzantrags",
-      "verifiziert": true
+      "wert": null,
+      "quelle": ""
     },
     "zeitraum_von": {
-      "wert": "01.11.2024",
-      "quelle": "Seite 5, Begründung des Insolvenzantrags",
-      "verifiziert": true
+      "wert": null,
+      "quelle": ""
     },
     "zeitraum_bis": {
-      "wert": "31.08.2025",
-      "quelle": "Seite 5, Begründung des Insolvenzantrags",
-      "verifiziert": true
+      "wert": null,
+      "quelle": ""
     },
     "laufende_monatliche_beitraege": {
-      "wert": 649.05,
-      "quelle": "Seite 5, Begründung des Insolvenzantrags",
-      "verifiziert": true
+      "wert": null,
+      "quelle": ""
     },
     "betroffene_arbeitnehmer": [
       {
         "anzahl": 1,
-        "typ": "Mitglied/Arbeitnehmer (Daniela-Adelina Mitache)",
-        "quelle": "Seite 5, Begründung des Insolvenzantrags"
+        "typ": "Daniela-Adelina Mitache (versichertes Mitglied)",
+        "quelle": "Seite 5, Begründung Insolvenzantrag"
       }
     ]
   },
   "gutachterbestellung": {
     "gutachter_name": {
-      "wert": "Dr. Alexander Thomas Lamberty",
+      "wert": "Rechtsanwalt Dr. Alexander Thomas Lamberty",
       "quelle": "Seite 28, Beschluss vom 18.12.2025",
       "verifiziert": true
     },
@@ -318,13 +522,13 @@
       "verifiziert": true
     },
     "abgabefrist": {
-      "wert": "vier Wochen",
+      "wert": "vier Wochen ab 18.12.2025",
       "quelle": "Seite 31, Schreiben an Gutachter",
       "verifiziert": true
     },
     "befugnisse": [
       "Zutritt zu allen Geschäfts- und Privaträumen des Antragsgegners",
-      "Einholung aller erforderlichen Auskünfte auch von Dritten (Finanzämtern, Banken, Versicherungsgesellschaften, Steuerberatern)",
+      "Einholung aller erforderlichen Auskünfte - auch von Dritten (Finanzämtern, Banken, Versicherungsgesellschaften, Steuerberatern pp.)",
       "Einsicht in Unterlagen, insbesondere Geschäftsunterlagen",
       "Unverzügliche Anzeige an das Insolvenzgericht bei Behinderung oder wenn Sicherungsmaßnahmen gem. § 21 InsO notwendig erscheinen"
     ]
@@ -333,64 +537,63 @@
     "grundbuch": {
       "ergebnis": {
         "wert": null,
-        "quelle": "Seite 23, Antwort des Grundbuchamts Trier vom 27.11.2025",
+        "quelle": "Seite 23, Handschriftlicher Vermerk Grundbuchamt Trier",
         "verifiziert": false
       },
       "grundbesitz_vorhanden": {
         "wert": null,
-        "quelle": "Seite 23, Antwort des Grundbuchamts Trier vom 27.11.2025",
+        "quelle": "Seite 23, Handschriftlicher Vermerk Grundbuchamt Trier",
         "verifiziert": false
       },
       "datum": {
-        "wert": null,
-        "quelle": "Seite 23, Antwort des Grundbuchamts Trier vom 27.11.2025",
-        "verifiziert": false
+        "wert": "27.11.2025",
+        "quelle": "Seite 23, Schreiben des Amtsgerichts Trier an Grundbuchamt"
       }
     },
     "gerichtsvollzieher": {
       "name": {
         "wert": "Tanja Pierags, Obergerichtsvollzieherin beim AG Trier",
-        "quelle": "Seite 26, Schreiben der Gerichtsvollzieherin vom 03.12.2025",
+        "quelle": "Seite 26, Mitteilung der Gerichtsvollzieherin vom 03.12.2025",
         "verifiziert": true
       },
       "betriebsstaette_bekannt": {
         "wert": null,
-        "quelle": "Seite 26, Schreiben der Gerichtsvollzieherin vom 03.12.2025"
+        "quelle": "Seite 26, Mitteilung GV - ist mir nicht bekannt"
       },
       "vollstreckungen": {
-        "wert": "Zwangsvollstreckungsauftrag der Landesoberkasse Koblenz vom 12.11.2025 (Antrag auf Abnahme der Vermögensauskunft); Forderung i.H.v. 290,00 EUR am 27.11.2025 vollständig bezahlt",
-        "quelle": "Seite 26, Schreiben der Gerichtsvollzieherin vom 03.12.2025",
+        "wert": "Zwangsvollstreckungsauftrag der Landesoberkasse Koblenz vom 12.11.2025 (Antrag auf Abnahme der Vermögensauskunft); Forderung 290,00 EUR komplett am 27.11.2025 bezahlt",
+        "quelle": "Seite 26, Mitteilung der Gerichtsvollzieherin",
         "verifiziert": true
       },
       "masse_deckend": {
         "wert": null,
-        "quelle": "Seite 26, Schreiben der Gerichtsvollzieherin vom 03.12.2025"
+        "quelle": "Seite 26, Mitteilung GV - ist mir unbekannt"
       },
       "vermoegensauskunft_abgegeben": {
         "wert": false,
-        "quelle": "Seite 26, Schreiben der Gerichtsvollzieherin vom 03.12.2025",
+        "quelle": "Seite 26, Mitteilung GV - Mir ist nicht bekannt, dass die Vermögensauskunft abgegeben wurde",
         "verifiziert": true
       },
       "haftbefehle": {
         "wert": false,
-        "quelle": "Seite 26, Schreiben der Gerichtsvollzieherin vom 03.12.2025",
+        "quelle": "Seite 26, Mitteilung GV - Haftbefehle liegen keine vor",
         "verifiziert": true
       },
       "datum": {
         "wert": "03.12.2025",
-        "quelle": "Seite 26, Schreiben der Gerichtsvollzieherin vom 03.12.2025",
+        "quelle": "Seite 26, Mitteilung der Gerichtsvollzieherin",
         "verifiziert": true
       }
     },
     "vollstreckungsportal": {
       "schuldnerverzeichnis_eintrag": {
         "wert": false,
-        "quelle": "Seite 35, Vollstreckungsportal Schuldnerverzeichnis",
+        "quelle": "Seite 35, Vollstreckungsportal Schuldnerverzeichnis - Keine Daten gefunden",
         "verifiziert": true
       },
       "vermoegensverzeichnis_eintrag": {
         "wert": false,
-        "quelle": "Seite 36, Vollstreckungsportal Vermögensverzeichnis",
+        "quelle": "Seite 36, Vollstreckungsportal Vermögensverzeichnis - Keine Daten gefunden",
         "verifiziert": true
       }
     },
@@ -409,235 +612,286 @@
   },
   "fristen": [
     {
-      "bezeichnung": "Fragebogen-Beantwortung durch Schuldner (10 Tage ab Zugang)",
+      "bezeichnung": "Anhörungsfrist Schuldner (10 Tage ab Zustellung)",
       "datum": "08.12.2025",
       "status": "abgelaufen",
-      "quelle": "Seite 16, Schreiben an Schuldner zur Anhörung"
+      "quelle": "Seite 16, Anhörungsschreiben; Zustellung 28.11.2025"
     },
     {
-      "bezeichnung": "Restschuldbefreiungsantrag des Schuldners (2 Wochen ab Zustellung Belehrung)",
+      "bezeichnung": "Restschuldbefreiungsantrag (2 Wochen ab Zustellung Belehrung)",
       "datum": "12.12.2025",
       "status": "abgelaufen",
-      "quelle": "Seite 19, Wichtiger Hinweis Restschuldbefreiung"
+      "quelle": "Seite 19, Wichtiger Hinweis; Zustellung 28.11.2025"
     },
     {
-      "bezeichnung": "Gutachterliche Stellungnahme (4 Wochen ab Beschluss 18.12.2025)",
+      "bezeichnung": "Gutachtenabgabe (4 Wochen ab Beschluss)",
       "datum": "15.01.2026",
       "status": "offen",
       "quelle": "Seite 31, Schreiben an Gutachter"
     },
     {
-      "bezeichnung": "Wiedervorlage Gericht (5 Wochen ab Beschluss 18.12.2025)",
+      "bezeichnung": "Rückgabe Gerichtsakte (3 Tage)",
+      "datum": "21.12.2025",
+      "status": "offen",
+      "quelle": "Seite 31, Schreiben an Gutachter"
+    },
+    {
+      "bezeichnung": "Wiedervorlage (5 Wochen ab Beschluss)",
       "datum": "22.01.2026",
       "status": "offen",
       "quelle": "Seite 30, Verfügung vom 18.12.2025"
-    },
-    {
-      "bezeichnung": "Rückgabe Gerichtsakte durch Gutachter (3 Tage ab Erhalt)",
-      "datum": "",
-      "status": "offen",
-      "quelle": "Seite 31, Schreiben an Gutachter"
     }
   ],
   "standardanschreiben": [
     {
       "typ": "Bankenauskunft",
-      "empfaenger": "Bankverbindungen des Schuldners (unbekannt)",
-      "status": "fehlt",
-      "begruendung": "Konkrete Bankverbindungen des Schuldners Mehmet Bayar sind nicht bekannt.",
-      "fehlende_daten": [
-        "Name und Adresse der kontoführenden Bank(en) des Schuldners"
-      ]
+      "empfaenger": "Alle Banken/Sparkassen im Raum Trier",
+      "status": "bereit",
+      "begruendung": "Schuldnerdaten vollständig, Gutachterbefugnis zur Einholung von Bankauskünften erteilt",
+      "fehlende_daten": []
     },
     {
       "typ": "Bausparkassen-Anfrage",
-      "empfaenger": "Bausparkassen (unbekannt)",
-      "status": "fehlt",
-      "begruendung": "Keine Hinweise auf Bausparverträge in der Akte; konkrete Bausparkasse nicht bekannt.",
-      "fehlende_daten": [
-        "Name und Adresse einer konkreten Bausparkasse des Schuldners"
-      ]
+      "empfaenger": "Alle Bausparkassen (generisch)",
+      "status": "bereit",
+      "begruendung": "Schuldnerdaten vollständig für generische Anfrage",
+      "fehlende_daten": []
     },
     {
       "typ": "Steuerberater-Kontakt",
-      "empfaenger": "Steuerberater des Schuldners (unbekannt)",
+      "empfaenger": "",
       "status": "fehlt",
-      "begruendung": "Kein Steuerberater des Schuldners aus der Akte ersichtlich.",
+      "begruendung": "Kein Steuerberater in der Akte bekannt",
       "fehlende_daten": [
-        "Name und Adresse des Steuerberaters von Mehmet Bayar"
+        "Name und Adresse des Steuerberaters"
       ]
     },
     {
       "typ": "Strafakte-Akteneinsicht",
       "empfaenger": "Staatsanwaltschaft Trier",
       "status": "bereit",
-      "begruendung": "Hinweis auf mögliche Strafbarkeit gem. § 266a StGB durch Nichtabführung von Sozialversicherungsbeiträgen in der Akte.",
+      "begruendung": "Schuldnerdaten vollständig; § 266a StGB-Verdacht wegen Nichtabführung von SV-Beiträgen naheliegend",
       "fehlende_daten": []
     },
     {
       "typ": "KFZ-Halteranfrage Zulassungsstelle",
       "empfaenger": "Zulassungsstelle Trier",
       "status": "bereit",
-      "begruendung": "Schuldnerdaten vollständig vorhanden für Anfrage bei der Zulassungsstelle.",
+      "begruendung": "Schuldnerdaten (Name, Geburtsdatum, Adresse) vollständig",
       "fehlende_daten": []
     },
     {
       "typ": "Gewerbeauskunft",
-      "empfaenger": "Gewerbeamt Trier",
+      "empfaenger": "Gewerbeamt Stadt Trier",
       "status": "bereit",
-      "begruendung": "Schuldner betreibt Einzelunternehmen Pizza Kebaphaus Alt Ehrang; Gewerbeanmeldung und -status abzufragen.",
+      "begruendung": "Schuldnerdaten und Firmendaten vollständig",
       "fehlende_daten": []
     },
     {
       "typ": "Finanzamt-Anfrage",
       "empfaenger": "Finanzamt Trier",
       "status": "bereit",
-      "begruendung": "Alle erforderlichen Schuldnerdaten vorhanden; Finanzamt-Anfrage zu steuerlichen Verhältnissen möglich.",
+      "begruendung": "Schuldnerdaten vollständig, Gutachterbefugnis für Finanzamtsauskünfte erteilt",
       "fehlende_daten": []
     },
     {
       "typ": "KFZ-Halteranfrage KBA",
-      "empfaenger": "Kraftfahrt-Bundesamt, Fördestraße 16, 24944 Flensburg",
+      "empfaenger": "Kraftfahrt-Bundesamt Flensburg",
       "status": "bereit",
-      "begruendung": "Schuldnerdaten vollständig vorhanden für Anfrage beim KBA.",
+      "begruendung": "Schuldnerdaten (Name, Geburtsdatum, Adresse) vollständig",
       "fehlende_daten": []
     },
     {
       "typ": "Versicherungsanfrage",
-      "empfaenger": "Versicherungen des Schuldners (unbekannt)",
-      "status": "fehlt",
-      "begruendung": "Konkrete Versicherungsgesellschaften des Schuldners nicht aus der Akte bekannt.",
-      "fehlende_daten": [
-        "Name und Adresse der Versicherungsgesellschaft(en) des Schuldners"
-      ]
+      "empfaenger": "Alle gängigen Versicherungen (generisch)",
+      "status": "bereit",
+      "begruendung": "Schuldnerdaten vollständig für generische Anfrage",
+      "fehlende_daten": []
     },
     {
       "typ": "Gerichtsvollzieher-Anfrage",
-      "empfaenger": "Tanja Pierags, Obergerichtsvollzieherin, Justizstraße 2-6, 54290 Trier",
+      "empfaenger": "OGVin Tanja Pierags, Justizstraße 2-6, 54290 Trier",
       "status": "entfaellt",
-      "begruendung": "Bereits vom Amtsgericht Trier im Rahmen der Verfügung vom 26.11.2025 angefragt; Antwort der Gerichtsvollzieherin Pierags liegt vom 03.12.2025 vor.",
+      "begruendung": "Bereits vom Gericht angefragt; Antwort der OGVin Pierags vom 03.12.2025 liegt vor",
       "fehlende_daten": []
     }
   ],
   "fehlende_informationen": [
     {
-      "information": "Handelsregistereintrag des Schuldners",
-      "grund": "Anfrage an Handelsregister durch Gericht am 18.12.2025 veranlasst; Antwort noch nicht in der Akte",
-      "ermittlung_ueber": "Handelsregister (Amtsgericht Trier) oder www.handelsregister.de"
+      "information": "Handelsregistereintrag",
+      "grund": "Anfrage an Handelsregister versandt (Seite 32), Antwort liegt noch nicht vor",
+      "ermittlung_ueber": "Antwort des Handelsregisters abwarten; ggf. online-Recherche über Handelsregister-Portal"
     },
     {
-      "information": "Betriebsstätte des Pizza Kebaphaus Alt Ehrang",
-      "grund": "Gerichtsvollzieherin hat angegeben, dass ihr dies nicht bekannt ist; Privatanschrift Niederstraße 118 ist keine Betriebsstätte",
-      "ermittlung_ueber": "Gewerbeamt Trier, Ortsbegehung, Befragung des Schuldners"
+      "information": "Telefon und E-Mail des Schuldners",
+      "grund": "Nicht in der Akte enthalten, Schuldner hat auf Anhörung nicht reagiert",
+      "ermittlung_ueber": "Kontaktaufnahme bei Vor-Ort-Termin oder Internetrecherche"
     },
     {
-      "information": "Bankverbindungen des Schuldners Mehmet Bayar",
-      "grund": "Keine Kontoverbindungen des Schuldners aus der Akte ersichtlich",
-      "ermittlung_ueber": "Schufa, Bankenauskunft, Schuldner direkt, Steuerberater"
+      "information": "Bankverbindungen des Schuldners",
+      "grund": "Keine Kontodaten in der Akte vorhanden",
+      "ermittlung_ueber": "Bankenauskunft (Standardanschreiben) und Finanzamt-Anfrage"
     },
     {
       "information": "Steuerberater des Schuldners",
-      "grund": "Kein Steuerberater aus der Akte bekannt; für Gutachtenerstellung relevant",
-      "ermittlung_ueber": "Befragung des Schuldners, Finanzamt Trier"
+      "grund": "Nicht in der Akte benannt",
+      "ermittlung_ueber": "Befragung des Schuldners oder Finanzamt-Anfrage"
     },
     {
-      "information": "Antwort des Schuldners auf Fragebogen",
-      "grund": "Frist zur Beantwortung des Fragebogens (10 Tage ab Zustellung 28.11.2025) ist abgelaufen; keine Antwort in der Akte",
-      "ermittlung_ueber": "Schuldner direkt oder mündlicher Anhörungstermin"
+      "information": "Finanzamt und Steuernummer",
+      "grund": "Nicht in der Akte enthalten",
+      "ermittlung_ueber": "Finanzamt Trier anschreiben; Ermittlung über Gewerbeamt"
     },
     {
-      "information": "Ergebnis der Handelsregisteranfrage",
-      "grund": "Schreiben an Handelsregister vom 18.12.2025 verfügt; Antwort noch ausstehend",
-      "ermittlung_ueber": "Handelsregister Amtsgericht Trier"
+      "information": "Genaue Anzahl der Arbeitnehmer",
+      "grund": "Nur ein Arbeitnehmer (Daniela-Adelina Mitache) namentlich genannt, Gesamtzahl unbekannt",
+      "ermittlung_ueber": "Befragung des Schuldners, Anfrage bei Sozialversicherungsträgern"
     },
     {
-      "information": "Restschuldbefreiungsantrag des Schuldners",
-      "grund": "Frist von 2 Wochen ab Zustellung (28.11.2025) abgelaufen; kein Restschuldbefreiungsantrag in der Akte erkennbar",
-      "ermittlung_ueber": "Geschäftsstelle des Amtsgerichts Trier prüfen"
+      "information": "Nettoeinkommen des Schuldners",
+      "grund": "Keine Angaben zum Einkommen in der Akte",
+      "ermittlung_ueber": "Befragung des Schuldners, Steuererklärungen über Finanzamt/Steuerberater"
     },
     {
-      "information": "Antwort des Schuldners auf Fragebogen zu Vermögensverhältnissen",
-      "grund": "Keine Gläubiger- und Schuldnerverzeichnisse sowie Vermögensübersicht gemäß Anforderung Seite 16 eingegangen",
-      "ermittlung_ueber": "Schuldner direkt; ggf. Anordnung eines mündlichen Anhörungstermins"
+      "information": "Vermögenswerte (Geschäftsausstattung, Fahrzeuge, Konten)",
+      "grund": "Schuldner hat auf Anhörung/Fragebogen nicht reagiert, keine Vermögensübersicht eingereicht",
+      "ermittlung_ueber": "Vor-Ort-Besichtigung der Betriebsstätte, Bankanfragen, KFZ-Anfragen"
+    },
+    {
+      "information": "Mietverhältnis Betriebsstätte und Privatwohnung",
+      "grund": "Keine Angaben in der Akte zu Mietverträgen oder Mietrückständen",
+      "ermittlung_ueber": "Befragung des Schuldners, Ermittlung des Vermieters"
+    },
+    {
+      "information": "Weitere Gläubiger",
+      "grund": "Nur die HEK als Gläubigerin bekannt, weitere Verbindlichkeiten wahrscheinlich",
+      "ermittlung_ueber": "Schuldnerverzeichnis, Finanzamt, Befragung des Schuldners"
+    },
+    {
+      "information": "Zustellungsdatum des Beschlusses vom 18.12.2025 an den Schuldner",
+      "grund": "ZU für Beschluss noch nicht in der Akte zurückgekehrt",
+      "ermittlung_ueber": "Abwarten der Rücksendung der Postzustellungsurkunde"
+    },
+    {
+      "information": "Reaktion des Schuldners auf Anhörungsschreiben",
+      "grund": "Keine Stellungnahme oder Fragebogenrücklauf in der Akte ersichtlich",
+      "ermittlung_ueber": "Kontaktaufnahme mit dem Schuldner vor Ort"
     }
   ],
   "zusammenfassung": [
     {
-      "wert": "Die HEK - Hanseatische Krankenkasse hat am 25.11.2025 beim Amtsgericht Trier Insolvenzantrag gegen Mehmet Bayar (geb. 01.03.1982), Inhaber des Pizza Kebaphaus Alt Ehrang, Niederstraße 118, 54293 Trier, gestellt.",
+      "wert": "Gläubigerantrag der HEK-Hanseatische Krankenkasse (Regelinsolvenz § 14 InsO) über das Vermögen des Einzelunternehmers Mehmet Bayar, Inhaber Pizza Kebaphaus Alt Ehrang in Trier.",
       "quelle": "Seite 4, Insolvenzantrag der HEK",
       "verifiziert": true
     },
     {
-      "wert": "Die Gesamtforderung beträgt 5.765,34 EUR (Sozialversicherungsbeiträge 5.104,34 EUR für 11/2024 und 01-08/2025, Säumniszuschläge 387,50 EUR, Mahngebühren 57,50 EUR, Antragskosten 216,00 EUR).",
-      "quelle": "Seite 5, Begründung des Insolvenzantrags",
+      "wert": "Forderung der HEK: 5.765,34 EUR aus rückständigen Sozialversicherungsbeiträgen für das Mitglied Daniela-Adelina Mitache (Beitragszeitraum 11/2024-08/2025), zzgl. Säumniszuschläge, Mahngebühren und Antragskosten.",
+      "quelle": "Seite 5, Begründung Insolvenzantrag",
       "verifiziert": true
     },
     {
-      "wert": "Das Amtsgericht Trier hat am 18.12.2025 den Insolvenzantrag zugelassen und Rechtsanwalt Dr. Alexander Thomas Lamberty, Kornmarkt 4, 54290 Trier, zum Gutachter bestellt.",
-      "quelle": "Seite 28, Beschluss vom 18.12.2025",
+      "wert": "Schuldner ist ledig, türkischer Staatsbürger, geboren 01.03.1982 in Midyat/Türkei, mit 2 minderjährigen Kindern (geb. 2017 und 2024). Privatadresse: Niederstraße 118, 54293 Trier.",
+      "quelle": "Seite 12-14, Meldeauskunft",
       "verifiziert": true
     },
     {
-      "wert": "Grundbuch-Anfrage gestellt, Antwort nicht im Dokument vorhanden",
-      "quelle": "Seite 23, Schreiben an Grundbuchamt Trier vom 27.11.2025",
+      "wert": "Kein Grundbesitz des Schuldners im Grundbuch Trier ersichtlich. Kein Eintrag im Schuldner- und Vermögensverzeichnis.",
+      "quelle": "Seite 23, Grundbuchamt; Seite 35-36, Vollstreckungsportal",
       "verifiziert": true
     },
     {
-      "wert": "Keine Einträge im Schuldner- und Vermögensverzeichnis des Vollstreckungsportals; keine Haftbefehle; Vermögensauskunft bisher nicht abgegeben.",
-      "quelle": "Seite 35, Vollstreckungsportal Schuldnerverzeichnis; Seite 36, Vollstreckungsportal Vermögensverzeichnis; Seite 26, Schreiben der Gerichtsvollzieherin vom 03.12.2025",
+      "wert": "Gerichtsvollzieherin berichtet: Betriebsstätte-Status unbekannt, Niederstraße 118 ist Privatanschrift. Vollstreckungsauftrag Landesoberkasse Koblenz (290 EUR) am 27.11.2025 bezahlt. Keine Vermögensauskunft abgegeben, keine Haftbefehle.",
+      "quelle": "Seite 26, Mitteilung OGVin Pierags",
       "verifiziert": true
     },
     {
-      "wert": "Schuldner hat zwei minderjährige Kinder (Melek, geb. 07.02.2017 und Miran, geb. 08.08.2024), ist ledig und türkischer Staatsangehöriger.",
-      "quelle": "Seite 14, Meldeauskunft Zentrale Verwaltung",
+      "wert": "Am 18.12.2025 Beschluss: Insolvenzantrag zugelassen, Gutachter RA Dr. Alexander Thomas Lamberty bestellt mit umfassenden Befugnissen. Frist zur Gutachtenabgabe: 4 Wochen.",
+      "quelle": "Seite 28-29, Beschluss; Seite 31, Schreiben an Gutachter",
       "verifiziert": true
     },
     {
-      "wert": "Laufende monatliche Beiträge betragen derzeit 649,05 EUR; Beschäftigungsverhältnis des Mitglieds Daniela-Adelina Mitache besteht fort.",
-      "quelle": "Seite 5, Begründung des Insolvenzantrags",
+      "wert": "27.11.2025",
+      "quelle": "Seite 20, Zustellungsurkunde - Schreiben v. 27.11.2025",
       "verifiziert": true
     }
   ],
   "risiken_hinweise": [
     {
-      "wert": "HEK erklärt ausdrücklich, bei Masseunzulänglichkeit keinen Kostenvorschuss leisten zu wollen; Verfahren könnte mangels Masse abgewiesen werden.",
-      "quelle": "Seite 6, Insolvenzantrag der HEK (Fortsetzung)",
+      "wert": "Schuldner hat auf die Anhörung nicht reagiert und keine Unterlagen eingereicht - mangelnde Mitwirkung. Ggf. mündliche Anhörung mit Vorführungsandrohung erforderlich.",
+      "quelle": "Seite 16, Anhörungsschreiben an Schuldner",
       "verifiziert": true
     },
     {
-      "wert": "Antrag wird auch nach Vollausgleich der Forderungen nicht für erledigt erklärt (§ 14 Abs. 1 Satz 2 InsO in der Fassung ab 05.04.2017).",
-      "quelle": "Seite 11, Schreiben an Schuldner (Leistungsbescheid Seite 2)",
+      "wert": "HEK weist darauf hin, dass sie diesen Insolvenzantrag auch nach Vollausgleich ihrer Forderungen gemäß § 14 Abs. 1 S. 2 InsO nicht für erledigt erklären können. Außerdem behält sich HEK vor, gemäß § 35 Abs. 1 GewO die Untersagung des Gewerbes zu beantragen sowie bei der Staatsanwaltschaft eine Strafanzeige gemäß § 266a StGB zu erstatten.",
+      "quelle": "Seite 11, Insolvenzantrag Anschreiben an Schuldner",
       "verifiziert": true
     },
     {
-      "wert": "Mögliche Strafbarkeit des Schuldners gem. § 266a StGB wegen Nichtabführung von Arbeitnehmer-Beitragsanteilen; HEK behält sich Strafanzeige vor.",
-      "quelle": "Seite 11, Schreiben an Schuldner (Leistungsbescheid Seite 2)",
+      "wert": "HEK erklärt sich nicht bereit, bei Masseunzulänglichkeit einen Kostenvorschuss zu leisten - Risiko der Abweisung mangels Masse.",
+      "quelle": "Seite 6, Insolvenzantrag Fortsetzung",
       "verifiziert": true
     },
     {
-      "wert": "HEK behält sich Gewerbsuntersagungsantrag gem. § 35 Abs. 1 GewO vor.",
-      "quelle": "Seite 11, Schreiben an Schuldner (Leistungsbescheid Seite 2)",
+      "wert": "Laufende monatliche SV-Beiträge von 649,05 EUR erhöhen die Forderung kontinuierlich - Beschäftigungsverhältnis der Mitarbeiterin Mitache besteht offenbar fort.",
+      "quelle": "Seite 5, Begründung Insolvenzantrag",
       "verifiziert": true
     },
     {
-      "wert": "Zustellung am 27.11.2025 gemäß Zustellungsurkunde (Schreiben datiert 27.11.2025); Frist zur Beantwortung: 10 Tage ab Zugang. Status der Beantwortung: Nicht dokumentiert.",
-      "quelle": "Seite 20, Zustellungsurkunde (PZU), Formular mit Schreiben vom 27.11.2025",
+      "wert": "Betriebsstätte-Adresse (Niederstraße 87) weicht von Meldeadresse (Niederstraße 118) ab - Betriebsstätte möglicherweise nicht mehr aktiv. GV-Bericht (Seite 26): 'Ob der Schuldner noch ein Büro oder sonstige Betriebsstätte unterhält, ist mir nicht bekannt. Die Anschrift Niederstraße 118, 54293 Trier ist die Privatanschrift'",
+      "quelle": "Seite 26, Mitteilung OGVin Pierags; Seite 4/10/11, Insolvenzantrag und Leistungsbescheid mit Betriebsadresse",
       "verifiziert": true
     },
     {
-      "wert": "Keine Betriebsstätte bekannt; Betriebsfortführung und vorhandene Masse unklar; Gerichtsvollzieherin konnte keine Angaben zur kostendeckenden Masse machen.",
-      "quelle": "Seite 26, Schreiben der Gerichtsvollzieherin vom 03.12.2025",
+      "wert": "Zwangsvollstreckungsauftrag der Landesoberkasse Koblenz vom 12.11.2025 (290 EUR) deutet auf weitere Steuerrückstände hin - Finanzamt-Anfrage dringend.",
+      "quelle": "Seite 26, Mitteilung OGVin Pierags",
       "verifiziert": true
     },
     {
-      "wert": "Forderungsrückstand erhöht sich monatlich um weitere 649,05 EUR solange das Beschäftigungsverhältnis fortbesteht.",
-      "quelle": "Seite 5, Begründung des Insolvenzantrags",
+      "wert": "Schuldner hat 2 minderjährige Kinder (Bayar, Miran, geb. 08.08.2024 und Bayar, Melek, geb. 07.02.2017), beide wohnen unter der Anschrift Niederstraße 118, 1. OG Mitte. Schuldner selbst ledig, Wohnung 1. OG Rechts - unterschiedliche Wohnungen in demselben Haus (Klärung der Lebenssituation relevant für Pfändungsberechnung).",
+      "quelle": "Seite 14, Meldeauskunft - Auszug 'Kinder' und Seite 12 'Hauptwohnung/en'",
       "verifiziert": true
     },
     {
-      "wert": "Schuldner hat zwei minderjährige Kinder (darunter ein Kleinkind unter 1 Jahr); ggf. erhöhter Pfändungsschutz bei Einkommen zu beachten.",
-      "quelle": "Seite 14, Meldeauskunft Zentrale Verwaltung",
-      "verifiziert": true
+      "wert": "[Plausibilitätsprüfung] Leistungsbescheid (SEITE 10, Datum 26.09.2025) nennt Gesamtbetrag 5.444,34 EUR (ohne Kosten des Beitragseinzugs). Insolvenzantrag (SEITE 5, Datum 25.11.2025) nennt Gesamtbetrag 5.765,34 EUR (mit Kosten des Insolvenzantrages 216,00 EUR und höheren Säumniszuschlägen bis 26.11.2025: 387,50 EUR). Der Antrag enthält den aktuelleren und höheren Betrag.",
+      "quelle": ""
     }
-  ]
+  ],
+  "aktiva": {
+    "positionen": [],
+    "summe_aktiva": {
+      "wert": null,
+      "quelle": ""
+    },
+    "massekosten_schaetzung": {
+      "wert": null,
+      "quelle": ""
+    },
+    "insolvenzanalyse": {
+      "zahlungsunfaehigkeit_17": {
+        "status": "ja",
+        "begruendung": "Fortgesetzte Nichtzahlung der Gesamtsozialversicherungsbeiträge über mehr als 12 Monate (11/2024-08/2025). Nach ständiger Rechtsprechung indiziert die Nichtabführung von SV-Beiträgen die Zahlungsunfähigkeit, da diese erst zuletzt nicht mehr bedient werden."
+      },
+      "drohende_zahlungsunfaehigkeit_18": {
+        "status": "offen",
+        "begruendung": "Zahlungsunfähigkeit § 17 InsO bereits feststellbar, § 18 InsO daher nicht gesondert zu prüfen."
+      },
+      "ueberschuldung_19": {
+        "status": "offen",
+        "begruendung": "§ 19 InsO nur bei juristischen Personen relevant - Schuldner ist natürliche Person (Einzelunternehmer)."
+      },
+      "massekostendeckung_26": {
+        "status": "offen",
+        "begruendung": "Keine Vermögenswerte bisher identifiziert. Grundbesitz nicht vorhanden, kein Eintrag im Vermögensverzeichnis. Vermögenslage muss durch Gutachten geklärt werden. Geschäftsausstattung des Kebab-Restaurants möglicherweise vorhanden."
+      },
+      "gesamtbewertung": "Zahlungsunfähigkeit § 17 InsO liegt mit hoher Wahrscheinlichkeit vor. Massekostendeckung fraglich - wesentlich abhängig von Geschäftsausstattung und laufendem Einkommen. Umfassende Ermittlungen durch Gutachter erforderlich."
+    }
+  },
+  "anfechtung": {
+    "vorgaenge": [],
+    "gesamtpotenzial": {
+      "wert": null,
+      "quelle": ""
+    },
+    "zusammenfassung": "Keine konkreten anfechtbaren Rechtshandlungen aus der Akte ersichtlich. Die Zahlung von 290 EUR an die Landesoberkasse Koblenz am 27.11.2025 (2 Tage nach Insolvenzantrag) könnte nach § 130 InsO (kongruente Deckung) anfechtbar sein, Details sind jedoch noch zu ermitteln. Umfassende Prüfung der Kontobewegungen im Gutachterverfahren erforderlich."
+  }
 }

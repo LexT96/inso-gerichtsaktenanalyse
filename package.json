@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "eval": "promptfoo eval --no-cache",
+    "eval:view": "promptfoo view"
+  },
+  "devDependencies": {
+    "promptfoo": "^0.120.19"
+  }
+}
