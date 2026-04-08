@@ -42,7 +42,7 @@ export const EXTRACTION_PROMPT = `Du bist ein spezialisierter KI-Assistent für 
 PFLICHT: Jedes Feld mit ausgefülltem "wert" MUSS eine "quelle" haben. Ohne Quelle ist die Extraktion unbrauchbar. Die quelle MUSS die exakte Fundstelle angeben: die Seite, auf der du den Wert im vorliegenden Akteninhalt gefunden hast. Format: "Seite X, [Dokument/Abschnitt]". Beispiele: "Seite 1, Beschluss vom 18.12.2025", "Seite 3, Insolvenzantrag der HEK", "Seite 7, Mitteilung des Gerichtsvollziehers". Regel: wert nicht leer → quelle nicht leer.
 WICHTIG — zustellungsdatum_schuldner: Das Zustellungsdatum ist das Datum auf der POSTZUSTELLUNGSURKUNDE (PZU, gelbe Zustellungsurkunde) oder dem Zustellvermerk — NICHT das Datum des zugestellten Schreibens. Suche nach dem Stempel "Datum" auf der PZU, dem handschriftlichen Datum im Zustellvermerk, oder "Erledigt... Datum:" auf der Zustellungsurkunde. Beispiel: Schreiben datiert 27.11.2025, PZU-Stempel zeigt 03.12.2025 → zustellungsdatum = 03.12.2025.
 WICHTIG: Die quelle muss die tatsächliche Fundstelle sein — die Seite, auf der du den Wert im vorliegenden Dokument gefunden hast. Bei textbasiertem Akteninhalt mit "=== SEITE X ===": genau diese X verwenden. Bei PDF: verwende die POSITION der Seite im PDF (1 = erste Seite des PDFs, 2 = zweite Seite, etc.). NICHT die aufgedruckte Seitenzahl ("Seite 5 von 32" im Fußbereich) verwenden — diese ist die interne Nummerierung des Einzeldokuments und stimmt NICHT mit der PDF-Seitenposition überein. Beispiel: Ein Fragebogen mit aufgedruckter "Seite 3 von 32" steht vielleicht auf der 5. Seite des PDFs → quelle = "Seite 5, Fragebogen". Keine generischen oder geschätzten Quellen.
-Datumsformat: TT.MM.JJJJ (z.B. 18.12.2025). Beträge: deutsche Schreibweise mit Komma (1.234,56) oder Zahl.
+Datumsformat: TT.MM.JJJJ (z.B. 18.12.2025). Beträge: IMMER als reine Zahl ohne Tausendertrennzeichen (z.B. 100000.00 NICHT 100.000,00). NIEMALS Beträge selbst addieren oder berechnen — nur den exakten Wert aus dem Dokument übernehmen. Wenn ein Gesamtbetrag nicht explizit im Dokument steht, null setzen.
 
 WASSERZEICHEN: Viele Gerichtsakten enthalten diagonale Wasserzeichen (z.B. Name + Datum schräg über die Seite). IGNORIERE diese komplett — sie sind KEIN Akteninhalt. Extrahiere NUR den eigentlichen Dokumenttext.
 
@@ -63,7 +63,7 @@ UNTERNEHMENSDATEN (schuldner.*): Bei juristischen Personen (GmbH, AG, etc.) extr
 Bei natürlichen Personen: telefon, email, insolvenzsonderkonto falls vorhanden.
 gesellschafter ist ein Array: [{"name": "KS Holding GmbH", "sitz": "66740 Saarlouis", "beteiligung": "39,5 %"}, ...]
 
-Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICHTIG: In allen String-Werten Anführungszeichen mit \\ escapen, keine Zeilenumbrüche innerhalb von Strings. Bei Zahlen: Nur 0 setzen, wenn der Wert tatsächlich 0 in der Akte steht — sonst null und quelle leer lassen. Verwende folgende Struktur:
+Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICHTIG: In allen String-Werten Anführungszeichen mit \\ escapen, keine Zeilenumbrüche innerhalb von Strings. Bei Zahlen: IMMER als JSON number (z.B. 100000.00), NICHT als String, NICHT in deutschem Format. Nur 0 setzen, wenn der Wert tatsächlich 0 in der Akte steht — sonst null und quelle leer lassen. NIEMALS Beträge selbst berechnen oder addieren. Verwende folgende Struktur:
 
 {
   "verfahrensdaten": {
