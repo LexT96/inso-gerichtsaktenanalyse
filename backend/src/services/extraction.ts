@@ -306,6 +306,44 @@ function postProcessDefaults(result: ExtractionResult): ExtractionResult {
     }
   }
 
+  // 8. Recompute forderungen sums from einzelforderungen (never trust model arithmetic)
+  if (result.forderungen?.einzelforderungen?.length) {
+    const ef = result.forderungen.einzelforderungen;
+    const safeNum = (v: unknown): number => {
+      if (typeof v === 'number') return v;
+      if (typeof v === 'string') {
+        const cleaned = v.replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.');
+        const n = parseFloat(cleaned);
+        return isNaN(n) ? 0 : n;
+      }
+      return 0;
+    };
+
+    const total = ef.reduce((s, f) => s + safeNum(f.betrag?.wert), 0);
+    if (total > 0) {
+      result.forderungen.gesamtforderungen = { wert: Math.round(total * 100) / 100, quelle: 'Berechnet aus Einzelforderungen' };
+    }
+
+    // Also fix individual betrag values that are strings
+    for (const f of ef) {
+      if (typeof f.betrag?.wert === 'string') {
+        const n = safeNum(f.betrag.wert);
+        if (n > 0) (f.betrag as { wert: unknown }).wert = n;
+      }
+    }
+  }
+
+  // 9. Recompute summe_aktiva from positions
+  if (result.aktiva?.positionen?.length && result.aktiva.summe_aktiva?.wert == null) {
+    const total = result.aktiva.positionen.reduce((sum, p) => {
+      const w = p.geschaetzter_wert?.wert;
+      return sum + (typeof w === 'number' ? w : 0);
+    }, 0);
+    if (total > 0) {
+      result.aktiva.summe_aktiva = { wert: total, quelle: 'Berechnet aus Einzelpositionen' };
+    }
+  }
+
   logger.info('Post-processing defaults applied');
   return result;
 }
