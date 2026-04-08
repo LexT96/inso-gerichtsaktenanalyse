@@ -28,7 +28,12 @@ function getOpenAI(): OpenAI {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY not set');
     const baseURL = process.env.OPENAI_BASE_URL;
-    openaiClient = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}), timeout: 600_000 });
+    openaiClient = new OpenAI({
+      apiKey,
+      ...(baseURL ? { baseURL } : {}),
+      timeout: 600_000,
+      maxRetries: IS_LANGDOCK ? 3 : 2, // Retry on 429 with exponential backoff
+    });
   }
   return openaiClient;
 }
@@ -322,7 +327,11 @@ export async function extractWithOpenAI(
   if (IS_LANGDOCK && pageCount > CHUNK_PAGE_THRESHOLD) {
     logger.info('OpenAI extraction: hybrid mode (text + key images)', { model, pages: pageCount });
     const startTime = Date.now();
-    const keyPages = detectKeyPages(pageTexts, 20);
+    // Budget: 60K TPM. Text ~200 tok/page. Images ~1100 tok/page at 100 DPI.
+    // 182 pages text = 36K. Remaining for images: (60K - 36K - 5K prompt) / 1100 = ~17 images
+    const maxImages = Math.max(5, Math.floor((55000 - pageCount * 200) / 1100));
+    const keyPages = detectKeyPages(pageTexts, maxImages);
+    logger.info('Hybrid budget', { pageCount, maxImages, selectedImages: keyPages.length });
 
     const { text, inputTokens, outputTokens } = await callGptHybrid(
       client, model, pdfBuffer, pageTexts, keyPages, prompt
