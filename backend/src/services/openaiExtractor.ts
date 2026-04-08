@@ -14,12 +14,12 @@ import { extractionResultSchema } from '../utils/validation';
 import type { ExtractionResult } from '../types/extraction';
 import type { DocumentSegment } from '../utils/documentAnalyzer';
 
-// Threshold: above this, chunk by segments and merge results
-// Langdock has 60K TPM → ~20 pages at high detail per call
-// Direct OpenAI has 1M context → 80 pages per call
-const CHUNK_PAGE_THRESHOLD = process.env.OPENAI_BASE_URL?.includes('langdock')
-  ? 18  // Langdock: ~18 pages × 2700 tokens = ~49K (under 60K TPM)
-  : 80; // Direct: up to 80 pages
+// Langdock detection
+const IS_LANGDOCK = Boolean(process.env.OPENAI_BASE_URL?.includes('langdock'));
+// Langdock: use 100 DPI (1100 tokens/page) → 50 pages fit in 60K TPM
+// Direct: use 150 DPI (2700 tokens/page) → 80 pages fit in 1M context
+const IMAGE_DPI = IS_LANGDOCK ? 100 : 150;
+const CHUNK_PAGE_THRESHOLD = IS_LANGDOCK ? 50 : 80;
 
 let openaiClient: OpenAI | null = null;
 
@@ -63,11 +63,11 @@ async function callGptWithImages(
 import fitz, sys, os
 doc = fitz.open(sys.argv[1])
 for i in range(min(len(doc), int(sys.argv[3]))):
-    pix = doc[i].get_pixmap(dpi=150)
+    pix = doc[i].get_pixmap(dpi=int(sys.argv[4]))
     pix.save(os.path.join(sys.argv[2], f'page_{i:04d}.jpg'))
 doc.close()
 `;
-    execFileSync('python3', ['-c', script, pdfPath, tmpDir, String(maxPages)], { timeout: 60000 });
+    execFileSync('python3', ['-c', script, pdfPath, tmpDir, String(maxPages), String(IMAGE_DPI)], { timeout: 60000 });
 
     const content: OpenAI.Chat.ChatCompletionContentPart[] = [
       { type: 'text', text: prompt },
