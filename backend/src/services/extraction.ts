@@ -32,6 +32,120 @@ function isEmpty(field: { wert?: unknown; quelle?: unknown } | null | undefined)
   return w === null || w === undefined || w === '';
 }
 
+// ─── Einzelforderungen post-processing helpers ───
+
+/**
+ * Parse a German-format number: "50.000,00" → 50000, "1.791,67" → 1791.67, "50000.00" → 50000
+ * Handles both German (dot=thousands, comma=decimal) and raw (dot=decimal) formats.
+ */
+function parseGermanNumber(s: string): number | null {
+  s = s.trim().replace(/\s/g, '');
+  if (!s) return null;
+
+  // Has both dots and comma → German format: "50.000,00"
+  if (s.includes('.') && s.includes(',')) {
+    const n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
+    return isNaN(n) ? null : n;
+  }
+  // Has comma but no dot → German decimal: "1791,67"
+  if (s.includes(',') && !s.includes('.')) {
+    const n = parseFloat(s.replace(',', '.'));
+    return isNaN(n) ? null : n;
+  }
+  // Has dot(s) → could be German thousands or raw decimal
+  // If multiple dots → German thousands: "50.000" = 50000
+  if ((s.match(/\./g) || []).length > 1) {
+    const n = parseFloat(s.replace(/\./g, ''));
+    return isNaN(n) ? null : n;
+  }
+  // Single dot — ambiguous: "50000.00" (raw) vs "50.000" (German 50k)
+  // Heuristic: if exactly 3 digits after dot → German thousands separator
+  if (/\.\d{3}$/.test(s) && !/\.\d{1,2}$/.test(s)) {
+    const n = parseFloat(s.replace('.', ''));
+    return isNaN(n) ? null : n;
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+/**
+ * Extract amount components from a titel string and compute the total.
+ * Conservative: only computes when the pattern is unambiguous.
+ *
+ * Pattern 1 — Nennbetrag + Zinsen (Wandeldarlehen):
+ *   "Wandeldarlehen: Nennbetrag 50.000,00 EUR; Zinsen 1.791,67 EUR" → 51791.67
+ *   "Wandeldarlehensvertrag; Nennbetrag 100000,00 EUR + Zinsen 533,33 EUR" → 100533.33
+ *
+ * Pattern 2 — Explicit "+" separated components:
+ *   "SV-Beiträge 5.104,34 EUR + Säumniszuschläge 387,50 EUR + Mahngebühren 57,50 EUR" → 5549.34
+ */
+function computeBetragFromTitel(titel: string): number | null {
+  // Pattern 1: Nennbetrag + Zinsen (most Wandeldarlehen)
+  const nennbetragMatch = titel.match(/Nennbetrag(?:\s+insgesamt)?\s+([\d.,]+)\s*EUR/i);
+  const zinsenMatch = titel.match(/Zinsen\s+([\d.,]+)\s*EUR/i);
+  if (nennbetragMatch && zinsenMatch) {
+    const nennbetrag = parseGermanNumber(nennbetragMatch[1]);
+    const zinsen = parseGermanNumber(zinsenMatch[1]);
+    if (nennbetrag !== null && zinsen !== null) {
+      // Sanity: if titel also mentions "Zahlung von X EUR" with a DIFFERENT amount,
+      // the claim structure is complex — skip automatic computation
+      const zahlungMatch = titel.match(/Zahlung\s+von\s+([\d.,]+)\s*EUR/i);
+      if (zahlungMatch) {
+        const zahlung = parseGermanNumber(zahlungMatch[1]);
+        if (zahlung !== null && Math.abs(zahlung - nennbetrag) > 0.01) {
+          return null; // Complex claim with partial payment — don't auto-compute
+        }
+      }
+      return Math.round((nennbetrag + zinsen) * 100) / 100;
+    }
+  }
+
+  // Pattern 2: Explicit "+" separated components ("X EUR + Y EUR + Z EUR")
+  // Split by " + " and extract EUR amounts from each part
+  if (titel.includes(' + ') || titel.includes(' +\n')) {
+    const parts = titel.split(/\s*\+\s*/);
+    if (parts.length >= 2) {
+      let total = 0;
+      let validParts = 0;
+      for (const part of parts) {
+        const match = part.match(/([\d.,]+)\s*EUR/i);
+        if (match) {
+          const num = parseGermanNumber(match[1]);
+          if (num !== null && num > 0) {
+            total += num;
+            validParts++;
+          }
+        }
+      }
+      if (validParts >= 2 && validParts === parts.length) {
+        return Math.round(total * 100) / 100;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Check if a glaeubiger name is actually a number, date, or amount
+ * that was incorrectly placed in the name field.
+ */
+function looksLikeInvalidGlaeubiger(name: string): boolean {
+  const trimmed = name.trim();
+  if (!trimmed) return false;
+
+  // Pure number (with optional German formatting): "40.000,00", "751937.5", "503208.33"
+  if (/^[\d.,\s]+$/.test(trimmed)) return true;
+
+  // Date-only strings: "05.10.2022", "05.10.2022, 06.10.2023 und 17.11.2023"
+  if (/^\d{1,2}\.\d{1,2}\.\d{4}(\s*[,;]\s*\d{1,2}\.\d{1,2}\.\d{4})*(\s+und\s+\d{1,2}\.\d{1,2}\.\d{4})?$/.test(trimmed)) return true;
+
+  // Number followed by date-like patterns (from confused table columns)
+  if (/^\d[\d.,]*\s*\n?\d{1,2}\.\d{1,2}\.\d{4}/.test(trimmed)) return true;
+
+  return false;
+}
+
 // ─── Stage 3c: Focused handwriting extraction for Fragebogen pages ───
 
 const FRAGEBOGEN_MARKERS = [
@@ -302,6 +416,45 @@ function postProcessDefaults(result: ExtractionResult): ExtractionResult {
         if (!isNaN(num) && num > 0) {
           (ef.betrag as { wert: unknown }).wert = num;
         }
+      }
+    }
+  }
+
+  // 7b. Compute betrag from titel components (Nennbetrag + Zinsen etc.)
+  // The LLM is instructed NOT to add amounts — this layer does it correctly
+  if (result.forderungen?.einzelforderungen) {
+    for (const ef of result.forderungen.einzelforderungen) {
+      const titel = String(ef.titel?.wert ?? '');
+      if (!titel) continue;
+
+      const computed = computeBetragFromTitel(titel);
+      if (computed === null) continue;
+
+      const currentBetrag = ef.betrag?.wert;
+      if (currentBetrag == null || currentBetrag === 0) {
+        // betrag is null/0 — use computed value
+        ef.betrag = { wert: computed, quelle: ef.titel?.quelle ? `Berechnet aus Teilbeträgen (${ef.titel.quelle})` : 'Berechnet aus Teilbeträgen' };
+      } else if (typeof currentBetrag === 'number' && currentBetrag > 0) {
+        // betrag is set — check for *100 multiplication error (lost decimal)
+        const ratio = currentBetrag / computed;
+        if (ratio > 90 && ratio < 110) {
+          // Looks like betrag ≈ computed * 100 → LLM dropped the decimal point
+          ef.betrag = { wert: computed, quelle: ef.titel?.quelle ? `Korrigiert aus Teilbeträgen (${ef.titel.quelle})` : 'Korrigiert aus Teilbeträgen' };
+        }
+      }
+    }
+  }
+
+  // 7c. Validate glaeubiger names — reject numbers, dates, and amounts
+  if (result.forderungen?.einzelforderungen) {
+    for (const ef of result.forderungen.einzelforderungen) {
+      const name = String(ef.glaeubiger?.wert ?? '').trim();
+      if (!name || name === '—') continue;
+
+      if (looksLikeInvalidGlaeubiger(name)) {
+        logger.warn(`Einzelforderung glaeubiger rejected (looks like number/date): "${name}"`);
+        (ef.glaeubiger as { wert: unknown }).wert = null;
+        ef.glaeubiger.quelle = '';
       }
     }
   }
