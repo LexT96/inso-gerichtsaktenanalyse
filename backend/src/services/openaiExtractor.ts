@@ -192,10 +192,119 @@ function mergeResults(base: ExtractionResult, addition: ExtractionResult): Extra
   return merged;
 }
 
+// ─── Hybrid mode: text for all pages + images for key pages only ───
+// Fits 200+ pages under 60K TPM. Used when IS_LANGDOCK and pages > CHUNK_PAGE_THRESHOLD.
+
+const KEY_PAGE_MARKERS = [
+  /beschluss/i, /fragebogen/i, /anlage/i, /ergänzungsblatt/i,
+  /vermögensübersicht/i, /schuldenaufstellung/i, /aufstellung der schulden/i,
+  /gläubiger.*verzeichnis/i, /leistungsbescheid/i, /zustellungsurkunde/i,
+  /grundbuch/i, /vollstreckungsportal/i, /meldeauskunft/i,
+  /handelsregister/i, /kontierung/i, /buchung/i, /bilanz/i, /bwa/i,
+];
+
+function detectKeyPages(pageTexts: string[], maxImages = 20): number[] {
+  const keyPages: number[] = [];
+
+  // Always include first 3 pages (cover, Beschluss, overview)
+  for (let i = 0; i < Math.min(3, pageTexts.length); i++) keyPages.push(i);
+
+  // Include pages matching key document markers
+  for (let i = 0; i < pageTexts.length; i++) {
+    if (keyPages.includes(i)) continue;
+    const text = pageTexts[i].toLowerCase();
+    if (KEY_PAGE_MARKERS.some(m => m.test(text))) {
+      keyPages.push(i);
+    }
+  }
+
+  // Cap at maxImages
+  return keyPages.sort((a, b) => a - b).slice(0, maxImages);
+}
+
+async function callGptHybrid(
+  client: OpenAI,
+  model: string,
+  pdfBuffer: Buffer,
+  pageTexts: string[],
+  keyPageIndices: number[],
+  prompt: string,
+): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
+  const { execFileSync } = await import('child_process');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-img-'));
+  const pdfPath = path.join(tmpDir, 'input.pdf');
+  fs.writeFileSync(pdfPath, pdfBuffer);
+
+  try {
+    // Convert only key pages to JPEG
+    const pageList = keyPageIndices.join(',');
+    const script = `
+import fitz, sys, os
+doc = fitz.open(sys.argv[1])
+pages = [int(p) for p in sys.argv[4].split(',') if p]
+for i in pages:
+    if i < len(doc):
+        pix = doc[i].get_pixmap(dpi=int(sys.argv[3]))
+        pix.save(os.path.join(sys.argv[2], f'page_{i:04d}.jpg'))
+doc.close()
+`;
+    execFileSync('python3', ['-c', script, pdfPath, tmpDir, String(IMAGE_DPI), pageList], { timeout: 60000 });
+
+    // Build content: prompt + full text + selective images
+    const content: OpenAI.Chat.ChatCompletionContentPart[] = [
+      { type: 'text', text: prompt },
+    ];
+
+    // Add ALL pages as text
+    const textBlock = pageTexts.map((t, i) =>
+      `=== SEITE ${i + 1} ===\n${t}`
+    ).join('\n\n');
+    content.push({ type: 'text', text: `\n\n--- VOLLSTÄNDIGER AKTENINHALT (${pageTexts.length} Seiten) ---\n\n${textBlock}` });
+
+    // Add key pages as images for visual detail (forms, handwriting, tables)
+    content.push({ type: 'text', text: '\n\n--- BILDANSICHT WICHTIGER SEITEN (für Handschrift, Tabellen, Formulare) ---' });
+
+    const keyPageSet = new Set(keyPageIndices);
+    const imgFiles = fs.readdirSync(tmpDir).filter(f => f.endsWith('.jpg')).sort();
+    for (const file of imgFiles) {
+      const pageIdx = parseInt(file.replace('page_', '').replace('.jpg', ''), 10);
+      const pageNum = pageIdx + 1;
+      content.push({ type: 'text', text: `=== BILD SEITE ${pageNum} ===` });
+      const b64 = fs.readFileSync(path.join(tmpDir, file)).toString('base64');
+      content.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'high' } });
+    }
+
+    logger.info('Sending hybrid (text + images) to GPT', {
+      model, totalPages: pageTexts.length, imagePages: keyPageIndices.length,
+      keyPages: keyPageIndices.map(i => i + 1),
+    });
+
+    const response = await client.chat.completions.create({
+      model,
+      messages: [{ role: 'user', content }],
+      max_completion_tokens: 32000,
+    });
+
+    const text = response.choices[0]?.message?.content || '';
+    return {
+      text,
+      inputTokens: response.usage?.prompt_tokens ?? 0,
+      outputTokens: response.usage?.completion_tokens ?? 0,
+    };
+  } finally {
+    try {
+      for (const f of fs.readdirSync(tmpDir)) fs.unlinkSync(path.join(tmpDir, f));
+      fs.rmdirSync(tmpDir);
+    } catch { /* ignore */ }
+  }
+}
+
 /**
- * Extract data from PDF using OpenAI GPT-5.4 with native PDF input.
- * For small PDFs (≤80 pages): single call with full PDF.
- * For large PDFs (>80 pages): chunk by document segments, merge results.
+ * Extract data from PDF using OpenAI GPT-5.4.
+ * Strategy depends on provider:
+ * - Direct OpenAI: all pages as images (high DPI)
+ * - Langdock (≤50 pages): all pages as images (100 DPI)
+ * - Langdock (>50 pages): hybrid text + selective images
  */
 export async function extractWithOpenAI(
   pdfBuffer: Buffer,
@@ -209,9 +318,29 @@ export async function extractWithOpenAI(
   const pageCount = pageTexts.length;
   const prompt = extractionPrompt + (documentMap ? `\n\nDOKUMENTSTRUKTUR:\n${documentMap}` : '');
 
+  // Langdock large docs: hybrid mode (text + selective images)
+  if (IS_LANGDOCK && pageCount > CHUNK_PAGE_THRESHOLD) {
+    logger.info('OpenAI extraction: hybrid mode (text + key images)', { model, pages: pageCount });
+    const startTime = Date.now();
+    const keyPages = detectKeyPages(pageTexts, 20);
+
+    const { text, inputTokens, outputTokens } = await callGptHybrid(
+      client, model, pdfBuffer, pageTexts, keyPages, prompt
+    );
+
+    logger.info('OpenAI hybrid extraction completed', {
+      model, pages: pageCount, keyImages: keyPages.length,
+      elapsed: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+      inputTokens, outputTokens,
+    });
+
+    const parsed = await parseJsonResponse(text);
+    return validateResult(parsed);
+  }
+
   if (pageCount <= CHUNK_PAGE_THRESHOLD) {
-    // Single call with full PDF
-    logger.info('OpenAI extraction: single PDF call', { model, pages: pageCount });
+    // Single call with all pages as images
+    logger.info('OpenAI extraction: single PDF call', { model, pages: pageCount, dpi: IMAGE_DPI });
     const startTime = Date.now();
 
     const { text, inputTokens, outputTokens } = await callGptWithImages(
