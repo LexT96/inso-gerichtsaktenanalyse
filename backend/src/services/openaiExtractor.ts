@@ -14,8 +14,12 @@ import { extractionResultSchema } from '../utils/validation';
 import type { ExtractionResult } from '../types/extraction';
 import type { DocumentSegment } from '../utils/documentAnalyzer';
 
-// Threshold: above this, chunk by segments to avoid 2x pricing (>272K tokens)
-const CHUNK_PAGE_THRESHOLD = 80;
+// Threshold: above this, chunk by segments and merge results
+// Langdock has 60K TPM → ~20 pages at high detail per call
+// Direct OpenAI has 1M context → 80 pages per call
+const CHUNK_PAGE_THRESHOLD = process.env.OPENAI_BASE_URL?.includes('langdock')
+  ? 18  // Langdock: ~18 pages × 2700 tokens = ~49K (under 60K TPM)
+  : 80; // Direct: up to 80 pages
 
 let openaiClient: OpenAI | null = null;
 
@@ -240,7 +244,7 @@ export async function extractWithOpenAI(
       // seg.pages is 1-indexed array, convert to 0-indexed for pdf-lib
       const segPages = seg.pages.map(p => p - 1);
 
-      if (currentChunk.length + segPages.length > 70 && currentChunk.length > 0) {
+      if (currentChunk.length + segPages.length > CHUNK_PAGE_THRESHOLD && currentChunk.length > 0) {
         chunks.push({ name: currentName || `pages_${currentChunk[0] + 1}-${currentChunk[currentChunk.length - 1] + 1}`, pages: currentChunk });
         currentChunk = [];
         currentName = '';
@@ -254,9 +258,10 @@ export async function extractWithOpenAI(
       chunks.push({ name: currentName || 'remainder', pages: currentChunk });
     }
   } else {
-    // Fixed-size chunks of 60 pages
-    for (let i = 0; i < pageCount; i += 60) {
-      const end = Math.min(i + 60, pageCount);
+    // Fixed-size chunks respecting threshold
+    const chunkSize = CHUNK_PAGE_THRESHOLD;
+    for (let i = 0; i < pageCount; i += chunkSize) {
+      const end = Math.min(i + chunkSize, pageCount);
       const pages = Array.from({ length: end - i }, (_, j) => i + j);
       chunks.push({ name: `pages_${i + 1}-${end}`, pages });
     }
@@ -264,18 +269,25 @@ export async function extractWithOpenAI(
 
   logger.info('OpenAI chunked extraction', { chunks: chunks.length, chunkSizes: chunks.map(c => c.pages.length) });
 
-  // Extract each chunk
+  // Extract each chunk (serialize with delay for rate-limited providers)
+  const isLangdock = Boolean(process.env.OPENAI_BASE_URL?.includes('langdock'));
+  const RATE_LIMIT_DELAY = isLangdock ? 62_000 : 0; // 62s for Langdock 60K TPM
   let mergedResult: ExtractionResult | null = null;
 
-  for (const chunk of chunks) {
+  for (let ci = 0; ci < chunks.length; ci++) {
+    const chunk = chunks[ci];
+    // Wait between chunks for rate-limited providers
+    if (ci > 0 && RATE_LIMIT_DELAY > 0) {
+      logger.info(`Rate limit delay: waiting ${RATE_LIMIT_DELAY / 1000}s before chunk ${ci + 1}`);
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+    }
     try {
       const chunkPdf = await extractPdfPages(pdfBuffer, chunk.pages);
       const chunkPrompt = prompt + `\n\nDieses PDF enthält die Seiten ${chunk.pages[0] + 1}-${chunk.pages[chunk.pages.length - 1] + 1} der Gesamtakte. Extrahiere ALLE Informationen die auf diesen Seiten zu finden sind.`;
 
-      // Pass the 1-based page number of the first page in this chunk
       const chunkPageOffset = chunk.pages[0] + 1;
       const { text, inputTokens, outputTokens } = await callGptWithImages(
-        client, model, chunkPdf, 70, chunkPrompt, chunkPageOffset
+        client, model, chunkPdf, CHUNK_PAGE_THRESHOLD, chunkPrompt, chunkPageOffset
       );
 
       logger.info(`Chunk "${chunk.name}" completed`, { pages: chunk.pages.length, inputTokens, outputTokens });
