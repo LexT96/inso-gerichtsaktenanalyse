@@ -41,8 +41,12 @@ const EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' 
 function getNum(field: { wert: number | null } | null | undefined): number | null {
   if (!field) return null;
   const v = field.wert;
-  if (v === null || v === undefined || isNaN(v)) return null;
-  return v;
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'number') return isNaN(v) ? null : v;
+  // Handle German number format: "100.608,33" → 100608.33
+  const s = String(v).replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
 }
 
 /**

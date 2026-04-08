@@ -40,7 +40,9 @@ function getNum(field: { wert: number | null } | null | undefined): number | nul
   if (!field) return null;
   const v = field.wert;
   if (v === null || v === undefined) return null;
-  const n = typeof v === 'number' ? v : parseFloat(String(v));
+  if (typeof v === 'number') return v;
+  const s = String(v).replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
   return isNaN(n) ? null : n;
 }
 
@@ -49,7 +51,10 @@ function safeWert(field: { wert: number | null } | null | undefined): number {
   if (!field) return 0;
   const v = field.wert;
   if (v === null || v === undefined) return 0;
-  const n = typeof v === 'number' ? v : parseFloat(String(v));
+  if (typeof v === 'number') return v;
+  // Handle German number format: "100.608,33" → 100608.33
+  const s = String(v).replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
 
