@@ -51,11 +51,16 @@ router.get('/:id', authMiddleware, (req: Request, res: Response): void => {
     return;
   }
 
+  const isAdmin = req.user!.role === 'admin';
   const row = db.prepare(
-    `SELECT id, filename, file_size, result_json, status, error_message,
-            stats_found, stats_missing, stats_letters_ready, processing_time_ms, created_at
-     FROM extractions WHERE id = ? AND user_id = ?`
-  ).get(id, userId) as {
+    isAdmin
+      ? `SELECT id, filename, file_size, result_json, status, error_message,
+              stats_found, stats_missing, stats_letters_ready, processing_time_ms, created_at
+         FROM extractions WHERE id = ?`
+      : `SELECT id, filename, file_size, result_json, status, error_message,
+              stats_found, stats_missing, stats_letters_ready, processing_time_ms, created_at
+         FROM extractions WHERE id = ? AND user_id = ?`
+  ).get(...(isAdmin ? [id] : [id, userId])) as {
     id: number; filename: string; file_size: number; result_json: string | null;
     status: string; error_message: string | null;
     stats_found: number; stats_missing: number; stats_letters_ready: number;
