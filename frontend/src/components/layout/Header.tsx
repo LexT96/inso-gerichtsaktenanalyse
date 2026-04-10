@@ -1,7 +1,13 @@
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
 export function Header() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const navBtn = 'bg-transparent border border-border/80 rounded-md text-text-muted text-[9px] px-3.5 py-1.5 cursor-pointer font-mono hover:border-accent hover:text-accent hover:bg-accent/[0.03] transition-all uppercase tracking-wider';
+  const navBtnActive = 'bg-transparent border border-accent rounded-md text-accent text-[9px] px-3.5 py-1.5 cursor-pointer font-mono uppercase tracking-wider';
 
   return (
     <header className="bg-surface border-b border-border px-6 py-2.5 flex items-center gap-5 shadow-card">
@@ -22,9 +28,17 @@ export function Header() {
         </div>
       </div>
       <div className="flex-1" />
+      {user?.role === 'admin' && (
+        <button
+          onClick={() => navigate('/admin')}
+          className={location.pathname === '/admin' ? navBtnActive : navBtn}
+        >
+          Admin
+        </button>
+      )}
       <button
         onClick={logout}
-        className="bg-transparent border border-border/80 rounded-md text-text-muted text-[9px] px-3.5 py-1.5 cursor-pointer font-mono hover:border-accent hover:text-accent hover:bg-accent/[0.03] transition-all uppercase tracking-wider"
+        className={navBtn}
       >
         Abmelden
       </button>
