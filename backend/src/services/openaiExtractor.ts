@@ -5,7 +5,7 @@
  * For large PDFs (>80 pages), chunks by document segments and merges results.
  */
 
-import OpenAI, { AzureOpenAI } from 'openai';
+import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -32,14 +32,14 @@ function getOpenAI(): OpenAI {
     const baseURL = process.env.OPENAI_BASE_URL;
 
     if (IS_AZURE) {
-      // Azure OpenAI: use AzureOpenAI client for proper auth + URL routing
+      // Azure OpenAI: use regular OpenAI client with Azure URL format + api-key header
       const deployment = process.env.OPENAI_MODEL || 'gpt-5.4';
       const apiVersion = process.env.AZURE_OPENAI_API_VERSION || '2025-04-01-preview';
-      openaiClient = new AzureOpenAI({
+      openaiClient = new OpenAI({
         apiKey,
-        endpoint: baseURL!,
-        deployment,
-        apiVersion,
+        baseURL: `${baseURL}/openai/deployments/${deployment}`,
+        defaultHeaders: { 'api-key': apiKey },
+        defaultQuery: { 'api-version': apiVersion },
         timeout: 600_000,
         maxRetries: 2,
       });
