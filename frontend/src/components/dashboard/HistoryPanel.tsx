@@ -91,8 +91,7 @@ export function HistoryPanel({ onSelect, currentId }: HistoryPanelProps) {
                         {isActive && (
                           <>
                             <span>·</span>
-                            <span className="text-ie-green">{item.statsFound}</span>
-                            <span className="text-ie-red">{item.statsMissing}</span>
+                            <span className="text-ie-green">{item.statsFound} Felder</span>
                             <span className="text-ie-blue">{item.statsLettersReady} Briefe</span>
                           </>
                         )}

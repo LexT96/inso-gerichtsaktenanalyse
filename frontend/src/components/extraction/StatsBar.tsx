@@ -33,16 +33,10 @@ interface StatsBarProps {
   fields?: FieldDetail[];
 }
 
-export function StatsBar({ found, missing, total, lettersReady, lettersNA, lettersOpen, fields }: StatsBarProps) {
-  const quote = total ? Math.round((found / total) * 100) : 0;
-  const [expanded, setExpanded] = useState<'found' | 'missing' | null>(null);
+export function StatsBar({ found, lettersReady, lettersNA, lettersOpen, fields }: StatsBarProps) {
+  const [expanded, setExpanded] = useState(false);
 
   const foundFields = fields?.filter(f => f.filled) || [];
-  const missingFields = fields?.filter(f => !f.filled) || [];
-
-  const toggle = (type: 'found' | 'missing') => {
-    setExpanded(prev => prev === type ? null : type);
-  };
 
   return (
     <div className="mb-3.5">
@@ -51,17 +45,9 @@ export function StatsBar({ found, missing, total, lettersReady, lettersNA, lette
           label="Gefunden"
           value={found}
           colorClass="text-ie-green"
-          onClick={() => toggle('found')}
-          active={expanded === 'found'}
+          onClick={() => setExpanded(prev => !prev)}
+          active={expanded}
         />
-        <StatsCard
-          label="Fehlend"
-          value={missing}
-          colorClass="text-ie-red"
-          onClick={() => toggle('missing')}
-          active={expanded === 'missing'}
-        />
-        <StatsCard label="Quote" value={`${quote}%`} colorClass="text-text-dim" />
         <StatsCard label="Anschreiben bereit" value={lettersReady} colorClass="text-ie-green" />
         <StatsCard label="Entfällt" value={lettersNA} colorClass="text-text-dim" />
         <StatsCard label="Noch offen" value={lettersOpen} colorClass="text-ie-amber" />
@@ -70,18 +56,16 @@ export function StatsBar({ found, missing, total, lettersReady, lettersNA, lette
       {expanded && fields && (
         <div className="mt-2 bg-surface border border-border/60 rounded-lg shadow-card p-4 animate-fade-up">
           <div className="text-[10px] text-text-muted font-mono uppercase tracking-wide mb-2">
-            {expanded === 'found' ? `${foundFields.length} gefundene Felder` : `${missingFields.length} fehlende Felder`}
+            {foundFields.length} gefundene Felder
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 max-h-64 overflow-y-auto">
-            {(expanded === 'found' ? foundFields : missingFields).map(f => (
+            {foundFields.map(f => (
               <div key={f.path} className="flex items-center gap-1.5 text-xs font-mono">
-                <span className={expanded === 'found' ? 'text-ie-green' : 'text-ie-red'}>
-                  {expanded === 'found' ? '\u2713' : '\u2717'}
-                </span>
+                <span className="text-ie-green">{'\u2713'}</span>
                 <span className="text-text-dim truncate" title={f.path}>
                   {f.label}
                 </span>
-                {expanded === 'found' && f.value && (
+                {f.value && (
                   <span className="text-text-muted truncate ml-auto text-[10px] max-w-[120px]" title={f.value}>
                     {f.value.length > 25 ? f.value.slice(0, 25) + '\u2026' : f.value}
                   </span>
