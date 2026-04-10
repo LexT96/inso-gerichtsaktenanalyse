@@ -11,7 +11,7 @@ interface User {
   role: string;
 }
 
-type AuthMode = 'local' | 'entra' | null;
+type AuthMode = 'local' | 'hybrid' | null;
 
 interface AuthContextType {
   user: User | null;
@@ -19,6 +19,7 @@ interface AuthContextType {
   authMode: AuthMode;
   login: (username: string, password: string) => Promise<void>;
   loginWithEntra: () => Promise<void>;
+  register: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -28,6 +29,7 @@ export const AuthContext = createContext<AuthContextType>({
   authMode: null,
   login: async () => {},
   loginWithEntra: async () => {},
+  register: async () => {},
   logout: () => {},
 });
 
@@ -52,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Entra ID: after MSAL reports authenticated, fetch user from backend /auth/me
   useEffect(() => {
-    if (authMode !== 'entra') return;
+    if (authMode !== 'hybrid') return;
     if (!isEntraAuthenticated || accounts.length === 0) {
       setLoading(false);
       return;
@@ -84,9 +86,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, [authMode, isEntraAuthenticated, accounts, instance]);
 
-  // Local auth: restore session from localStorage
+  // Local auth: restore session from localStorage (works in both 'local' and 'hybrid' mode)
   useEffect(() => {
-    if (authMode !== 'local') return;
+    if (authMode !== 'local' && authMode !== 'hybrid') return;
+    // In hybrid mode, Entra effect handles its own loading — only restore local session here
+    if (authMode === 'hybrid' && isEntraAuthenticated) return;
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       try {
@@ -96,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     setLoading(false);
-  }, [authMode]);
+  }, [authMode, isEntraAuthenticated]);
 
   // Still loading while we don't know the auth mode
   useEffect(() => {
@@ -128,6 +132,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [instance]);
 
+  // Email + password registration
+  const register = useCallback(async (email: string, password: string, displayName: string) => {
+    await apiClient.post('/auth/register', { email, password, displayName });
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await apiClient.post('/auth/logout');
@@ -135,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Best-effort logout
     }
 
-    if (authMode === 'entra') {
+    if (authMode === 'hybrid') {
       // Only clear local MSAL cache — don't sign out of M365
       const account = instance.getActiveAccount() || instance.getAllAccounts()[0];
       if (account) {
@@ -148,7 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [authMode, instance]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, authMode, login, loginWithEntra, logout }}>
+    <AuthContext.Provider value={{ user, loading, authMode, login, loginWithEntra, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

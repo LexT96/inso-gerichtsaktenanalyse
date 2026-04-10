@@ -5,6 +5,12 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(200),
 });
 
+export const registerSchema = z.object({
+  email: z.string().email('Ungültige E-Mail-Adresse').max(100),
+  password: z.string().min(8, 'Passwort muss mindestens 8 Zeichen haben').max(200),
+  displayName: z.string().min(1, 'Name ist erforderlich').max(100),
+});
+
 export const refreshSchema = z.object({
   refreshToken: z.string().min(1),
 });

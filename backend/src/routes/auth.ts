@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { getDb } from '../db/database';
-import { loginSchema } from '../utils/validation';
+import { loginSchema, registerSchema } from '../utils/validation';
 import { logger } from '../utils/logger';
 import { authRateLimit } from '../middleware/rateLimit';
 import { authMiddleware } from '../middleware/auth';
@@ -15,10 +15,24 @@ const router = Router();
 const isEntraEnabled = (): boolean =>
   Boolean(config.AZURE_TENANT_ID && config.AZURE_CLIENT_ID);
 
+/**
+ * Check if an email domain is in the AZURE_ALLOWED_DOMAINS list.
+ * Used for both Entra ID and local registration domain gating.
+ */
+function isRegistrationDomainAllowed(email: string): boolean {
+  const allowed = process.env.AZURE_ALLOWED_DOMAINS;
+  if (!allowed) return true;
+  const domains = allowed.split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
+  if (domains.length === 0) return true;
+  const userDomain = email.split('@')[1]?.toLowerCase();
+  return domains.includes(userDomain);
+}
+
 // ─── Auth mode endpoint — tells the frontend which login flow to use ───
 
 router.get('/mode', (_req: Request, res: Response): void => {
-  res.json({ mode: isEntraEnabled() ? 'entra' : 'local' });
+  // hybrid = both Entra SSO and local email/password are available
+  res.json({ mode: isEntraEnabled() ? 'hybrid' : 'local' });
 });
 
 // ─── /auth/me — returns the current user from token (works for both Entra and local) ───
@@ -49,7 +63,7 @@ router.get('/me', authMiddleware, (req: Request, res: Response): void => {
   });
 });
 
-// ─── Local auth routes (only active when Entra ID is NOT configured) ───
+// ─── Local auth helpers ───
 
 function parseExpiry(expiry: string): number {
   const match = expiry.match(/^(\d+)([mhd])$/);
@@ -84,12 +98,6 @@ function clearAuthCookies(res: Response): void {
 }
 
 router.post('/login', authRateLimit, async (req: Request, res: Response): Promise<void> => {
-  // In Entra mode, local login is disabled
-  if (isEntraEnabled()) {
-    res.status(400).json({ error: 'Lokale Anmeldung ist deaktiviert. Bitte Microsoft SSO verwenden.' });
-    return;
-  }
-
   try {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -155,12 +163,6 @@ router.post('/login', authRateLimit, async (req: Request, res: Response): Promis
 });
 
 router.post('/refresh', (req: Request, res: Response): void => {
-  // In Entra mode, token refresh is handled by MSAL
-  if (isEntraEnabled()) {
-    res.status(400).json({ error: 'Token-Refresh wird von Microsoft SSO verwaltet.' });
-    return;
-  }
-
   const refreshTokenValue = req.cookies?.refreshToken;
   if (!refreshTokenValue) {
     res.status(400).json({ error: 'Refresh Token erforderlich' });
@@ -208,14 +210,57 @@ router.post('/refresh', (req: Request, res: Response): void => {
   res.json({ ok: true });
 });
 
-router.post('/logout', (req: Request, res: Response): void => {
-  if (!isEntraEnabled()) {
-    // Local auth: clean up refresh tokens
-    const refreshTokenValue = req.cookies?.refreshToken;
-    if (refreshTokenValue) {
-      const db = getDb();
-      db.prepare('DELETE FROM refresh_tokens WHERE token = ?').run(refreshTokenValue);
+// ─── Registration ───
+
+router.post('/register', authRateLimit, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const firstError = parsed.error.issues[0]?.message || 'Ungültige Eingabedaten';
+      res.status(400).json({ error: firstError });
+      return;
     }
+
+    const { email, password, displayName } = parsed.data;
+
+    // Domain restriction: only allowed email domains can register
+    if (!isRegistrationDomainAllowed(email)) {
+      res.status(403).json({ error: 'Registrierung ist nur mit einer autorisierten E-Mail-Domain möglich.' });
+      return;
+    }
+
+    const db = getDb();
+
+    // Check if email already exists
+    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(email);
+    if (existing) {
+      res.status(409).json({ error: 'Ein Konto mit dieser E-Mail-Adresse existiert bereits.' });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const result = db.prepare(
+      'INSERT INTO users (username, password_hash, display_name, role, active) VALUES (?, ?, ?, ?, 1)'
+    ).run(email, passwordHash, displayName, 'user');
+
+    db.prepare(
+      'INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)'
+    ).run(result.lastInsertRowid, 'register', JSON.stringify({ email }), req.ip);
+
+    logger.info('Neuer Benutzer registriert', { email });
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    logger.error('Registrierung fehlgeschlagen', { error: String(err) });
+    res.status(500).json({ error: 'Interner Serverfehler' });
+  }
+});
+
+router.post('/logout', (req: Request, res: Response): void => {
+  // Clean up refresh tokens for local-auth sessions
+  const refreshTokenValue = req.cookies?.refreshToken;
+  if (refreshTokenValue) {
+    const db = getDb();
+    db.prepare('DELETE FROM refresh_tokens WHERE token = ?').run(refreshTokenValue);
   }
   clearAuthCookies(res);
   res.json({ ok: true });

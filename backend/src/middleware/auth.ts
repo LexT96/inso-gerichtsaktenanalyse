@@ -23,8 +23,10 @@ let jwksClientInstance: jwksRsa.JwksClient | null = null;
 
 function getJwksClient(): jwksRsa.JwksClient {
   if (!jwksClientInstance) {
+    // Multi-tenant: use 'common' endpoint to accept signing keys from any Azure AD tenant.
+    // Access control is enforced via AZURE_ALLOWED_DOMAINS, not issuer locking.
     jwksClientInstance = new jwksRsa.JwksClient({
-      jwksUri: `https://login.microsoftonline.com/${config.AZURE_TENANT_ID}/discovery/v2.0/keys`,
+      jwksUri: 'https://login.microsoftonline.com/common/discovery/v2.0/keys',
       cache: true,
       rateLimit: true,
     });
@@ -46,15 +48,20 @@ function verifyEntraToken(token: string): Promise<jwt.JwtPayload> {
       getEntraSigningKey,
       {
         audience: `api://${config.AZURE_CLIENT_ID}`,
-        issuer: [
-          `https://login.microsoftonline.com/${config.AZURE_TENANT_ID}/v2.0`,
-          `https://sts.windows.net/${config.AZURE_TENANT_ID}/`,
-        ],
+        // Multi-tenant: no issuer restriction — any Azure AD tenant is accepted.
+        // We verify the issuer is Azure AD (not arbitrary), then AZURE_ALLOWED_DOMAINS
+        // controls which email domains can access the app.
         algorithms: ['RS256'],
       },
       (err, decoded) => {
         if (err) return reject(err);
-        resolve(decoded as jwt.JwtPayload);
+        const payload = decoded as jwt.JwtPayload;
+        // Verify issuer is actually Azure AD (prevent non-Azure tokens)
+        const iss = payload.iss || '';
+        if (!iss.startsWith('https://login.microsoftonline.com/') && !iss.startsWith('https://sts.windows.net/')) {
+          return reject(new Error('Token issuer is not Azure AD'));
+        }
+        resolve(payload);
       }
     );
   });
