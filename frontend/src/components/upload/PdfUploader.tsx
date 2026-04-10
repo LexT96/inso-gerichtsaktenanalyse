@@ -10,7 +10,7 @@ interface PdfUploaderProps {
   onProModeChange: (enabled: boolean) => void;
 }
 
-export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading, proMode, onProModeChange }: PdfUploaderProps) {
+export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading, proMode: _proMode, onProModeChange: _onProModeChange }: PdfUploaderProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback((e: DragEvent<HTMLDivElement> | ChangeEvent<HTMLInputElement>) => {
@@ -52,8 +52,9 @@ export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading, pr
                 : 'bg-accent text-white cursor-pointer hover:brightness-110 active:scale-[0.98]'
               }`}
           >
-            {loading ? 'ANALYSIERE…' : proMode ? 'PRO-ANALYSE STARTEN' : 'AKTE ANALYSIEREN'}
+            {loading ? 'ANALYSIERE…' : 'AKTE ANALYSIEREN'}
           </button>
+          {/* Pro mode toggle — disabled for now
           <div className="mt-3 flex items-center justify-center gap-2" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => onProModeChange(!proMode)}
@@ -70,6 +71,7 @@ export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading, pr
               </span>
             )}
           </div>
+          */}
         </>
       ) : (
         <>
