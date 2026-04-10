@@ -1,10 +1,11 @@
 /**
  * OpenAI/GPT-5.4 extraction provider.
- * Uses native PDF file input — the API extracts text + renders page images automatically.
+ * Supports direct OpenAI, Azure OpenAI (EU), and Langdock proxy.
+ * Uses page images via Chat Completions API.
  * For large PDFs (>80 pages), chunks by document segments and merges results.
  */
 
-import OpenAI from 'openai';
+import OpenAI, { AzureOpenAI } from 'openai';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -14,10 +15,11 @@ import { extractionResultSchema } from '../utils/validation';
 import type { ExtractionResult } from '../types/extraction';
 import type { DocumentSegment } from '../utils/documentAnalyzer';
 
-// Langdock detection
+// Provider detection
 const IS_LANGDOCK = Boolean(process.env.OPENAI_BASE_URL?.includes('langdock'));
+const IS_AZURE = Boolean(process.env.OPENAI_BASE_URL?.includes('azure') || process.env.OPENAI_BASE_URL?.includes('cognitiveservices'));
 // Langdock: use 100 DPI (1100 tokens/page) → 50 pages fit in 60K TPM
-// Direct: use 150 DPI (2700 tokens/page) → 80 pages fit in 1M context
+// Direct/Azure: use 150 DPI (2700 tokens/page) → 80 pages fit in 1M context
 const IMAGE_DPI = IS_LANGDOCK ? 100 : 150;
 const CHUNK_PAGE_THRESHOLD = IS_LANGDOCK ? 50 : 80;
 
@@ -28,12 +30,28 @@ function getOpenAI(): OpenAI {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY not set');
     const baseURL = process.env.OPENAI_BASE_URL;
-    openaiClient = new OpenAI({
-      apiKey,
-      ...(baseURL ? { baseURL } : {}),
-      timeout: 600_000,
-      maxRetries: IS_LANGDOCK ? 3 : 2, // Retry on 429 with exponential backoff
-    });
+
+    if (IS_AZURE) {
+      // Azure OpenAI: use AzureOpenAI client for proper auth + URL routing
+      const deployment = process.env.OPENAI_MODEL || 'gpt-5.4';
+      const apiVersion = process.env.AZURE_OPENAI_API_VERSION || '2025-04-01-preview';
+      openaiClient = new AzureOpenAI({
+        apiKey,
+        endpoint: baseURL!,
+        deployment,
+        apiVersion,
+        timeout: 600_000,
+        maxRetries: 2,
+      });
+      logger.info('Azure OpenAI client initialized', { endpoint: baseURL, deployment, apiVersion });
+    } else {
+      openaiClient = new OpenAI({
+        apiKey,
+        ...(baseURL ? { baseURL } : {}),
+        timeout: 600_000,
+        maxRetries: IS_LANGDOCK ? 3 : 2,
+      });
+    }
   }
   return openaiClient;
 }
