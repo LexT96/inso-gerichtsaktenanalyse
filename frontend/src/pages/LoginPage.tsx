@@ -262,11 +262,6 @@ export function LoginPage() {
           )}
         </div>
 
-        {/* Legal footer */}
-        <div className="px-10 py-4 border-t border-border/60 text-center text-[8px] text-text-muted leading-relaxed font-mono tracking-wide">
-          &sect; 43a BRAO &middot; &sect; 2 BORA &middot; Art. 28 DSGVO<br />
-          Alle Daten verbleiben innerhalb der EU
-        </div>
       </div>
     </div>
   );
