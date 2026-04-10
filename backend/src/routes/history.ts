@@ -103,11 +103,14 @@ router.get('/:id/pdf', authMiddleware, (req: Request, res: Response): void => {
   const id = parseInt(Array.isArray(idParam) ? idParam[0] : idParam ?? '', 10);
   if (isNaN(id)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
 
-  // Verify user owns this extraction
+  // Verify user owns this extraction (admins can access any)
   const db = getDb();
+  const isAdmin = req.user!.role === 'admin';
   const row = db.prepare(
-    'SELECT id, filename FROM extractions WHERE id = ? AND user_id = ?'
-  ).get(id, userId) as { id: number; filename: string } | undefined;
+    isAdmin
+      ? 'SELECT id, filename FROM extractions WHERE id = ?'
+      : 'SELECT id, filename FROM extractions WHERE id = ? AND user_id = ?'
+  ).get(...(isAdmin ? [id] : [id, userId])) as { id: number; filename: string } | undefined;
   if (!row) { res.status(404).json({ error: 'Nicht gefunden' }); return; }
 
   const pdfDir = path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs');
