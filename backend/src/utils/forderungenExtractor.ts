@@ -142,7 +142,8 @@ export async function extractForderungen(
 
     const content = `${FORDERUNGEN_PROMPT}${mapBlock}\n--- AKTENINHALT (${pages.length} relevante Seiten von ${pageTexts.length} gesamt) ---\n\n${pageBlock}`;
 
-    const model = config.UTILITY_MODEL || 'claude-haiku-4-5-20251001';
+    // Use EXTRACTION_MODEL (Sonnet) — Haiku drops creditor names from long tables
+    const model = config.EXTRACTION_MODEL;
 
     const response = await callWithRetry(() =>
       anthropic.messages.create({

@@ -14,3 +14,10 @@ promptfoo-output/
 data/
 backend/data/pdfs/
 backend/data/logs/*.gz
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/terraform.tfvars
+terraform/.terraform.lock.hcl

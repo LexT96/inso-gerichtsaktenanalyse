@@ -117,7 +117,7 @@ const AKTIVA_PROMPT = `Du bist ein spezialisierter KI-Assistent für deutsche In
 2. Erstelle eine fundierte Insolvenzanalyse (Vergleich Aktiva vs. Passiva)
 
 PFLICHT: Jedes Feld mit ausgefülltem "wert" MUSS eine "quelle" haben. Format: "Seite X, [Dokument/Abschnitt]". Die quelle muss die tatsächliche Fundstelle sein — die Seite, auf der du den Wert im vorliegenden Dokument gefunden hast.
-Datumsformat: TT.MM.JJJJ. Beträge: deutsche Schreibweise mit Komma (1.234,56) oder Zahl.
+Datumsformat: TT.MM.JJJJ. Beträge: IMMER in EUR (nicht TEUR) als reine Zahl ohne Tausendertrennzeichen (z.B. 100000.00 NICHT 100.000,00). WICHTIG: Wenn Beträge im Dokument in TEUR angegeben sind, multipliziere mit 1000 um auf EUR umzurechnen (z.B. 898 TEUR → 898000).
 
 Identifiziere Vermögenswerte in diesen 10 Kategorien:
 1. immobilien — Grundstücke, Häuser, Wohnungen, Grundbesitz (beachte: belastete Grundstücke — Grundschulden, Hypotheken abziehen!)
@@ -143,11 +143,11 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). In a
       "fortfuehrungswert": {"wert": 0, "quelle": ""},
       "absonderung": {"wert": 0, "quelle": ""},
       "aussonderung": {"wert": 0, "quelle": ""},
-      "freie_masse": {"wert": 0, "quelle": ""},
+      "freie_masse": {"wert": null, "quelle": ""},
       "sicherungsrechte": "z.B. Grundschuld zugunsten Sparkasse, Sicherungsübereignung zugunsten Bank"
     }
   ],
-  "summe_aktiva": {"wert": 0, "quelle": "Seite X, Zusammenfassung"},
+  "summe_aktiva": {"wert": null, "quelle": ""},
   "massekosten_schaetzung": {"wert": 0, "quelle": ""},
   "insolvenzanalyse": {
     "zahlungsunfaehigkeit_17": {
@@ -177,9 +177,9 @@ REGELN FÜR VERMÖGENSWERTE:
 - liquidationswert / fortfuehrungswert: Wenn das Dokument beide Werte nennt, beide extrahieren. Sonst: liquidationswert = geschaetzter_wert, fortfuehrungswert leer.
 - absonderung: Wert der Absonderungsrechte (z.B. Grundschuld, Sicherungsübereignung) an diesem Vermögenswert. 0 wenn keine Absonderung.
 - aussonderung: Wert der Aussonderungsrechte (z.B. Eigentumsvorbehalt, Leasing) an diesem Vermögenswert. 0 wenn keine Aussonderung.
-- freie_masse: geschaetzter_wert - absonderung - aussonderung. Kann 0 sein wenn wertausschöpfend belastet.
+- freie_masse: Auf null setzen — wird automatisch vom System berechnet (geschaetzter_wert - absonderung - aussonderung). NIEMALS selbst berechnen.
 - sicherungsrechte: Textbeschreibung der Sicherheiten (z.B. "Grundschuld zugunsten Sparkasse Trier i.H.v. 154.000 EUR")
-- summe_aktiva: Gesamtsumme aller Aktiva berechnen oder aus Dokument übernehmen.
+- summe_aktiva: Auf null setzen — wird automatisch vom System aus den Einzelpositionen berechnet. NIEMALS selbst addieren.
 - massekosten_schaetzung: Geschätzte Massekosten nach § 54 InsO (Gerichtskosten ca. 2.000-4.000 EUR + Verwaltervergütung nach InsVV).
 - Jede Position braucht eine kategorie aus der obigen Liste.
 - ERINNERUNG: Jeder nicht-leere wert braucht eine quelle (Seite X, ...). Keine Ausnahme.

@@ -152,15 +152,15 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). In a
       "ist_nahestehend": false
     }
   ],
-  "gesamtpotenzial": {"wert": 0, "quelle": "Berechnung"},
+  "gesamtpotenzial": {"wert": null, "quelle": ""},
   "zusammenfassung": "Zusammenfassende Bewertung des Anfechtungspotenzials"
 }
 
 REGELN:
 - Nur extrahieren, was tatsächlich im Dokument steht oder sich aus den Daten ableiten lässt.
 - Wenn keine anfechtbaren Vorgänge erkennbar sind, leere vorgaenge-Liste zurückgeben.
-- gesamtpotenzial: Summe aller potenziell anfechtbaren Beträge.
-- anfechtbar_ab: Berechne die Anfechtungsfrist basierend auf dem Antragsdatum und der Anfechtungsgrundlage.
+- gesamtpotenzial: Auf null setzen — wird automatisch vom System aus den Einzelbeträgen berechnet. NIEMALS selbst addieren.
+- anfechtbar_ab: Auf null setzen — die Berechnung der Anfechtungsfrist erfolgt automatisch im System.
 - ist_nahestehend: true wenn der Empfänger eine nahestehende Person i.S.v. § 138 InsO ist.
 - ERINNERUNG: Jeder nicht-leere wert braucht eine quelle (Seite X, ...). Keine Ausnahme.
 

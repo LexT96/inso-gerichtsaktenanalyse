@@ -1,0 +1,29 @@
+hcloud_token = "your-hetzner-api-token"
+
+server_name     = "aktenanalyse-demo"
+server_type     = "cx22"       # 2 vCPU, 4 GB RAM (~€6/mo)
+server_location = "fsn1"       # Falkenstein, Germany
+
+ssh_key_names = ["my-ssh-key"] # Must be pre-registered in Hetzner Console
+
+# domain = "demo.klareprozesse.de"  # Optional — leave empty for IP-only (HTTP, no TLS)
+
+# Anthropic (still needed for Haiku utility model in Stage 1 + 3)
+anthropic_api_key  = "sk-ant-..."
+anthropic_base_url = ""
+
+# GPT-5.4 for extraction (Stage 2)
+extraction_provider = "openai"
+openai_api_key      = "sk-..."
+openai_model        = "gpt-5.4"
+# openai_base_url   = ""              # For Azure OpenAI override
+# openai_reasoning_effort = "high"
+
+# Secrets
+jwt_secret        = "generate-with: openssl rand -hex 32"
+admin_password    = "change-me"
+db_encryption_key = "generate-with: openssl rand -hex 32"
+
+# Git
+git_repo_url = "https://github.com/LexT96/insolvenz-extraktor.git"
+git_branch   = "main"

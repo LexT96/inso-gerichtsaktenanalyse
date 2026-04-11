@@ -6,21 +6,6 @@
     "auditLog": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/.d1196f403b3f44b8a2ff8e6d4f7d85e0344b3251-audit.json",
     "files": [
         {
-            "date": 1773127218931,
-            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-10.log",
-            "hash": "04b430f52d0c2c8bc114bfb8426cc2963f6220cfe704e20b138d612dfd457a3a"
-        },
-        {
-            "date": 1773232853773,
-            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-11.log",
-            "hash": "5aa441efc4cd4eb8dd9d6e7866b2c093d956096aea6b7904ad4ab48e2724eefd"
-        },
-        {
-            "date": 1773307010700,
-            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-12.log",
-            "hash": "98c84eb6fe5978883b72d7d33f7802b452be1376830a2ff7f9af76960042bc7b"
-        },
-        {
             "date": 1773385065914,
             "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-03-13.log",
             "hash": "91fb71239f7dae7392d7dc2829e24361f4591c36a4cde3013a1568f168d06ec5"
@@ -64,6 +49,16 @@
             "date": 1775636131849,
             "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-04-08.log",
             "hash": "79facd5a642ca53eabb9f1b262b29dbe049c406ae936cdb299e5cacac65bd52f"
+        },
+        {
+            "date": 1775814120974,
+            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-04-10.log",
+            "hash": "c8827876853493839d6c1b7461160ec5bccd6390338a3e1e7f89a56c4e69038d"
+        },
+        {
+            "date": 1775898456667,
+            "name": "/Users/thorsten/KlareProzesse.de/TBS/insolvenz-extraktor/backend/data/logs/insolvenz-2026-04-11.log",
+            "hash": "f8dcb5cd6f8cde8fff02a379c224f1cc5492bacdfaf00ace5b2ee4f5a9cbbffb"
         }
     ],
     "hashType": "sha256"

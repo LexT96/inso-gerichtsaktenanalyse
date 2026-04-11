@@ -254,13 +254,7 @@ export function AdminPage() {
                     <td className="px-3 py-2 truncate max-w-[250px]">{e.filename}</td>
                     <td className="px-3 py-2 text-text-muted">{e.displayName || e.username}</td>
                     <td className="px-3 py-2 text-right">
-                      {e.statsFound != null ? (
-                        <span>
-                          <span className="text-ie-green">{e.statsFound}</span>
-                          <span className="text-text-dim">/</span>
-                          <span className="text-ie-red">{e.statsMissing}</span>
-                        </span>
-                      ) : '-'}
+                      {e.statsFound != null ? e.statsFound : '-'}
                     </td>
                     <td className="px-3 py-2 text-right text-text-muted">{formatTime(e.processingTimeMs)}</td>
                     <td className="px-3 py-2 text-right text-text-dim">{formatDate(e.createdAt)}</td>
