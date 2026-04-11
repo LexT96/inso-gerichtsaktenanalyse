@@ -159,6 +159,56 @@ export function findOrphanPages(segments: DocumentSegment[], totalPages: number)
   return orphans;
 }
 
+/**
+ * Classify document segments by extraction domain.
+ * Returns page numbers relevant for each focused extractor.
+ * Pages can appear in multiple domains (e.g. a page with both creditor and asset info).
+ */
+export interface ExtractionRouting {
+  /** Pages relevant for forderungen/creditor extraction */
+  forderungenPages: number[];
+  /** Pages relevant for aktiva/asset extraction */
+  aktivaPages: number[];
+  /** Pages relevant for anfechtung/contestable transactions */
+  anfechtungPages: number[];
+}
+
+// Keywords in segment type or description that indicate domain relevance
+const FORDERUNGEN_KEYWORDS = /forderung|gläubiger|glaub|kredit|verbindlich|darlehen|wandel|schuld|sozialversicherung|finanzamt|steuer|arbeitnehmer|lohn|gehalt|insolvenzantrag|antragsteller|tabelle|passiva/i;
+const AKTIVA_KEYWORDS = /aktiva|vermögen|bilanz|grundbuch|grundstück|immobili|fahrzeug|kfz|pkw|konto|bank|guthaben|versicherung|forderung.*schuldner|inventar|anlage|sachlage|vorräte|geschäftsausstattung|maschine|wertpapier/i;
+const ANFECHTUNG_KEYWORDS = /anfechtung|zahlung|überweisung|transaktion|schenkung|gesellschafterdarlehen|nahestehend|§\s*1[3-4]\d|vorsätzlich|unentgeltlich|deckung|kongruent|inkongruent/i;
+
+export function classifySegmentsForExtraction(
+  segments: DocumentSegment[],
+  totalPages: number,
+): ExtractionRouting {
+  const forderungenPages = new Set<number>();
+  const aktivaPages = new Set<number>();
+  const anfechtungPages = new Set<number>();
+
+  for (const seg of segments) {
+    const text = `${seg.type} ${seg.description}`.toLowerCase();
+    if (FORDERUNGEN_KEYWORDS.test(text)) {
+      for (const p of seg.pages) forderungenPages.add(p);
+    }
+    if (AKTIVA_KEYWORDS.test(text)) {
+      for (const p of seg.pages) aktivaPages.add(p);
+    }
+    if (ANFECHTUNG_KEYWORDS.test(text)) {
+      for (const p of seg.pages) anfechtungPages.add(p);
+    }
+  }
+
+  // Fallback: if no pages matched for a domain, include all pages
+  // (better to send too much than miss data)
+  const allPages = Array.from({ length: totalPages }, (_, i) => i + 1);
+  return {
+    forderungenPages: forderungenPages.size > 0 ? [...forderungenPages].sort((a, b) => a - b) : allPages,
+    aktivaPages: aktivaPages.size > 0 ? [...aktivaPages].sort((a, b) => a - b) : allPages,
+    anfechtungPages: anfechtungPages.size > 0 ? [...anfechtungPages].sort((a, b) => a - b) : allPages,
+  };
+}
+
 // ─── Main ───
 
 /**
