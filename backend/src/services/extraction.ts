@@ -9,8 +9,9 @@ import { getDb } from '../db/database';
 import { writeResultJson } from '../db/resultJson';
 import { logger } from '../utils/logger';
 import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
-import { analyzeDocumentStructure } from '../utils/documentAnalyzer';
+import { analyzeDocumentStructure, classifySegmentsForExtraction } from '../utils/documentAnalyzer';
 import type { DocumentAnalysis } from '../utils/documentAnalyzer';
+import { extractForderungen } from '../utils/forderungenExtractor';
 import { semanticVerify } from '../utils/semanticVerifier';
 import { extractAktiva } from '../utils/aktivaExtractor';
 import { analyzeAnfechtung } from '../utils/anfechtungsAnalyzer';
@@ -78,6 +79,10 @@ function parseGermanNumber(s: string): number | null {
  *
  * Pattern 2 — Explicit "+" separated components:
  *   "SV-Beiträge 5.104,34 EUR + Säumniszuschläge 387,50 EUR + Mahngebühren 57,50 EUR" → 5549.34
+ *
+ * Pattern 3 — Single TEUR amount (German accounting, 1 TEUR = 1000 EUR):
+ *   "Lohnsteuerverbindlichkeiten: 29 TEUR (zum 31.12.2023)" → 29000
+ *   "Kreditkartenverbindlichkeiten: 10 TEUR" → 10000
  */
 function computeBetragFromTitel(titel: string): number | null {
   // Pattern 1: Nennbetrag + Zinsen (most Wandeldarlehen)
@@ -123,6 +128,21 @@ function computeBetragFromTitel(titel: string): number | null {
     }
   }
 
+  // Pattern 3: Single TEUR amount — "...: X TEUR" or "... X TEUR (...)"
+  // Only matches when there's exactly one TEUR value and no EUR values (avoids ambiguity)
+  if (/TEUR/i.test(titel) && !/\d[\d.,]*\s*EUR\b/i.test(titel)) {
+    const teurMatches = titel.match(/([\d.,]+)\s*TEUR/gi);
+    if (teurMatches && teurMatches.length === 1) {
+      const match = teurMatches[0].match(/([\d.,]+)\s*TEUR/i);
+      if (match) {
+        const val = parseGermanNumber(match[1]);
+        if (val !== null && val > 0) {
+          return Math.round(val * 1000 * 100) / 100;
+        }
+      }
+    }
+  }
+
   return null;
 }
 
@@ -142,6 +162,9 @@ function looksLikeInvalidGlaeubiger(name: string): boolean {
 
   // Number followed by date-like patterns (from confused table columns)
   if (/^\d[\d.,]*\s*\n?\d{1,2}\.\d{1,2}\.\d{4}/.test(trimmed)) return true;
+
+  // Page references used as names: "Seite 8, Abschnitt 46 — ..."
+  if (/^Seite\s+\d/i.test(trimmed)) return true;
 
   return false;
 }
@@ -394,14 +417,14 @@ function postProcessDefaults(result: ExtractionResult): ExtractionResult {
     }
   }
 
-  // 6. Compute summe_aktiva if null but positions exist
-  if (result.aktiva?.positionen?.length && result.aktiva.summe_aktiva?.wert == null) {
-    const total = result.aktiva.positionen.reduce((sum, p) => {
-      const w = p.geschaetzter_wert?.wert;
-      return sum + (typeof w === 'number' ? w : 0);
-    }, 0);
-    if (total > 0) {
-      result.aktiva.summe_aktiva = { wert: total, quelle: 'Berechnet aus Einzelpositionen' };
+  // 6. Compute freie_masse per aktiva position (never trust LLM arithmetic)
+  if (result.aktiva?.positionen?.length) {
+    for (const pos of result.aktiva.positionen) {
+      const wert = typeof pos.geschaetzter_wert?.wert === 'number' ? pos.geschaetzter_wert.wert : 0;
+      const absonderung = typeof pos.absonderung?.wert === 'number' ? pos.absonderung.wert : 0;
+      const aussonderung = typeof pos.aussonderung?.wert === 'number' ? pos.aussonderung.wert : 0;
+      const computed = Math.max(0, Math.round((wert - absonderung - aussonderung) * 100) / 100);
+      pos.freie_masse = { wert: computed, quelle: 'Berechnet: geschaetzter_wert - absonderung - aussonderung' };
     }
   }
 
@@ -486,15 +509,23 @@ function postProcessDefaults(result: ExtractionResult): ExtractionResult {
     }
   }
 
-  // 9. Recompute summe_aktiva from positions
-  if (result.aktiva?.positionen?.length && result.aktiva.summe_aktiva?.wert == null) {
+  // 9. ALWAYS recompute all derived totals — never trust LLM arithmetic
+  // 9a. summe_aktiva from positions (always overwrite, even if non-null)
+  if (result.aktiva?.positionen?.length) {
     const total = result.aktiva.positionen.reduce((sum, p) => {
       const w = p.geschaetzter_wert?.wert;
       return sum + (typeof w === 'number' ? w : 0);
     }, 0);
-    if (total > 0) {
-      result.aktiva.summe_aktiva = { wert: total, quelle: 'Berechnet aus Einzelpositionen' };
-    }
+    result.aktiva.summe_aktiva = { wert: Math.round(total * 100) / 100, quelle: 'Berechnet aus Einzelpositionen' };
+  }
+
+  // 9b. gesamtpotenzial from anfechtung vorgaenge (always overwrite)
+  if (result.anfechtung?.vorgaenge?.length) {
+    const total = result.anfechtung.vorgaenge.reduce((sum, v) => {
+      const w = v.betrag?.wert;
+      return sum + (typeof w === 'number' ? w : 0);
+    }, 0);
+    result.anfechtung.gesamtpotenzial = { wert: Math.round(total * 100) / 100, quelle: 'Berechnet aus Einzelvorgängen' };
   }
 
   logger.info('Post-processing defaults applied');
@@ -587,11 +618,60 @@ export async function processExtraction(
       report(`GPT-Extraktion (${pageCount} S.)… (Stufe 2/3)`, 35);
       result = await extractWithOpenAI(pdfBuffer, pageTexts, EXTRACTION_PROMPT, documentMap, segments);
     } else if (pageCount <= effectiveThreshold()) {
-      // Anthropic/Vertex/Langdock — uses Anthropic SDK (direct, Vertex, or proxy)
-      // Native PDF mode for anthropic + vertex; text mode for langdock
-      // Single comprehensive call — extracts base data + aktiva + anfechtung
-      report(`Vollständige Analyse (${pageCount} S.)… (Stufe 2/3)`, 35);
+      // Multi-pass extraction: base (Sonnet) + focused passes (Haiku) in parallel
+      report(`Basisanalyse (${pageCount} S.)… (Stufe 2a/3)`, 35);
       result = await extractComprehensive(pdfBuffer, pageTexts, documentMap);
+
+      // Classify pages by domain for focused extraction
+      const routing = classifySegmentsForExtraction(segments, pageCount);
+      logger.info('Seitenklassifizierung', {
+        forderungenPages: routing.forderungenPages.length,
+        aktivaPages: routing.aktivaPages.length,
+        anfechtungPages: routing.anfechtungPages.length,
+      });
+
+      // Run focused extractors in parallel (all use cheap Haiku)
+      report('Detailanalyse (Forderungen, Aktiva, Anfechtung)… (Stufe 2b/3)', 50);
+
+      if (isRateLimitedProvider()) {
+        // Rate-limited: serialize with delays
+        logger.info('Rate-limited provider: Detailanalysen seriell');
+        const forderungenResult = await extractForderungen(pageTexts, routing.forderungenPages, documentMap)
+          .catch(err => { logger.warn('Forderungen-Extraktion fehlgeschlagen', { error: err instanceof Error ? err.message : String(err) }); return null; });
+        await new Promise(r => setTimeout(r, 62_000));
+        const aktivaResult = await extractAktiva(pageTexts, documentMap, result)
+          .catch(err => { logger.warn('Aktiva-Extraktion fehlgeschlagen', { error: err instanceof Error ? err.message : String(err) }); return null; });
+        await new Promise(r => setTimeout(r, 62_000));
+        const anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result)
+          .catch(err => { logger.warn('Anfechtungsanalyse fehlgeschlagen', { error: err instanceof Error ? err.message : String(err) }); return null; });
+
+        if (forderungenResult) result.forderungen = forderungenResult;
+        if (aktivaResult) result.aktiva = aktivaResult;
+        if (anfechtungResult) result.anfechtung = anfechtungResult;
+      } else {
+        // Normal: run all three in parallel
+        const [forderungenResult, aktivaResult, anfechtungResult] = await Promise.allSettled([
+          extractForderungen(pageTexts, routing.forderungenPages, documentMap),
+          extractAktiva(pageTexts, documentMap, result),
+          analyzeAnfechtung(pageTexts, documentMap, result),
+        ]);
+
+        if (forderungenResult.status === 'fulfilled' && forderungenResult.value) {
+          result.forderungen = forderungenResult.value;
+        } else if (forderungenResult.status === 'rejected') {
+          logger.warn('Forderungen-Extraktion fehlgeschlagen', { error: forderungenResult.reason instanceof Error ? forderungenResult.reason.message : String(forderungenResult.reason) });
+        }
+        if (aktivaResult.status === 'fulfilled' && aktivaResult.value) {
+          result.aktiva = aktivaResult.value;
+        } else if (aktivaResult.status === 'rejected') {
+          logger.warn('Aktiva-Extraktion fehlgeschlagen', { error: aktivaResult.reason instanceof Error ? aktivaResult.reason.message : String(aktivaResult.reason) });
+        }
+        if (anfechtungResult.status === 'fulfilled' && anfechtungResult.value) {
+          result.anfechtung = anfechtungResult.value;
+        } else if (anfechtungResult.status === 'rejected') {
+          logger.warn('Anfechtungsanalyse fehlgeschlagen', { error: anfechtungResult.reason instanceof Error ? anfechtungResult.reason.message : String(anfechtungResult.reason) });
+        }
+      }
     } else {
       // Fallback: chunked extraction for very large PDFs
       const chunkInfo = segments.length > 0
@@ -601,11 +681,15 @@ export async function processExtraction(
       report(`Großes PDF (${pageCount} S.) — Parallele Extraktion… (Stufe 2/3)`, 35);
       result = await extractFromPageTexts(pageTexts, documentMap, segments);
 
-      // For chunked extraction, run aktiva + anfechtung separately
+      // For chunked extraction, run aktiva + anfechtung + forderungen separately
       // On rate-limited providers, serialize with delay
       report('Zusatzanalysen…', 55);
       let aktivaResult: PromiseSettledResult<Awaited<ReturnType<typeof extractAktiva>>>;
       let anfechtungResult: PromiseSettledResult<Awaited<ReturnType<typeof analyzeAnfechtung>>>;
+      let forderungenChunkedResult: PromiseSettledResult<Awaited<ReturnType<typeof extractForderungen>>>;
+
+      // Classify pages for forderungen routing even in chunked mode
+      const chunkedRouting = classifySegmentsForExtraction(segments, pageCount);
 
       if (isRateLimitedProvider()) {
         logger.info('Rate-limited provider: Zusatzanalysen seriell mit Pause');
@@ -618,10 +702,16 @@ export async function processExtraction(
         anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result)
           .then(v => ({ status: 'fulfilled' as const, value: v }))
           .catch(reason => ({ status: 'rejected' as const, reason }));
+        await new Promise(r => setTimeout(r, 62_000));
+        report('Forderungen-Analyse…', 62);
+        forderungenChunkedResult = await extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap)
+          .then(v => ({ status: 'fulfilled' as const, value: v }))
+          .catch(reason => ({ status: 'rejected' as const, reason }));
       } else {
-        [aktivaResult, anfechtungResult] = await Promise.allSettled([
+        [aktivaResult, anfechtungResult, forderungenChunkedResult] = await Promise.allSettled([
           extractAktiva(pageTexts, documentMap, result),
           analyzeAnfechtung(pageTexts, documentMap, result),
+          extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap),
         ]);
       }
 
@@ -635,6 +725,12 @@ export async function processExtraction(
         result.anfechtung = anfechtungResult.value;
       } else if (anfechtungResult.status === 'rejected') {
         logger.warn('Anfechtungsanalyse failed, continuing without', { error: anfechtungResult.reason instanceof Error ? anfechtungResult.reason.message : String(anfechtungResult.reason) });
+      }
+
+      if (forderungenChunkedResult.status === 'fulfilled' && forderungenChunkedResult.value) {
+        result.forderungen = forderungenChunkedResult.value;
+      } else if (forderungenChunkedResult.status === 'rejected') {
+        logger.warn('Forderungen-Extraktion fehlgeschlagen', { error: forderungenChunkedResult.reason instanceof Error ? forderungenChunkedResult.reason.message : String(forderungenChunkedResult.reason) });
       }
     }
 
