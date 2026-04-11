@@ -235,7 +235,7 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICH
         "kategorie": "immobilien|fahrzeuge|bankguthaben|lebensversicherungen|wertpapiere_beteiligungen|forderungen_schuldner|bewegliches_vermoegen|geschaeftsausstattung|steuererstattungen|einkommen"
       }
     ],
-    "summe_aktiva": {"wert": 0, "quelle": ""},
+    "summe_aktiva": {"wert": null, "quelle": ""},
     "massekosten_schaetzung": {"wert": 0, "quelle": ""},
     "insolvenzanalyse": {
       "zahlungsunfaehigkeit_17": {"status": "ja|nein|offen", "begruendung": ""},
@@ -259,7 +259,7 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICH
         "ist_nahestehend": false
       }
     ],
-    "gesamtpotenzial": {"wert": 0, "quelle": ""},
+    "gesamtpotenzial": {"wert": null, "quelle": ""},
     "zusammenfassung": ""
   }
 }
@@ -290,11 +290,7 @@ WICHTIG — "nicht bekannt" betrifft NUR das jeweilige Feld:
 Wenn eine DOKUMENTSTRUKTUR mitgegeben wird, nutze sie NUR um zu verstehen welcher Dokumentteil was enthält. Die SEITENZAHLEN in der quelle müssen von der EXAKTEN Seite kommen, auf der du den Wert im Akteninhalt findest — NICHT aus der Dokumentstruktur-Übersicht.
 
 Extrahiere ALLE verfügbaren Daten. Bei fehlenden Informationen setze null/leere Strings und fülle fehlende_informationen mit konkreten Hinweisen, wie die Information ermittelt werden kann.
-Für einzelforderungen: Erstelle für JEDE in der Akte genannte Forderung/Verbindlichkeit ein eigenes Objekt. Der Antragsteller (der den Insolvenzantrag gestellt hat) wird mit ist_antragsteller: true markiert. art: "sozialversicherung" für Krankenkassen/Rentenversicherung/Berufsgenossenschaften, "steuer" für Finanzamt/Zoll, "bank" für Banken/Sparkassen/Kreditinstitute, "lieferant" für Lieferanten/Dienstleister, "arbeitnehmer" für Lohn-/Gehaltsforderungen, "miete" für Miet-/Pachtforderungen, "sonstige" für alles andere. rang: Standard ist "§38 Insolvenzforderung". Wenn nur ein Gesamtbetrag ohne Gläubigeraufschlüsselung vorhanden ist, eine einzelne Forderung mit dem Antragsteller als Gläubiger erstellen. sicherheit: NUR angeben wenn in der Akte eine konkrete Sicherheit für diese Forderung genannt wird (z.B. Grundschuld, Sicherungsübereignung, Eigentumsvorbehalt). art der Sicherheit, Gegenstand, geschätzter Wert und ob absonderungsberechtigt. Wenn keine Sicherheit erwähnt: sicherheit weglassen. gesicherte_forderungen und ungesicherte_forderungen: Summen wenn aus der Akte ableitbar, sonst null.
-WICHTIG — Forderungsdetails im titel-Feld: Wenn eine Forderung aufgeschlüsselt ist (z.B. Hauptforderung, Säumniszuschläge, Mahngebühren, Antragskosten), trage die AUFSCHLÜSSELUNG in das titel-Feld als Text ein. Beispiel: "SV-Beiträge 5.104,34 EUR + Säumniszuschläge 387,50 EUR + Mahngebühren 57,50 EUR + Antragskosten 216,00 EUR". Extrahiere auch: zeitraum_von/zeitraum_bis der Forderung (z.B. "01.11.2024" bis "31.08.2025").
-ABSOLUTES VERBOT — Beträge NIEMALS selbst berechnen: Wenn eine Forderung aus Teilbeträgen besteht (z.B. Nennbetrag + Zinsen bei Wandeldarlehen, oder Hauptforderung + Nebenforderungen), setze betrag auf NULL. Trage die Komponenten NUR in das titel-Feld ein, z.B. "Wandeldarlehen: Nennbetrag 50.000,00 EUR; Zinsen 1.791,67 EUR". Die Berechnung der Summe erfolgt automatisch im System. Setze betrag NUR dann, wenn ein einzelner EXPLIZITER Gesamtbetrag im Dokument steht. NIEMALS zwei oder mehr Zahlen addieren.
-WICHTIG — glaeubiger ist IMMER ein Name: Das Feld glaeubiger.wert MUSS der Name einer Person, Firma oder Organisation sein (z.B. "Huetti Ventures GmbH", "Stefan Zuschke", "Finanzamt München"). NIEMALS Beträge (z.B. "40.000,00"), Berechnungen (z.B. "751937.5") oder Datumsangaben (z.B. "05.10.2022") als Gläubigernamen eintragen. Wenn der Name des Gläubigers nicht eindeutig aus dem Dokument hervorgeht, setze glaeubiger auf null.
-WICHTIG — betroffene_arbeitnehmer: Extrahiere ALLE namentlich oder zahlenmäßig genannten betroffenen Arbeitnehmer. Wenn ein Arbeitnehmer namentlich genannt wird (z.B. "für unser Mitglied Daniela-Adelina Mitache"), erstelle einen Eintrag mit anzahl: 1, typ: "Name des AN" und quelle. Auch "laufende monatliche Beiträge" in Höhe von X EUR sind ein wichtiger Hinweis — trage sie als separate Information in den Titel der Forderung ein.
+Für einzelforderungen: Erstelle nur eine GROBE Übersicht — die detaillierte Extraktion aller Einzelforderungen erfolgt in einem separaten Analyseschritt. Trage hier nur den Antragsteller (mit ist_antragsteller: true) und offensichtliche Hauptforderungen ein. Keine Vollständigkeit nötig.
 Für verfahrensstadium: Erkenne aus dem Beschluss/der Akte: "Eröffnungsverfahren" (vorläufige Verwaltung angeordnet, Verfahren noch nicht eröffnet), "Eröffnetes Verfahren" (Eröffnungsbeschluss ergangen), oder "Unbekannt". Für verfahrensart: "Regelinsolvenz" (Unternehmen/Selbständige), "Verbraucherinsolvenz" (§ 304 InsO, natürliche Person ohne selbständige Tätigkeit), oder "Unbekannt".
 Für ehegatte: Wenn im Insolvenzantrag oder der Vermögensauskunft ein Ehegatte/Lebenspartner genannt wird: Name, Geburtsdatum, Güterstand (oft in Vermögensauskunft oder Ehevertrag). gueterstand: "zugewinngemeinschaft" (gesetzlicher Güterstand, Standard wenn verheiratet und nichts anderes angegeben), "guetertrennung" (wenn Ehevertrag vorhanden), "guetergemeinschaft" (selten), "unbekannt". Wenn kein Ehegatte erwähnt: ehegatte weglassen.
 WICHTIG — betriebsstaette_adresse vs. aktuelle_adresse: Das sind ZWEI VERSCHIEDENE Felder. aktuelle_adresse = Wohnanschrift (aus Meldeauskunft). betriebsstaette_adresse = Geschäftsadresse (aus Insolvenzantrag, Leistungsbescheid, Gewerberegister). Bei Einzelunternehmern stehen oft UNTERSCHIEDLICHE Adressen im Antrag (unter dem Firmennamen) und in der Meldeauskunft (Privatanschrift). Die Adresse im Insolvenzantrag UNTER oder NEBEN dem Firmennamen ist die Betriebsstätte, NICHT die Privatanschrift. NIEMALS die Meldeadresse als betriebsstaette_adresse verwenden wenn eine andere Adresse im Antrag steht. Beispiel: Meldeauskunft sagt "Niederstraße 118", Antrag sagt "Mehmet Bayar, Niederstraße 87, 54293 Trier, handelnd als Einzelunternehmer mit Pizza Kebaphaus" → aktuelle_adresse = Niederstraße 118, betriebsstaette_adresse = Niederstraße 87.
@@ -314,35 +310,9 @@ ERINNERUNG: Jeder nicht-leere wert braucht eine quelle (Seite X, ...). Keine Aus
 
 WICHTIG für fehlende_informationen: Jeder Eintrag MUSS ein Objekt mit allen drei Feldern sein. Das Feld "information" darf NIEMALS leer sein — trage dort stets eine kurze, prägnante Bezeichnung der fehlenden Information ein (z.B. "Beschlussdatum des Insolvenzgerichts", "Konkrete Bankverbindungen"). Keine Platzhalter wie {"information":"","grund":"..."} ausgeben. Wenn nichts fehlt, leere Liste []. Maximal 15 Einträge — nur die wichtigsten fehlenden Informationen, keine Wiederholungen.
 
-REGELN FÜR AKTIVA (Vermögenswerte):
-Identifiziere Vermögenswerte in diesen 10 Kategorien:
-1. immobilien — Grundstücke, Häuser, Wohnungen (Belastungen wie Grundschulden/Hypotheken abziehen!)
-2. fahrzeuge — PKW, LKW, Motorräder (Zeitwert; sicherungsübereignete kennzeichnen)
-3. bankguthaben — Konten, Guthaben (beachte Pfändungsschutzkonto § 850k ZPO)
-4. lebensversicherungen — Lebens-/Rentenversicherungen mit Rückkaufswert
-5. wertpapiere_beteiligungen — Aktien, Fonds, GmbH-Anteile
-6. forderungen_schuldner — Forderungen des Schuldners gegen Dritte
-7. bewegliches_vermoegen — Schmuck, Kunst, Sammlungen (unpfändbare Haushaltsgegenstände § 811 ZPO nicht mitzählen)
-8. geschaeftsausstattung — Büroausstattung, Maschinen, Warenlager
-9. steuererstattungen — erwartete Steuererstattungsansprüche
-10. einkommen — laufendes Einkommen (NUR pfändbarer Anteil nach § 850c ZPO, Pfändungsfreigrenzen berücksichtigen)
-- Belastungen berücksichtigen: Grundschulden, Sicherungsübereignungen bei Wertermittlung abziehen
-- summe_aktiva: Gesamtsumme aller Aktiva. massekosten_schaetzung: geschätzte Verfahrenskosten nach § 54 InsO
-- Wenn keine Vermögenswerte gefunden: leere positionen-Liste zurückgeben
-- Insolvenzanalyse: Bewerte §§ 17, 18, 19, 26 InsO separat mit "ja"/"nein"/"offen" und konkreter Begründung aus der Akte. § 19 (Überschuldung) nur bei juristischen Personen relevant — bei natürlichen Personen status="offen"
+REGELN FÜR AKTIVA: Die detaillierte Aktiva-Analyse erfolgt in einem separaten Schritt. Trage hier nur offensichtliche Vermögenswerte ein, die du beim Lesen direkt findest. Keine Vollständigkeit nötig. summe_aktiva auf null setzen.
 
-REGELN FÜR ANFECHTUNG (§§ 129-147 InsO):
-Identifiziere potenziell anfechtbare Rechtshandlungen:
-- § 130 Kongruente Deckung: Zahlungen auf fällige Forderungen, 3 Monate vor Antrag
-- § 131 Inkongruente Deckung: Sicherungen die der Gläubiger nicht beanspruchen konnte, 3 Monate vor Antrag
-- § 133 Vorsätzliche Benachteiligung: Handlungen mit Benachteiligungsvorsatz, 10 Jahre vor Antrag
-- § 134 Unentgeltliche Leistung: Schenkungen und unentgeltliche Zuwendungen, 4 Jahre vor Antrag
-- § 135 Gesellschafterdarlehen: Rückzahlung von Gesellschafterdarlehen, 1 Jahr vor Antrag
-- § 138 InsO Nahestehende: Ehegatten, Lebenspartner, Verwandte, Gesellschafter >25%
-- anfechtbar_ab: Berechne aus Antragsdatum minus Rückrechnungsfrist der jeweiligen Grundlage
-- risiko: "hoch" (klare Anfechtbarkeit), "mittel" (abhängig von Beweislage), "gering" (fraglich, aber prüfenswert)
-- Wenn keine anfechtbaren Vorgänge erkennbar: leere vorgaenge-Liste zurückgeben
-- gesamtpotenzial: Summe aller potenziell anfechtbaren Beträge`;
+REGELN FÜR ANFECHTUNG: Die detaillierte Anfechtungsanalyse erfolgt in einem separaten Schritt. Trage hier nur offensichtliche anfechtbare Vorgänge ein. gesamtpotenzial auf null setzen.`;
 
 // ─── Helpers ───
 
@@ -514,9 +484,23 @@ function mergeExtractionResults(results: ExtractionResult[]): ExtractionResult {
   if (results.length === 0) {
     return extractionResultSchema.parse({}) as unknown as ExtractionResult;
   }
-  return results.reduce((merged, current) =>
-    mergeField(merged, current) as ExtractionResult
+  const merged = results.reduce((acc, current) =>
+    mergeField(acc, current) as ExtractionResult
   );
+
+  // Reset derived totals to null — post-processing will recompute from merged positions.
+  // Without this, a wrong LLM total from one chunk survives the merge.
+  if (merged.aktiva) {
+    merged.aktiva.summe_aktiva = { wert: null as unknown as number, quelle: '' };
+  }
+  if (merged.forderungen) {
+    merged.forderungen.gesamtforderungen = { wert: null as unknown as number, quelle: '' };
+  }
+  if (merged.anfechtung) {
+    merged.anfechtung.gesamtpotenzial = { wert: null as unknown as number, quelle: '' };
+  }
+
+  return merged;
 }
 
 // ─── JSON extraction from Claude response ───
