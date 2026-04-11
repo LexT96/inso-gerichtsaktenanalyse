@@ -42,39 +42,42 @@ docker compose -f docker-compose.dev.yml up --build  # Dev with volume mounts
 PDF → pdfProcessor (watermark removal) → pageTexts
                         ↓
           Stage 1: documentAnalyzer.ts (Haiku)
-          Maps document structure: which pages = which document type
-                        ↓ documentMap
-          Stage 2: anthropic.ts (Sonnet + Extended Thinking)
-          Single comprehensive call: extracts ALL fields + aktiva + anfechtung
-          Uses system prompt (prompt injection defense) + prompt caching
-          PDFs ≤500 pages: native PDF mode (Claude reads images directly)
-          PDFs >500 pages: chunked fallback with separate aktiva/anfechtung
-                        ↓ ExtractionResult
+          Maps document structure + classifies pages by domain (forderungen/aktiva/anfechtung)
+                        ↓ documentMap + ExtractionRouting
+          Stage 2a: anthropic.ts (Sonnet + Extended Thinking)
+          Base extraction: scalar fields only (verfahrensdaten, schuldner, antragsteller, etc.)
+          Trimmed prompt — no detailed forderungen/aktiva/anfechtung instructions
+                        ↓ base ExtractionResult
+          Stage 2b: Parallel focused passes (overwrite base result sections)
+          ├── forderungenExtractor.ts (Sonnet) — all einzelforderungen from creditor pages
+          ├── aktivaExtractor.ts (Haiku) — all aktiva positions from asset pages
+          └── anfechtungsAnalyzer.ts (Haiku) — anfechtung from transaction pages
+                        ↓ merged ExtractionResult
           Stage 3: semanticVerifier.ts (Haiku)
           Verifies + corrects fields against actual page texts
-          Skips computed fields (pfaendbarer_betrag) and synthesized fields (.titel)
                         ↓
           Stage 3b: Targeted re-extraction (Haiku)
           Re-extracts only fields removed by Stage 3 (recovers 5-15%)
                         ↓
           Stage 3c: Focused handwriting extraction (native PDF only)
           Detects Fragebogen pages → extracts as mini-PDF → focused OCR prompt
-          Merges handwritten fields (telefon, email, etc.) into main result
                         ↓
-          Stage 4: Post-processing defaults
-          Gender inference from vorname, boolean defaults, arbeitnehmer fallback
-          All with transparent quelle ("Abgeleitet aus...", "Standard-Annahme...")
+          Stage 4: Post-processing (deterministic, NO LLM arithmetic)
+          Gender inference, boolean defaults, arbeitnehmer fallback
+          ALWAYS recomputes: summe_aktiva, gesamtforderungen, gesamtpotenzial, freie_masse
+          Parses TEUR amounts from titel ("X TEUR" and "TEUR X" → X * 1000)
+          Computes betrag from Nennbetrag+Zinsen in titel
+          Rejects page references as glaeubiger names
                         ↓ verified ExtractionResult
           letterChecklist.ts — validates 10 standard letter types
 ```
 
-- **Stage 1 — Document Analysis** (`src/utils/documentAnalyzer.ts`): Haiku call → text map of document structure. Graceful degradation on failure.
-- **Stage 2 — Comprehensive Extraction** (`src/services/anthropic.ts`): Single Sonnet call with Extended Thinking (10K token budget). Streaming API for long operations. System prompt separated from user content. Prompt caching via `cache_control: ephemeral`. Extracts: verfahrensdaten (+ internationaler_bezug, eigenverwaltung), schuldner (+ ehegatte, beschaeftigung, pfaendungsberechnung + 30 corporate/tax/misc fields), antragsteller, einzelforderungen (dynamic array with sicherheiten), aktiva (10 categories + insolvenzanalyse + absonderung/aussonderung/freie_masse), anfechtung (§§ 129-147 InsO), ermittlungsergebnisse, standardanschreiben. Includes handwriting hints for reading Fragebogen forms.
+- **Stage 1 — Document Analysis** (`src/utils/documentAnalyzer.ts`): Haiku call → text map of document structure. `classifySegmentsForExtraction()` routes pages by keyword matching to forderungen/aktiva/anfechtung domains. Graceful degradation on failure.
+- **Stage 2a — Base Extraction** (`src/services/anthropic.ts`): Sonnet call with Extended Thinking. Trimmed prompt extracts only scalar fields. Forderungen/aktiva/anfechtung sections are stubs ("detaillierte Extraktion erfolgt in separatem Schritt").
+- **Stage 2b — Focused Passes** (parallel): `forderungenExtractor.ts` (Sonnet, not Haiku — Haiku drops names from long tables), `aktivaExtractor.ts` (Haiku), `anfechtungsAnalyzer.ts` (Haiku). Each gets only domain-relevant pages via `ExtractionRouting`. Results REPLACE the corresponding section from base extraction. Rate-limited providers serialize with 62s delays.
 - **Stage 3c — Handwriting Extraction** (`src/services/extraction.ts`): Detects Fragebogen/Anlage pages by text markers, extracts them as mini-PDF via `pdf-lib`, sends to Claude with focused OCR prompt. Merges handwritten fields (telefon, email, betriebsstaette, etc.) into main result. Only runs in native PDF mode (direct Anthropic API).
-- **Stage 4 — Post-processing Defaults** (`src/services/extraction.ts`): Gender inference from ~80 common German first names, boolean defaults (internationaler_bezug, eigenverwaltung, betriebsrat → false), arbeitnehmer count fallback. All defaults include transparent quelle.
+- **Stage 4 — Post-processing** (`src/services/extraction.ts`): ALL arithmetic is deterministic code, never LLM. `summe_aktiva` from positions, `gesamtforderungen` from einzelforderungen, `gesamtpotenzial` from vorgaenge, `freie_masse` per position (wert - absonderung - aussonderung). `computeBetragFromTitel()` parses Nennbetrag+Zinsen and TEUR patterns. `looksLikeInvalidGlaeubiger()` rejects numbers, dates, and page references as creditor names. `mergeExtractionResults()` resets derived totals to null before post-processing.
 - **Stage 3 — Semantic Verification** (`src/utils/semanticVerifier.ts`): Collects all `{wert, quelle}` fields (except `SKIP_VERIFICATION_PATHS` and `.titel` suffix fields), verifies against page texts. Can: confirm, correct source, correct value, or remove. Returns `removedPaths` for targeted re-extraction.
-- **Aktiva Extractor** (`src/utils/aktivaExtractor.ts`): Fallback for chunked mode. 10 asset categories, InsVV-based cost estimation, insolvency analysis (§§ 17-19, 26 InsO).
-- **Anfechtung Analyzer** (`src/utils/anfechtungsAnalyzer.ts`): Fallback for chunked mode. Identifies contestable transactions with lookback periods and risk assessment.
 
 ### Gutachten Generation (`src/utils/gutachtenGenerator.ts`)
 - **Templates**: 3 DOCX templates in `gutachtenvorlagen/` (natürliche Person, juristische Person, Personengesellschaft). Rebuilt from 3 real finalized TBS Gutachten — all `[...]` replaced with `[[SLOT_NNN: descriptive context]]` markers, standard legal boilerplate filled in (VID §4, §17/§19 definitions, Zuständigkeit). Change markers `⚡KI:` for review.
