@@ -19,9 +19,9 @@ import type { DocumentSegment } from '../utils/documentAnalyzer';
 const IS_LANGDOCK = Boolean(process.env.OPENAI_BASE_URL?.includes('langdock'));
 const IS_AZURE = Boolean(process.env.OPENAI_BASE_URL?.includes('azure') || process.env.OPENAI_BASE_URL?.includes('cognitiveservices'));
 // Langdock: use 100 DPI (1100 tokens/page) → 50 pages fit in 60K TPM
-// Direct/Azure: use 150 DPI (2700 tokens/page) → 80 pages fit in 1M context
+// Direct/Azure: use 150 DPI (2700 tokens/page) → 50 images max (Azure limit)
 const IMAGE_DPI = IS_LANGDOCK ? 100 : 150;
-const CHUNK_PAGE_THRESHOLD = IS_LANGDOCK ? 50 : 80;
+const CHUNK_PAGE_THRESHOLD = IS_LANGDOCK ? 50 : 50;
 
 let openaiClient: OpenAI | null = null;
 
