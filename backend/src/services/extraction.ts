@@ -128,17 +128,21 @@ function computeBetragFromTitel(titel: string): number | null {
     }
   }
 
-  // Pattern 3: Single TEUR amount — "...: X TEUR" or "... X TEUR (...)"
+  // Pattern 3: Single TEUR amount — matches both "X TEUR" and "TEUR X"
   // Only matches when there's exactly one TEUR value and no EUR values (avoids ambiguity)
   if (/TEUR/i.test(titel) && !/\d[\d.,]*\s*EUR\b/i.test(titel)) {
-    const teurMatches = titel.match(/([\d.,]+)\s*TEUR/gi);
-    if (teurMatches && teurMatches.length === 1) {
-      const match = teurMatches[0].match(/([\d.,]+)\s*TEUR/i);
-      if (match) {
-        const val = parseGermanNumber(match[1]);
-        if (val !== null && val > 0) {
-          return Math.round(val * 1000 * 100) / 100;
-        }
+    // Match both "29 TEUR" and "TEUR 29"
+    const allMatches: string[] = [];
+    const patternAfter = titel.matchAll(/([\d.,]+)\s*TEUR/gi);
+    for (const m of patternAfter) allMatches.push(m[1]);
+    const patternBefore = titel.matchAll(/TEUR\s+([\d.,]+)/gi);
+    for (const m of patternBefore) allMatches.push(m[1]);
+    // Deduplicate (same number might match both patterns)
+    const unique = [...new Set(allMatches)];
+    if (unique.length === 1) {
+      const val = parseGermanNumber(unique[0]);
+      if (val !== null && val > 0) {
+        return Math.round(val * 1000 * 100) / 100;
       }
     }
   }
