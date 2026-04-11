@@ -88,6 +88,8 @@ WICHTIG — glaeubiger ist IMMER ein Name: Das Feld glaeubiger.wert MUSS der Nam
 
 WICHTIG — VOLLSTÄNDIGKEIT: Extrahiere JEDEN einzelnen Gläubiger/Forderung. Bei langen Tabellen (z.B. 15+ Wandeldarlehen) MÜSSEN ALLE Einträge extrahiert werden — auch die letzten. Zähle die Einträge in der Tabelle und vergleiche mit deiner Ausgabe.
 
+WICHTIG — TEUR-Tabellen EXAKT lesen: Wenn eine Tabelle Positionen in TEUR auflistet (z.B. "Lohnsteuerverbindlichkeiten 29, Umsatzsteuer 11, Kreditkarten 10, Sozialversicherungsträger 5"), ordne JEDEN Betrag EXAKT der Zeile zu, in der er steht. NICHT die Zeilen durcheinanderbringen. Lies die Tabelle Zeile für Zeile von oben nach unten. Trage den Betrag im titel-Feld als "TEUR X" ein — die Umrechnung in EUR erfolgt automatisch. Wenn der Gläubigername generisch ist (z.B. "Kreditkarten", "Sonstige"), verwende genau diese Bezeichnung als glaeubiger.
+
 Für jeden Gläubiger erstelle ein einzelnes Objekt:
 - glaeubiger: Name der Person/Firma/Organisation
 - art: "sozialversicherung"|"steuer"|"bank"|"lieferant"|"arbeitnehmer"|"miete"|"sonstige"
