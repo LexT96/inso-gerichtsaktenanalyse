@@ -110,12 +110,13 @@ doc.close()
       content.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'high' } });
     }
 
-    logger.info('Sending images to GPT', { pages: files.length, model });
+    logger.info('Sending images to GPT', { pages: files.length, model, jsonMode: true });
 
     const response = await client.chat.completions.create({
       model,
       messages: [{ role: 'user', content }],
       max_completion_tokens: 32000,
+      response_format: { type: 'json_object' },
     });
 
     const text = response.choices[0]?.message?.content || '';
@@ -322,12 +323,14 @@ doc.close()
       model, totalPages: pageTexts.length, textPages: textPages.length,
       textChars: charCount, imagePages: keyPageIndices.length,
       estimatedTokens: Math.round(charCount / 3.5 + imageTokenBudget),
+      jsonMode: true,
     });
 
     const response = await client.chat.completions.create({
       model,
       messages: [{ role: 'user', content }],
       max_completion_tokens: 32000,
+      response_format: { type: 'json_object' },
     });
 
     const text = response.choices[0]?.message?.content || '';

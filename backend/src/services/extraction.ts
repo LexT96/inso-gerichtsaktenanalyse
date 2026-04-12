@@ -5,7 +5,7 @@ import { detectProvider, supportsNativePdf, isRateLimited, logProviderConfig } f
 import { computeExtractionStats } from '../utils/computeStats';
 import { config } from '../config';
 import { extractTextPerPage, removeWatermarksFromTexts } from './pdfProcessor';
-import { isScannedPdf, isOcrConfigured, ocrPdf } from './ocrService';
+import { isScannedPdf, isOcrConfigured, ocrPdf, type OcrResult } from './ocrService';
 import { getDb } from '../db/database';
 import { writeResultJson } from '../db/resultJson';
 import { logger } from '../utils/logger';
@@ -33,6 +33,30 @@ const effectiveThreshold = (): number => {
 };
 
 import type { ExtractionStats } from '../utils/computeStats';
+
+/**
+ * Build OCR confidence hints for pages with low-quality OCR.
+ * Appended to extractor prompts (NOT pageTexts) so the LLM knows which words are uncertain.
+ * Follows DokumenteAnalyse V3 pattern: >= 0.95 auto-accept, 0.80-0.95 flag, < 0.80 reject.
+ */
+function buildOcrConfidenceHints(ocrResult: OcrResult | null): string {
+  if (!ocrResult) return '';
+
+  const hints: string[] = [];
+  for (const page of ocrResult.pages) {
+    if (!page.avgConfidence || page.avgConfidence >= 0.90) continue;
+    const lowWords = (page.lowConfidenceWords || [])
+      .filter(w => w.confidence < 0.80)
+      .slice(0, 20); // Cap per page to avoid bloat
+    if (lowWords.length === 0) continue;
+
+    const wordList = lowWords.map(w => `"${w.text}" (${(w.confidence * 100).toFixed(0)}%)`).join(', ');
+    hints.push(`Seite ${page.pageNumber} (OCR-Qualität: ${(page.avgConfidence * 100).toFixed(0)}%): Unsichere Wörter: ${wordList}`);
+  }
+
+  if (hints.length === 0) return '';
+  return `\n--- OCR-QUALITÄTSHINWEISE ---\nDie folgenden Seiten haben niedrige OCR-Qualität. Prüfe die markierten Wörter besonders sorgfältig und korrigiere offensichtliche OCR-Fehler anhand des Kontexts.\n${hints.join('\n')}\n--- ENDE OCR-HINWEISE ---\n`;
+}
 
 function isEmpty(field: { wert?: unknown; quelle?: unknown } | null | undefined): boolean {
   if (!field) return true;
@@ -610,6 +634,9 @@ export async function processExtraction(
     const pageCount = pageTexts.length;
     logger.info('PDF Seitenanzahl ermittelt', { pageCount });
 
+    // Track OCR result for confidence hints
+    let ocrResult: OcrResult | null = null;
+
     // If scanned PDF (near-zero text), run Azure Document Intelligence OCR
     if (isScannedPdf(pageTexts) && isOcrConfigured()) {
       report('Gescanntes PDF erkannt — OCR wird durchgeführt…', 10);
@@ -617,7 +644,7 @@ export async function processExtraction(
         avgCharsPerPage: Math.round(pageTexts.reduce((s, t) => s + t.length, 0) / pageTexts.length),
       });
       try {
-        const ocrResult = await ocrPdf(pdfBuffer);
+        ocrResult = await ocrPdf(pdfBuffer);
         // Build pageTexts from clean OCR line text only.
         // Table structures and confidence data are available in ocrResult
         // but NOT injected into pageTexts — they bloat the prompt (129 tables
@@ -643,10 +670,20 @@ export async function processExtraction(
       }
     }
 
+    // Build OCR confidence hints (empty string for digital PDFs)
+    const ocrHints = buildOcrConfidenceHints(ocrResult);
+    if (ocrHints) {
+      logger.info('OCR-Qualitätshinweise erstellt', {
+        pagesWithLowConfidence: ocrResult!.pages.filter(p => p.avgConfidence && p.avgConfidence < 0.90).length,
+      });
+    }
+
     report(`${pageCount} Seiten erkannt — Dokumentstruktur wird analysiert… (Stufe 1/3)`, 15);
 
     // Stage 1: Analyze document structure → text map + parsed segments
-    const { mapText: documentMap, segments } = await analyzeDocumentStructure(pageTexts);
+    const { mapText: rawDocumentMap, segments } = await analyzeDocumentStructure(pageTexts);
+    // Append OCR confidence hints to document map — flows into all extractor prompts
+    const documentMap = ocrHints ? `${rawDocumentMap}${ocrHints}` : rawDocumentMap;
 
     report('Daten werden extrahiert… (Stufe 2/3)', 30);
 
@@ -940,7 +977,73 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
     report('Nachbearbeitung…', 89);
     result = postProcessDefaults(result);
 
-    report('Standardanschreiben werden geprüft…', 90);
+    // Stage 5: Validation-driven retry — check critical fields, retry base extraction once if missing
+    const criticalMissing: string[] = [];
+    if (!result.verfahrensdaten?.aktenzeichen?.wert) criticalMissing.push('Aktenzeichen');
+    if (!result.verfahrensdaten?.gericht?.wert) criticalMissing.push('Gericht');
+    if (!result.schuldner?.name?.wert && !result.schuldner?.firma?.wert) criticalMissing.push('Name/Firma des Schuldners');
+    if (!result.verfahrensdaten?.beschlussdatum?.wert && !result.verfahrensdaten?.antragsdatum?.wert) criticalMissing.push('Beschluss-/Antragsdatum');
+
+    if (criticalMissing.length > 0) {
+      report('Kritische Felder fehlen — Nachextraktion…', 90);
+      logger.info('Validation-driven retry: kritische Felder fehlen', { missing: criticalMissing });
+      try {
+        const retryPrompt = `Bei der Extraktion dieser Insolvenzakte fehlen kritische Felder: ${criticalMissing.join(', ')}.
+
+Prüfe die Akte NOCHMAL SORGFÄLTIG und extrahiere NUR diese fehlenden Felder.
+Denke Schritt für Schritt:
+1. Welche Dokumenttypen enthält die Akte? (Beschluss, Antrag, Anlage)
+2. Wo stehen typischerweise ${criticalMissing.join(', ')}? (Rubrum, Beschluss, Antrag)
+3. Suche gezielt auf den relevanten Seiten.
+
+Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, ..."}, ...}
+Mögliche Felder: verfahrensdaten.aktenzeichen, verfahrensdaten.gericht, verfahrensdaten.beschlussdatum, verfahrensdaten.antragsdatum, schuldner.name, schuldner.vorname, schuldner.firma`;
+
+        // Send first 30 pages (critical data is always at the start)
+        const retryPages = pageTexts.slice(0, Math.min(30, pageTexts.length))
+          .map((t, i) => `=== SEITE ${i + 1} ===\n${t}`).join('\n\n');
+
+        const retryResponse = await callWithRetry(() => anthropic.messages.create({
+          model: config.EXTRACTION_MODEL,
+          max_tokens: 4096,
+          temperature: 0,
+          messages: [{ role: 'user' as const, content: `${retryPrompt}\n\n${retryPages}` }],
+        }));
+
+        const retryText = retryResponse.content
+          .filter((c) => c.type === 'text')
+          .map((c) => (c as { text: string }).text).join('');
+
+        const retryJson = extractJsonFromText(retryText);
+        const retryData = JSON.parse(retryJson) as Record<string, { wert: unknown; quelle: string }>;
+
+        let recovered = 0;
+        for (const [path, value] of Object.entries(retryData)) {
+          if (!value?.wert || !value?.quelle) continue;
+          const parts = path.split('.');
+          let obj: Record<string, unknown> = result as unknown as Record<string, unknown>;
+          for (let i = 0; i < parts.length - 1; i++) {
+            if (!obj[parts[i]] || typeof obj[parts[i]] !== 'object') break;
+            obj = obj[parts[i]] as Record<string, unknown>;
+          }
+          const field = obj[parts[parts.length - 1]] as { wert: unknown; quelle: string } | undefined;
+          if (field && (field.wert === null || field.wert === undefined || field.wert === '')) {
+            field.wert = value.wert;
+            field.quelle = value.quelle;
+            recovered++;
+          }
+        }
+
+        if (recovered > 0) {
+          logger.info(`Validation-retry recovered ${recovered}/${criticalMissing.length} critical fields`);
+          result = postProcessDefaults(result); // Re-run post-processing
+        }
+      } catch (retryErr) {
+        logger.warn('Validation-driven retry failed', { error: retryErr instanceof Error ? retryErr.message : String(retryErr) });
+      }
+    }
+
+    report('Standardanschreiben werden geprüft…', 91);
     result = validateLettersAgainstChecklists(result);
 
     const processingTimeMs = Date.now() - startTime;

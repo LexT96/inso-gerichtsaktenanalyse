@@ -90,7 +90,7 @@ function loadFromCache(key: string): OcrResult | null {
 
 function saveToCache(key: string, result: OcrResult): void {
   if (!fs.existsSync(OCR_CACHE_DIR)) fs.mkdirSync(OCR_CACHE_DIR, { recursive: true });
-  // Only cache line text (strip wordConfidences to save disk space)
+  // Cache line text + confidence metadata (strip full wordConfidences to save disk space)
   const slim: OcrResult = {
     pages: result.pages.map(p => ({
       pageNumber: p.pageNumber,
@@ -98,6 +98,7 @@ function saveToCache(key: string, result: OcrResult): void {
       lines: p.lines,
       tables: p.tables,
       avgConfidence: p.avgConfidence,
+      lowConfidenceWords: p.lowConfidenceWords,
     })),
     totalChars: result.totalChars,
   };
