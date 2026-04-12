@@ -247,9 +247,30 @@ export async function analyzeAnfechtung(
   relevantPages?: number[],
 ): Promise<Anfechtungsanalyse | null> {
   try {
-    // Use only relevant pages if routing is available, otherwise all pages
-    const pages = relevantPages ?? pageTexts.map((_, i) => i + 1);
-    logger.info('Anfechtungsanalyse gestartet', { totalPages: pageTexts.length, relevantPages: pages.length });
+    // Use all pages by default. Only use routed subset if all pages exceed token limit.
+    const MAX_CHARS = 450_000; // ~180K tokens at 2.5 chars/tok, under 200K API limit
+    let pages = pageTexts.map((_, i) => i + 1);
+    const totalChars = pageTexts.reduce((sum, t) => sum + t.length, 0);
+
+    if (totalChars > MAX_CHARS) {
+      if (relevantPages && relevantPages.length < pages.length) {
+        pages = relevantPages;
+      }
+      let charSum = 0;
+      const fittingPages: number[] = [];
+      for (const p of pages) {
+        charSum += (pageTexts[p - 1] ?? '').length + 20;
+        if (charSum > MAX_CHARS) break;
+        fittingPages.push(p);
+      }
+      if (fittingPages.length < pages.length) {
+        pages = fittingPages;
+      }
+      logger.info('Anfechtungsanalyse: Token-Budget-Guard', {
+        totalChars, maxChars: MAX_CHARS, allPages: pageTexts.length, usingPages: pages.length,
+      });
+    }
+    logger.info('Anfechtungsanalyse gestartet', { totalPages: pageTexts.length, usingPages: pages.length });
 
     const mapBlock = documentMap
       ? `\n--- STRUKTURÜBERSICHT (nur zur Orientierung, KEINE Seitenzahlen hieraus verwenden) ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---\n`
@@ -261,7 +282,7 @@ export async function analyzeAnfechtung(
       .map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`)
       .join('\n\n');
 
-    const content = `${ANFECHTUNG_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pages.length} relevante Seiten von ${pageTexts.length} gesamt) ---\n\n${pageBlock}`;
+    const content = `${ANFECHTUNG_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
 
     const model = config.UTILITY_MODEL || 'claude-haiku-4-5-20251001';
 

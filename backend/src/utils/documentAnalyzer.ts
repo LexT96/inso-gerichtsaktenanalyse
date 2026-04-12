@@ -182,6 +182,10 @@ export function classifySegmentsForExtraction(
   segments: DocumentSegment[],
   totalPages: number,
 ): ExtractionRouting {
+  const allPages = Array.from({ length: totalPages }, (_, i) => i + 1);
+
+  // Token budget: ~2.5 chars/token for German, 200K limit minus ~10K for prompt/output.
+  // If all pages fit, use all pages (no routing needed — preserves original behavior).
   const forderungenPages = new Set<number>();
   const aktivaPages = new Set<number>();
   const anfechtungPages = new Set<number>();
@@ -199,31 +203,11 @@ export function classifySegmentsForExtraction(
     }
   }
 
-  // Add ±2 buffer pages around each classified page — content often spans page boundaries
-  // (e.g., a creditor table starting on page 42 may have its header on page 41)
-  const BUFFER = 2;
-  const addBuffer = (pages: Set<number>): number[] => {
-    const expanded = new Set<number>();
-    for (const p of pages) {
-      for (let i = Math.max(1, p - BUFFER); i <= Math.min(totalPages, p + BUFFER); i++) {
-        expanded.add(i);
-      }
-    }
-    return [...expanded].sort((a, b) => a - b);
-  };
-
-  // Cap routed pages to avoid exceeding 200K token limit (~1100 tokens/page for text).
-  // 200K limit / 1100 tok/page ≈ 180 pages max, minus prompt overhead → cap at 150.
-  const MAX_ROUTED_PAGES = 150;
-  const capPages = (pages: number[]): number[] =>
-    pages.length <= MAX_ROUTED_PAGES ? pages : pages.slice(0, MAX_ROUTED_PAGES);
-
-  // Fallback: if no pages matched for a domain, include all pages (capped)
-  const allPages = Array.from({ length: totalPages }, (_, i) => i + 1);
+  // Fallback: if no pages matched for a domain, use all pages
   return {
-    forderungenPages: forderungenPages.size > 0 ? capPages(addBuffer(forderungenPages)) : capPages(allPages),
-    aktivaPages: aktivaPages.size > 0 ? capPages(addBuffer(aktivaPages)) : capPages(allPages),
-    anfechtungPages: anfechtungPages.size > 0 ? capPages(addBuffer(anfechtungPages)) : capPages(allPages),
+    forderungenPages: forderungenPages.size > 0 ? [...forderungenPages].sort((a, b) => a - b) : allPages,
+    aktivaPages: aktivaPages.size > 0 ? [...aktivaPages].sort((a, b) => a - b) : allPages,
+    anfechtungPages: anfechtungPages.size > 0 ? [...anfechtungPages].sort((a, b) => a - b) : allPages,
   };
 }
 

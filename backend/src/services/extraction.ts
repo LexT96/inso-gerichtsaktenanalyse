@@ -23,8 +23,14 @@ import type { ExtractionResult } from '../types/extraction';
 const isRateLimitedProvider = (): boolean => isRateLimited(detectProvider());
 
 const LARGE_PDF_THRESHOLD = 500; // pages — above this, use chunked fallback
+// Opus is slower and may timeout on large native PDF calls — use lower threshold
+const OPUS_PDF_THRESHOLD = 80; // pages — Opus timed out on 182 pages (3h single call)
 // For rate-limited providers, force chunked mode for any PDF
-const effectiveThreshold = (): number => isRateLimitedProvider() ? 0 : LARGE_PDF_THRESHOLD;
+const effectiveThreshold = (): number => {
+  if (isRateLimitedProvider()) return 0;
+  if (config.EXTRACTION_MODEL.includes('opus')) return OPUS_PDF_THRESHOLD;
+  return LARGE_PDF_THRESHOLD;
+};
 
 import type { ExtractionStats } from '../utils/computeStats';
 
