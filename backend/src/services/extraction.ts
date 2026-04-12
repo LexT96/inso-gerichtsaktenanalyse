@@ -45,7 +45,8 @@ function buildOcrConfidenceHints(ocrResult: OcrResult | null): string {
 
   const hints: string[] = [];
   for (const page of ocrResult.pages) {
-    if (!page.avgConfidence || page.avgConfidence >= 0.90) continue;
+    // DokumenteAnalyse V3 threshold: 0.95 (not 0.90) — flag more pages
+    if (!page.avgConfidence || page.avgConfidence >= 0.95) continue;
     const lowWords = (page.lowConfidenceWords || [])
       .filter(w => w.confidence < 0.80)
       .slice(0, 20); // Cap per page to avoid bloat
@@ -278,7 +279,7 @@ Wenn ein Feld leer ist oder nicht lesbar: NICHT aufnehmen. Nur tatsächlich gele
 
 async function extractHandwrittenFormFields(
   result: ExtractionResult,
-  pdfBuffer: Buffer,
+  pdfBuffer: Buffer | null,
   pageTexts: string[]
 ): Promise<ExtractionResult> {
   const formPages = detectFragebogenPages(pageTexts);
@@ -290,30 +291,45 @@ async function extractHandwrittenFormFields(
   logger.info('Fragebogen pages detected for handwriting extraction', {
     pages: formPages.map(p => p + 1),
     count: formPages.length,
+    mode: pdfBuffer && supportsNativePdf(detectProvider()) ? 'native-pdf' : 'text',
   });
 
-  // Extract only the form pages as a mini-PDF
-  const miniPdf = await extractPdfPages(pdfBuffer, formPages);
-  const base64 = miniPdf.toString('base64');
-
-  // Map page indices to actual page numbers for the prompt
-  const pageMapping = formPages.map((p, i) => `PDF-Seite ${i + 1} = Originalseite ${p + 1}`).join(', ');
-
-  // Use Sonnet for handwriting OCR — Haiku lacks vision quality for handwritten forms
-  // But limit max_tokens since output is a small JSON object (~20 fields)
   const handwritingModel = config.EXTRACTION_MODEL;
-  const response = await callWithRetry(() => createAnthropicMessage({
-    model: handwritingModel,
-    max_tokens: 4096,
-    temperature: 0,
-    messages: [{
-      role: 'user' as const,
-      content: [
-        { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
-        { type: 'text' as const, text: `${HANDWRITING_PROMPT}\n\nSeitenzuordnung: ${pageMapping}\nBitte verwende die Originalseitennummern in der quelle.` },
-      ],
-    }],
-  }));
+  const pageMapping = formPages.map((p, i) => `PDF-Seite ${i + 1} = Originalseite ${p + 1}`).join(', ');
+  const promptSuffix = `\n\nSeitenzuordnung: ${pageMapping}\nBitte verwende die Originalseitennummern in der quelle.`;
+
+  let response;
+  if (pdfBuffer && supportsNativePdf(detectProvider())) {
+    // Native PDF mode: send mini-PDF for vision-based handwriting OCR
+    const miniPdf = await extractPdfPages(pdfBuffer, formPages);
+    const base64 = miniPdf.toString('base64');
+    response = await callWithRetry(() => createAnthropicMessage({
+      model: handwritingModel,
+      max_tokens: 4096,
+      temperature: 0,
+      messages: [{
+        role: 'user' as const,
+        content: [
+          { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+          { type: 'text' as const, text: `${HANDWRITING_PROMPT}${promptSuffix}` },
+        ],
+      }],
+    }));
+  } else {
+    // Text mode (Langdock): send OCR text of form pages — still catches structured fields
+    const formTextBlock = formPages
+      .map(p => `=== SEITE ${p + 1} ===\n${pageTexts[p] ?? ''}`)
+      .join('\n\n');
+    response = await callWithRetry(() => createAnthropicMessage({
+      model: handwritingModel,
+      max_tokens: 4096,
+      temperature: 0,
+      messages: [{
+        role: 'user' as const,
+        content: `${HANDWRITING_PROMPT}${promptSuffix}\n\n--- FORMULARE (OCR-Text) ---\n\n${formTextBlock}`,
+      }],
+    }));
+  }
 
   const text = response.content
     .filter((c) => c.type === 'text')
@@ -712,9 +728,9 @@ export async function processExtraction(
 
       report('Detailanalyse (Forderungen, Aktiva, Anfechtung)… (Stufe 2b/3)', 50);
       const [forderungenResult, aktivaResult, anfechtungResult] = await Promise.allSettled([
-        extractForderungen(pageTexts, routing.forderungenPages, documentMap),
-        extractAktiva(pageTexts, documentMap, result, routing.aktivaPages),
-        analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages),
+        extractForderungen(pageTexts, routing.forderungenPages, documentMap, ocrResult),
+        extractAktiva(pageTexts, documentMap, result, routing.aktivaPages, ocrResult),
+        analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages, ocrResult),
       ]);
 
       if (forderungenResult.status === 'fulfilled' && forderungenResult.value) {
@@ -751,13 +767,13 @@ export async function processExtraction(
       if (isRateLimitedProvider()) {
         // Rate-limited: serialize with delays
         logger.info('Rate-limited provider: Detailanalysen seriell');
-        const forderungenResult = await extractForderungen(pageTexts, routing.forderungenPages, documentMap)
+        const forderungenResult = await extractForderungen(pageTexts, routing.forderungenPages, documentMap, ocrResult)
           .catch(err => { logger.warn('Forderungen-Extraktion fehlgeschlagen', { error: err instanceof Error ? err.message : String(err) }); return null; });
         await new Promise(r => setTimeout(r, 62_000));
-        const aktivaResult = await extractAktiva(pageTexts, documentMap, result, routing.aktivaPages)
+        const aktivaResult = await extractAktiva(pageTexts, documentMap, result, routing.aktivaPages, ocrResult)
           .catch(err => { logger.warn('Aktiva-Extraktion fehlgeschlagen', { error: err instanceof Error ? err.message : String(err) }); return null; });
         await new Promise(r => setTimeout(r, 62_000));
-        const anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages)
+        const anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages, ocrResult)
           .catch(err => { logger.warn('Anfechtungsanalyse fehlgeschlagen', { error: err instanceof Error ? err.message : String(err) }); return null; });
 
         if (forderungenResult) result.forderungen = forderungenResult;
@@ -766,9 +782,9 @@ export async function processExtraction(
       } else {
         // Normal: run all three in parallel
         const [forderungenResult, aktivaResult, anfechtungResult] = await Promise.allSettled([
-          extractForderungen(pageTexts, routing.forderungenPages, documentMap),
-          extractAktiva(pageTexts, documentMap, result, routing.aktivaPages),
-          analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages),
+          extractForderungen(pageTexts, routing.forderungenPages, documentMap, ocrResult),
+          extractAktiva(pageTexts, documentMap, result, routing.aktivaPages, ocrResult),
+          analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages, ocrResult),
         ]);
 
         if (forderungenResult.status === 'fulfilled' && forderungenResult.value) {
@@ -809,24 +825,24 @@ export async function processExtraction(
       if (isRateLimitedProvider()) {
         logger.info('Rate-limited provider: Zusatzanalysen seriell mit Pause');
         report('Aktiva-Analyse… (Rate-Limit-Modus)', 55);
-        aktivaResult = await extractAktiva(pageTexts, documentMap, result, chunkedRouting.aktivaPages)
+        aktivaResult = await extractAktiva(pageTexts, documentMap, result, chunkedRouting.aktivaPages, ocrResult)
           .then(v => ({ status: 'fulfilled' as const, value: v }))
           .catch(reason => ({ status: 'rejected' as const, reason }));
         await new Promise(r => setTimeout(r, 62_000));
         report('Anfechtungsanalyse…', 60);
-        anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result, chunkedRouting.anfechtungPages)
+        anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result, chunkedRouting.anfechtungPages, ocrResult)
           .then(v => ({ status: 'fulfilled' as const, value: v }))
           .catch(reason => ({ status: 'rejected' as const, reason }));
         await new Promise(r => setTimeout(r, 62_000));
         report('Forderungen-Analyse…', 62);
-        forderungenChunkedResult = await extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap)
+        forderungenChunkedResult = await extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap, ocrResult)
           .then(v => ({ status: 'fulfilled' as const, value: v }))
           .catch(reason => ({ status: 'rejected' as const, reason }));
       } else {
         [aktivaResult, anfechtungResult, forderungenChunkedResult] = await Promise.allSettled([
-          extractAktiva(pageTexts, documentMap, result, chunkedRouting.aktivaPages),
-          analyzeAnfechtung(pageTexts, documentMap, result, chunkedRouting.anfechtungPages),
-          extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap),
+          extractAktiva(pageTexts, documentMap, result, chunkedRouting.aktivaPages, ocrResult),
+          analyzeAnfechtung(pageTexts, documentMap, result, chunkedRouting.anfechtungPages, ocrResult),
+          extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap, ocrResult),
         ]);
       }
 
@@ -955,9 +971,10 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
     }
 
     // Stage 3c: Focused handwriting extraction for Fragebogen pages
-    // Claude's vision CAN read handwriting but misses details when processing 30+ pages at once.
-    // This pass sends ONLY the form pages with a focused prompt → dramatically better results.
-    if (supportsNativePdf(provider) && pdfBuffer) {
+    // With native PDF: sends mini-PDF for vision-based handwriting OCR.
+    // Without native PDF (Langdock): sends OCR text of form pages — still catches
+    // structured form fields that the base extraction missed.
+    if (pdfBuffer || pageTexts.length > 0) {
       report('Handschriftliche Formulare werden gelesen…', 85);
       try {
         result = await extractHandwrittenFormFields(result, pdfBuffer, pageTexts);

@@ -12,6 +12,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { jsonrepair } from 'jsonrepair';
 import { callWithRetry, extractJsonFromText, createAnthropicMessage } from '../services/anthropic';
+import { buildEnrichedPageBlock } from './ocrEnricher';
+import type { OcrResult } from '../services/ocrService';
 import { config } from '../config';
 import { logger } from './logger';
 import type { Forderungen } from '../types/extraction';
@@ -127,6 +129,7 @@ export async function extractForderungen(
   pageTexts: string[],
   relevantPages: number[] | undefined,
   documentMap: string | undefined,
+  ocrResult?: OcrResult | null,
 ): Promise<Forderungen | null> {
   try {
     // Use all pages by default. Only use routed subset if all pages exceed token limit.
@@ -158,10 +161,10 @@ export async function extractForderungen(
       ? `\n--- STRUKTURÜBERSICHT (nur zur Orientierung) ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---\n`
       : '';
 
-    // Build page block, keep original page numbers for source references
-    const pageBlock = pages
-      .map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`)
-      .join('\n\n');
+    // Build page block — enriched with table structures + confidence if OCR data available
+    const pageBlock = ocrResult
+      ? buildEnrichedPageBlock(ocrResult, pages, pageTexts)
+      : pages.map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`).join('\n\n');
 
     const content = `${FORDERUNGEN_PROMPT}${mapBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
 

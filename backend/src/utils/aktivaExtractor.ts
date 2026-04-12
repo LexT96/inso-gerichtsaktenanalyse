@@ -13,6 +13,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { jsonrepair } from 'jsonrepair';
 import { callWithRetry, extractJsonFromText, createAnthropicMessage } from '../services/anthropic';
+import { buildEnrichedPageBlock } from './ocrEnricher';
+import type { OcrResult } from '../services/ocrService';
 import { config } from '../config';
 import { logger } from './logger';
 import type { AktivaAnalyse } from '../types/extraction';
@@ -238,6 +240,7 @@ export async function extractAktiva(
   documentMap: string | undefined,
   existingResult: { ermittlungsergebnisse?: any; forderungen?: any },
   relevantPages?: number[],
+  ocrResult?: OcrResult | null,
 ): Promise<AktivaAnalyse | null> {
   try {
     // Use all pages by default. Only use routed subset if all pages exceed token limit.
@@ -273,9 +276,9 @@ export async function extractAktiva(
 
     const hintsBlock = buildHints(existingResult);
 
-    const pageBlock = pages
-      .map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`)
-      .join('\n\n');
+    const pageBlock = ocrResult
+      ? buildEnrichedPageBlock(ocrResult, pages, pageTexts)
+      : pages.map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`).join('\n\n');
 
     const content = `${AKTIVA_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
 
