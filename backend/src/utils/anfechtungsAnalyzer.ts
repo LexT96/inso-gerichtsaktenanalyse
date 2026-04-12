@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { jsonrepair } from 'jsonrepair';
 import { callWithRetry, extractJsonFromText, createAnthropicMessage } from '../services/anthropic';
 import { buildEnrichedPageBlock } from './ocrEnricher';
+import { renderPagesToJpeg } from './pageImageRenderer';
 import type { OcrResult } from '../services/ocrService';
 import { config } from '../config';
 import { logger } from './logger';
@@ -248,6 +249,7 @@ export async function analyzeAnfechtung(
   existingResult: Partial<ExtractionResult>,
   relevantPages?: number[],
   ocrResult?: OcrResult | null,
+  pdfBuffer?: Buffer | null,
 ): Promise<Anfechtungsanalyse | null> {
   try {
     // Use all pages by default. Only use routed subset if all pages exceed token limit.
@@ -285,7 +287,27 @@ export async function analyzeAnfechtung(
       ? buildEnrichedPageBlock(ocrResult, pages, pageTexts)
       : pages.map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`).join('\n\n');
 
-    const content = `${ANFECHTUNG_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
+    const textContent = `${ANFECHTUNG_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
+
+    // Build content blocks: text + page images (if PDF available, max 20 images)
+    let messageContent: string | Array<{ type: string; [key: string]: unknown }> = textContent;
+    if (pdfBuffer && pages.length <= 30) {
+      const pageImages = renderPagesToJpeg(pdfBuffer, pages.map(p => p - 1)); // 0-indexed
+      if (pageImages.size > 0) {
+        const blocks: Array<{ type: string; [key: string]: unknown }> = [];
+        blocks.push({ type: 'text', text: textContent });
+        blocks.push({ type: 'text', text: '\n--- BILDANSICHT (für Handschrift, Tabellen, Stempel) ---' });
+        for (const pageNum of pages) {
+          const b64 = pageImages.get(pageNum - 1);
+          if (b64) {
+            blocks.push({ type: 'text', text: `=== BILD SEITE ${pageNum} ===` });
+            blocks.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } });
+          }
+        }
+        messageContent = blocks;
+        logger.info('Anfechtungsanalyse: Bild+Text-Modus', { images: pageImages.size, textPages: pages.length });
+      }
+    }
 
     const model = config.UTILITY_MODEL || 'claude-haiku-4-5-20251001';
 
@@ -294,7 +316,7 @@ export async function analyzeAnfechtung(
         model,
         max_tokens: 4096,
         temperature: 0.1,
-        messages: [{ role: 'user' as const, content }],
+        messages: [{ role: 'user' as const, content: messageContent as any }],
       })
     ) as Anthropic.Message;
 

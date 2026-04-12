@@ -738,9 +738,9 @@ export async function processExtraction(
 
       report('Detailanalyse (Forderungen, Aktiva, Anfechtung)… (Stufe 2b/3)', 50);
       const [forderungenResult, aktivaResult, anfechtungResult] = await Promise.allSettled([
-        extractForderungen(pageTexts, routing.forderungenPages, documentMap, ocrResult),
-        extractAktiva(pageTexts, documentMap, result, routing.aktivaPages, ocrResult),
-        analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages, ocrResult),
+        extractForderungen(pageTexts, routing.forderungenPages, documentMap, ocrResult, pdfBuffer),
+        extractAktiva(pageTexts, documentMap, result, routing.aktivaPages, ocrResult, pdfBuffer),
+        analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages, ocrResult, pdfBuffer),
       ]);
 
       if (forderungenResult.status === 'fulfilled' && forderungenResult.value) {
@@ -777,13 +777,13 @@ export async function processExtraction(
       if (isRateLimitedProvider()) {
         // Rate-limited: serialize with delays
         logger.info('Rate-limited provider: Detailanalysen seriell');
-        const forderungenResult = await extractForderungen(pageTexts, routing.forderungenPages, documentMap, ocrResult)
+        const forderungenResult = await extractForderungen(pageTexts, routing.forderungenPages, documentMap, ocrResult, pdfBuffer)
           .catch(err => { logger.warn('Forderungen-Extraktion fehlgeschlagen', { error: err instanceof Error ? err.message : String(err) }); return null; });
         await new Promise(r => setTimeout(r, 62_000));
-        const aktivaResult = await extractAktiva(pageTexts, documentMap, result, routing.aktivaPages, ocrResult)
+        const aktivaResult = await extractAktiva(pageTexts, documentMap, result, routing.aktivaPages, ocrResult, pdfBuffer)
           .catch(err => { logger.warn('Aktiva-Extraktion fehlgeschlagen', { error: err instanceof Error ? err.message : String(err) }); return null; });
         await new Promise(r => setTimeout(r, 62_000));
-        const anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages, ocrResult)
+        const anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages, ocrResult, pdfBuffer)
           .catch(err => { logger.warn('Anfechtungsanalyse fehlgeschlagen', { error: err instanceof Error ? err.message : String(err) }); return null; });
 
         if (forderungenResult) result.forderungen = forderungenResult;
@@ -792,9 +792,9 @@ export async function processExtraction(
       } else {
         // Normal: run all three in parallel
         const [forderungenResult, aktivaResult, anfechtungResult] = await Promise.allSettled([
-          extractForderungen(pageTexts, routing.forderungenPages, documentMap, ocrResult),
-          extractAktiva(pageTexts, documentMap, result, routing.aktivaPages, ocrResult),
-          analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages, ocrResult),
+          extractForderungen(pageTexts, routing.forderungenPages, documentMap, ocrResult, pdfBuffer),
+          extractAktiva(pageTexts, documentMap, result, routing.aktivaPages, ocrResult, pdfBuffer),
+          analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages, ocrResult, pdfBuffer),
         ]);
 
         if (forderungenResult.status === 'fulfilled' && forderungenResult.value) {
@@ -835,24 +835,24 @@ export async function processExtraction(
       if (isRateLimitedProvider()) {
         logger.info('Rate-limited provider: Zusatzanalysen seriell mit Pause');
         report('Aktiva-Analyse… (Rate-Limit-Modus)', 55);
-        aktivaResult = await extractAktiva(pageTexts, documentMap, result, chunkedRouting.aktivaPages, ocrResult)
+        aktivaResult = await extractAktiva(pageTexts, documentMap, result, chunkedRouting.aktivaPages, ocrResult, pdfBuffer)
           .then(v => ({ status: 'fulfilled' as const, value: v }))
           .catch(reason => ({ status: 'rejected' as const, reason }));
         await new Promise(r => setTimeout(r, 62_000));
         report('Anfechtungsanalyse…', 60);
-        anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result, chunkedRouting.anfechtungPages, ocrResult)
+        anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result, chunkedRouting.anfechtungPages, ocrResult, pdfBuffer)
           .then(v => ({ status: 'fulfilled' as const, value: v }))
           .catch(reason => ({ status: 'rejected' as const, reason }));
         await new Promise(r => setTimeout(r, 62_000));
         report('Forderungen-Analyse…', 62);
-        forderungenChunkedResult = await extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap, ocrResult)
+        forderungenChunkedResult = await extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap, ocrResult, pdfBuffer)
           .then(v => ({ status: 'fulfilled' as const, value: v }))
           .catch(reason => ({ status: 'rejected' as const, reason }));
       } else {
         [aktivaResult, anfechtungResult, forderungenChunkedResult] = await Promise.allSettled([
-          extractAktiva(pageTexts, documentMap, result, chunkedRouting.aktivaPages, ocrResult),
-          analyzeAnfechtung(pageTexts, documentMap, result, chunkedRouting.anfechtungPages, ocrResult),
-          extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap, ocrResult),
+          extractAktiva(pageTexts, documentMap, result, chunkedRouting.aktivaPages, ocrResult, pdfBuffer),
+          analyzeAnfechtung(pageTexts, documentMap, result, chunkedRouting.anfechtungPages, ocrResult, pdfBuffer),
+          extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap, ocrResult, pdfBuffer),
         ]);
       }
 

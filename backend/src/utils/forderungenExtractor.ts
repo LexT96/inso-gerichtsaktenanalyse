@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { jsonrepair } from 'jsonrepair';
 import { callWithRetry, extractJsonFromText, createAnthropicMessage } from '../services/anthropic';
 import { buildEnrichedPageBlock } from './ocrEnricher';
+import { renderPagesToJpeg } from './pageImageRenderer';
 import type { OcrResult } from '../services/ocrService';
 import { config } from '../config';
 import { logger } from './logger';
@@ -130,6 +131,7 @@ export async function extractForderungen(
   relevantPages: number[] | undefined,
   documentMap: string | undefined,
   ocrResult?: OcrResult | null,
+  pdfBuffer?: Buffer | null,
 ): Promise<Forderungen | null> {
   try {
     // Use all pages by default. Only use routed subset if all pages exceed token limit.
@@ -166,7 +168,27 @@ export async function extractForderungen(
       ? buildEnrichedPageBlock(ocrResult, pages, pageTexts)
       : pages.map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`).join('\n\n');
 
-    const content = `${FORDERUNGEN_PROMPT}${mapBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
+    const textContent = `${FORDERUNGEN_PROMPT}${mapBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
+
+    // Build content blocks: text + page images (if PDF available, max 50 pages for forderungen)
+    let messageContent: string | Array<{ type: string; [key: string]: unknown }> = textContent;
+    if (pdfBuffer && pages.length <= 50) {
+      const pageImages = renderPagesToJpeg(pdfBuffer, pages.map(p => p - 1));
+      if (pageImages.size > 0) {
+        const blocks: Array<{ type: string; [key: string]: unknown }> = [];
+        blocks.push({ type: 'text', text: textContent });
+        blocks.push({ type: 'text', text: '\n--- BILDANSICHT (für Tabellen, Gläubigerlisten) ---' });
+        for (const pageNum of pages) {
+          const b64 = pageImages.get(pageNum - 1);
+          if (b64) {
+            blocks.push({ type: 'text', text: `=== BILD SEITE ${pageNum} ===` });
+            blocks.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } });
+          }
+        }
+        messageContent = blocks;
+        logger.info('Forderungen-Extraktion: Bild+Text-Modus', { images: pageImages.size, textPages: pages.length });
+      }
+    }
 
     // Use EXTRACTION_MODEL (Sonnet) — Haiku drops creditor names from long tables
     const model = config.EXTRACTION_MODEL;
@@ -176,7 +198,7 @@ export async function extractForderungen(
         model,
         max_tokens: 16384,
         temperature: 0,
-        messages: [{ role: 'user' as const, content }],
+        messages: [{ role: 'user' as const, content: messageContent as any }],
       })
     ) as Anthropic.Message;
 
