@@ -6,6 +6,7 @@ import { computeExtractionStats } from '../utils/computeStats';
 import { config } from '../config';
 import { extractTextPerPage, removeWatermarksFromTexts } from './pdfProcessor';
 import { isScannedPdf, isOcrConfigured, ocrPdf, type OcrResult } from './ocrService';
+import { registerExtraction } from './rateLimiter';
 import { getDb } from '../db/database';
 import { writeResultJson } from '../db/resultJson';
 import { logger } from '../utils/logger';
@@ -612,6 +613,7 @@ export async function processExtraction(
   const report = onProgress ?? (() => {});
   const db = getDb();
   const startTime = Date.now();
+  const deregisterExtraction = registerExtraction();
 
   // Create extraction record
   const insertResult = db.prepare(
@@ -1070,8 +1072,10 @@ Mögliche Felder: verfahrensdaten.aktenzeichen, verfahrensdaten.gericht, verfahr
       processingTimeMs,
     });
 
+    deregisterExtraction();
     return { id: extractionId, result, stats, processingTimeMs };
   } catch (error) {
+    deregisterExtraction();
     const processingTimeMs = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : String(error);
 

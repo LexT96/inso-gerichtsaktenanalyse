@@ -5,6 +5,7 @@ import { extractionResultSchema } from '../utils/validation';
 import { logger } from '../utils/logger';
 import { parallelLimitSettled } from '../utils/parallel';
 import { detectProvider, supportsNativePdf as providerSupportsNativePdf, getAnthropicClient, getVertexClient } from './extractionProvider';
+import { acquireSlot, releaseSlot, estimateTokens } from './rateLimiter';
 import type { DocumentSegment } from '../utils/documentAnalyzer';
 import type { ExtractionResult, Standardanschreiben, FehlendInfo } from '../types/extraction';
 
@@ -365,19 +366,32 @@ export async function callWithRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Wrapper for anthropic.messages.create that uses streaming on Langdock.
- * Langdock's Cloudflare proxy has a ~100s timeout on non-streaming requests.
- * Streaming keeps the connection alive and avoids 524 errors.
+ * Wrapper for anthropic.messages.create with:
+ * 1. Streaming on Langdock (avoids Cloudflare 524 timeout)
+ * 2. Global rate limiting (prevents TPM overload with concurrent extractions)
  * Drop-in replacement — returns the same Message type.
  */
-export function createAnthropicMessage(
+export async function createAnthropicMessage(
   params: Anthropic.MessageCreateParamsNonStreaming
 ): Promise<Anthropic.Message> {
-  if (USE_STREAMING) {
-    const stream = anthropic.messages.stream(params as unknown as Anthropic.MessageStreamParams);
-    return stream.finalMessage();
+  // Estimate tokens for rate limiting
+  const content = params.messages?.[0]?.content;
+  const estimated = typeof content === 'string'
+    ? estimateTokens(content)
+    : Array.isArray(content)
+      ? estimateTokens(content as Array<{ type: string; text?: string }>)
+      : 0;
+
+  await acquireSlot(estimated);
+  try {
+    if (USE_STREAMING) {
+      const stream = anthropic.messages.stream(params as unknown as Anthropic.MessageStreamParams);
+      return await stream.finalMessage();
+    }
+    return await anthropic.messages.create(params);
+  } finally {
+    releaseSlot(estimated);
   }
-  return anthropic.messages.create(params);
 }
 
 // ─── Merge ───
