@@ -305,7 +305,7 @@ async function extractHandwrittenFormFields(
     const base64 = miniPdf.toString('base64');
     response = await callWithRetry(() => createAnthropicMessage({
       model: handwritingModel,
-      max_tokens: 4096,
+      max_tokens: 8192,
       temperature: 0,
       messages: [{
         role: 'user' as const,
@@ -322,7 +322,7 @@ async function extractHandwrittenFormFields(
       .join('\n\n');
     response = await callWithRetry(() => createAnthropicMessage({
       model: handwritingModel,
-      max_tokens: 4096,
+      max_tokens: 8192,
       temperature: 0,
       messages: [{
         role: 'user' as const,
@@ -339,9 +339,19 @@ async function extractHandwrittenFormFields(
   let parsed: Record<string, { wert: unknown; quelle: string }>;
   try {
     const jsonStr = extractJsonFromText(text);
-    parsed = JSON.parse(jsonStr);
-  } catch {
-    logger.warn('Handwriting extraction JSON parse failed', { sample: text.slice(0, 300) });
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      // JSON likely truncated by max_tokens — try jsonrepair
+      const { jsonrepair } = await import('jsonrepair');
+      parsed = JSON.parse(jsonrepair(jsonStr));
+      logger.info('Handwriting JSON per jsonrepair repariert');
+    }
+  } catch (err) {
+    logger.warn('Handwriting extraction JSON parse failed', {
+      error: err instanceof Error ? err.message : String(err),
+      sample: text.slice(0, 300),
+    });
     return result;
   }
 
