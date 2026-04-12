@@ -11,7 +11,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { jsonrepair } from 'jsonrepair';
-import { anthropic, callWithRetry, extractJsonFromText } from '../services/anthropic';
+import { callWithRetry, extractJsonFromText, createAnthropicMessage } from '../services/anthropic';
 import { config } from '../config';
 import { logger } from './logger';
 import type { Forderungen } from '../types/extraction';
@@ -169,7 +169,7 @@ export async function extractForderungen(
     const model = config.EXTRACTION_MODEL;
 
     const response = await callWithRetry(() =>
-      anthropic.messages.create({
+      createAnthropicMessage({
         model,
         max_tokens: 16384,
         temperature: 0,

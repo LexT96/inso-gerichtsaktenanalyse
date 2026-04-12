@@ -1,5 +1,5 @@
 import path from 'path';
-import { extractComprehensive, extractFromPageTexts, anthropic, callWithRetry, extractJsonFromText, EXTRACTION_PROMPT } from './anthropic';
+import { extractComprehensive, extractFromPageTexts, callWithRetry, extractJsonFromText, createAnthropicMessage, EXTRACTION_PROMPT } from './anthropic';
 import { extractWithOpenAI } from './openaiExtractor';
 import { detectProvider, supportsNativePdf, isRateLimited, logProviderConfig } from './extractionProvider';
 import { computeExtractionStats } from '../utils/computeStats';
@@ -301,7 +301,7 @@ async function extractHandwrittenFormFields(
   // Use Sonnet for handwriting OCR — Haiku lacks vision quality for handwritten forms
   // But limit max_tokens since output is a small JSON object (~20 fields)
   const handwritingModel = config.EXTRACTION_MODEL;
-  const response = await callWithRetry(() => anthropic.messages.create({
+  const response = await callWithRetry(() => createAnthropicMessage({
     model: handwritingModel,
     max_tokens: 4096,
     temperature: 0,
@@ -899,7 +899,7 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
           .join('\n\n');
         const reContent = `${reExtractPrompt}\n\n${relevantPageBlock}`;
 
-        const reResponse = await callWithRetry(() => anthropic.messages.create({
+        const reResponse = await callWithRetry(() => createAnthropicMessage({
           model: config.UTILITY_MODEL || 'claude-haiku-4-5-20251001',
           max_tokens: 4096,
           temperature: 0,
@@ -1003,7 +1003,7 @@ Mögliche Felder: verfahrensdaten.aktenzeichen, verfahrensdaten.gericht, verfahr
         const retryPages = pageTexts.slice(0, Math.min(30, pageTexts.length))
           .map((t, i) => `=== SEITE ${i + 1} ===\n${t}`).join('\n\n');
 
-        const retryResponse = await callWithRetry(() => anthropic.messages.create({
+        const retryResponse = await callWithRetry(() => createAnthropicMessage({
           model: config.EXTRACTION_MODEL,
           max_tokens: 4096,
           temperature: 0,

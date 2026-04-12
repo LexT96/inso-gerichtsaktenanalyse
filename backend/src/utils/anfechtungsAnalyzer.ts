@@ -12,7 +12,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { jsonrepair } from 'jsonrepair';
-import { anthropic, callWithRetry, extractJsonFromText } from '../services/anthropic';
+import { callWithRetry, extractJsonFromText, createAnthropicMessage } from '../services/anthropic';
 import { config } from '../config';
 import { logger } from './logger';
 import type { Anfechtungsanalyse, ExtractionResult } from '../types/extraction';
@@ -287,7 +287,7 @@ export async function analyzeAnfechtung(
     const model = config.UTILITY_MODEL || 'claude-haiku-4-5-20251001';
 
     const response = await callWithRetry(() =>
-      anthropic.messages.create({
+      createAnthropicMessage({
         model,
         max_tokens: 4096,
         temperature: 0.1,

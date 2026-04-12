@@ -10,7 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { jsonrepair } from 'jsonrepair';
-import { anthropic, callWithRetry, extractJsonFromText } from '../services/anthropic';
+import { callWithRetry, extractJsonFromText, createAnthropicMessage } from '../services/anthropic';
 import { config } from '../config';
 import { logger } from './logger';
 import { parallelLimitSettled } from './parallel';
@@ -442,7 +442,7 @@ ${batch.pageBlock}
 ${fieldList}`;
 
     const response = await callWithRetry(() =>
-      anthropic.messages.create({
+      createAnthropicMessage({
         model: config.UTILITY_MODEL,
         max_tokens: VERIFICATION_MAX_TOKENS,
         messages: [{ role: 'user' as const, content }],
@@ -485,7 +485,7 @@ ${batch.pageBlock}
 ${retryFieldList}`;
 
         const retryResponse = await callWithRetry(() =>
-          anthropic.messages.create({
+          createAnthropicMessage({
             model: config.UTILITY_MODEL,
             max_tokens: VERIFICATION_MAX_TOKENS,
             messages: [{ role: 'user' as const, content: retryContent }],
@@ -522,8 +522,8 @@ ${retryFieldList}`;
     return { mutations: batchMutations, stats: batchStats, inputTokens, outputTokens };
   });
 
-  // Run batches — parallel for direct API, serial with delays for rate-limited providers
-  const isRateLimited = Boolean(config.ANTHROPIC_BASE_URL?.includes('langdock'));
+  // Run batches in parallel — Langdock now has 200K TPM, no longer rate-limited
+  const isRateLimited = false;
 
   let batchResults: (Awaited<ReturnType<typeof batchTasks[0]>> | undefined)[];
   let batchErrors: (Error | undefined)[];

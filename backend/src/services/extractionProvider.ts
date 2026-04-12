@@ -28,12 +28,14 @@ export function detectProvider(): Provider {
 
 /** Does this provider support native PDF mode (type: "document")? */
 export function supportsNativePdf(provider: Provider): boolean {
+  // Langdock proxy does NOT support native PDF (document content type) — only text/image
   return provider === 'anthropic' || provider === 'vertex';
 }
 
 /** Is this provider rate-limited (needs serialized calls)? */
 export function isRateLimited(provider: Provider): boolean {
-  return provider === 'langdock';
+  // Langdock now has 200K TPM — no longer rate-limited
+  return false;
 }
 
 // ─── Anthropic clients (direct + Vertex) ───

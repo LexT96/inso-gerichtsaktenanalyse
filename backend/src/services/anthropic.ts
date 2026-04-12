@@ -18,6 +18,24 @@ const isRateLimitedProvider = (): boolean => isRateLimited(detectProvider());
 // Delay between API calls for rate-limited providers (wait for TPM window to reset)
 const RATE_LIMITED_DELAY_MS = 62_000; // 62s — just over 1 minute TPM window
 
+// Langdock has a Cloudflare 524 gateway timeout (~100s) on non-streaming calls.
+// Use streaming for all Langdock calls to keep the connection alive.
+const USE_STREAMING = Boolean(config.ANTHROPIC_BASE_URL?.includes('langdock'));
+
+/**
+ * Create a message — uses streaming on Langdock to avoid Cloudflare 524 timeout.
+ * Drop-in replacement for anthropic.messages.create() with non-streaming params.
+ */
+export async function createMessage(
+  params: Anthropic.MessageCreateParamsNonStreaming
+): Promise<Anthropic.Message> {
+  if (USE_STREAMING) {
+    const stream = anthropic.messages.stream(params as unknown as Anthropic.MessageStreamParams);
+    return stream.finalMessage();
+  }
+  return anthropic.messages.create(params);
+}
+
 // Max pages per document-aware chunk (soft limit — won't split a document)
 const MAX_PAGES_PER_CHUNK = 40;
 // Fallback: 30 pages per chunk when no segments available
@@ -344,6 +362,22 @@ export async function callWithRetry<T>(fn: () => Promise<T>): Promise<T> {
     }
   }
   throw new Error('callWithRetry: max retries exhausted');
+}
+
+/**
+ * Wrapper for anthropic.messages.create that uses streaming on Langdock.
+ * Langdock's Cloudflare proxy has a ~100s timeout on non-streaming requests.
+ * Streaming keeps the connection alive and avoids 524 errors.
+ * Drop-in replacement — returns the same Message type.
+ */
+export function createAnthropicMessage(
+  params: Anthropic.MessageCreateParamsNonStreaming
+): Promise<Anthropic.Message> {
+  if (USE_STREAMING) {
+    const stream = anthropic.messages.stream(params as unknown as Anthropic.MessageStreamParams);
+    return stream.finalMessage();
+  }
+  return anthropic.messages.create(params);
 }
 
 // ─── Merge ───

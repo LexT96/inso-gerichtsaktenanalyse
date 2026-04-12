@@ -10,7 +10,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { anthropic, callWithRetry } from '../services/anthropic';
+import { callWithRetry, createAnthropicMessage } from '../services/anthropic';
 import { config } from '../config';
 import { logger } from './logger';
 
@@ -229,7 +229,7 @@ export async function analyzeDocumentStructure(pageTexts: string[]): Promise<Doc
 
   try {
     const response = await callWithRetry(() =>
-      anthropic.messages.create({
+      createAnthropicMessage({
         model: config.UTILITY_MODEL,
         max_tokens: 4096,
         messages: [{ role: 'user' as const, content }],
