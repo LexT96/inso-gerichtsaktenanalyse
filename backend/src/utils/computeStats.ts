@@ -22,9 +22,10 @@ export interface ExtractionStats {
 
 // Fields only relevant for juristische Personen — skip for natürliche Person
 const ENTITY_ONLY_FIELDS = new Set([
+  'firma', 'rechtsform', 'handelsregisternummer',
   'satzungssitz', 'verwaltungssitz', 'stammkapital', 'geschaeftsfuehrer',
   'prokurist', 'gruendungsdatum', 'hr_eintragung_datum', 'groessenklasse_hgb',
-  'dundo_versicherung', 'steuerliche_organschaft',
+  'dundo_versicherung', 'steuerliche_organschaft', 'letzter_jahresabschluss',
 ]);
 
 // Fields only relevant for natürliche Personen — skip for entities
@@ -38,6 +39,8 @@ const OPTIONAL_FIELDS = new Set([
   'insolvenzsonderkonto', 'geschaeftszweig', 'unternehmensgegenstand',
   'internationaler_bezug', 'eigenverwaltung', 'verfahrensstadium', 'verfahrensart',
   'richter', 'zustellungsdatum_schuldner',
+  'betriebsstaette_adresse', 'steuernummer', 'steuerberater',
+  'beschaeftigt_seit', 'bankverbindung_iban', 'bankverbindung_bic',
 ]);
 
 const LABELS: Record<string, string> = {

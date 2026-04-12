@@ -25,6 +25,15 @@ const envSchema = z.object({
   ),
   DATA_RETENTION_HOURS: z.coerce.number().default(72),
   DB_ENCRYPTION_KEY: z.string().min(32, 'DB_ENCRYPTION_KEY muss mindestens 32 Zeichen haben (256-bit Hex empfohlen)'),
+  // Azure Document Intelligence (optional — enables OCR for scanned PDFs)
+  AZURE_DOC_INTEL_ENDPOINT: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.string().url().optional()
+  ),
+  AZURE_DOC_INTEL_KEY: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.string().optional()
+  ),
   // Azure Entra ID (optional — if set, enables SSO; if not set, falls back to local password auth)
   AZURE_TENANT_ID: z.string().optional(),
   AZURE_CLIENT_ID: z.string().optional(),

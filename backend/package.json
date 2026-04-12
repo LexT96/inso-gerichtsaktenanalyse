@@ -8,6 +8,9 @@
     "start": "node dist/index.js",
     "seed": "tsx src/db/seed.ts",
     "verify": "tsx src/scripts/verify-extraction.ts",
+    "benchmark": "tsx src/scripts/benchmark.ts",
+    "benchmark:list": "tsx src/scripts/benchmark.ts --list",
+    "benchmark:compare": "tsx src/scripts/benchmark.ts --compare",
     "test": "vitest run",
     "test:watch": "vitest"
   },

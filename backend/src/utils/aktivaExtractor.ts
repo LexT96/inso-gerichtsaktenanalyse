@@ -236,10 +236,13 @@ function buildHints(existingResult: { ermittlungsergebnisse?: any; forderungen?:
 export async function extractAktiva(
   pageTexts: string[],
   documentMap: string | undefined,
-  existingResult: { ermittlungsergebnisse?: any; forderungen?: any }
+  existingResult: { ermittlungsergebnisse?: any; forderungen?: any },
+  relevantPages?: number[],
 ): Promise<AktivaAnalyse | null> {
   try {
-    logger.info('Aktiva-Extraktion gestartet', { pages: pageTexts.length });
+    // Use only relevant pages if routing is available, otherwise all pages
+    const pages = relevantPages ?? pageTexts.map((_, i) => i + 1);
+    logger.info('Aktiva-Extraktion gestartet', { totalPages: pageTexts.length, relevantPages: pages.length });
 
     const mapBlock = documentMap
       ? `\n--- STRUKTURÜBERSICHT (nur zur Orientierung, KEINE Seitenzahlen hieraus verwenden) ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---\n`
@@ -247,11 +250,11 @@ export async function extractAktiva(
 
     const hintsBlock = buildHints(existingResult);
 
-    const pageBlock = pageTexts
-      .map((text, i) => `=== SEITE ${i + 1} ===\n${text}`)
+    const pageBlock = pages
+      .map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`)
       .join('\n\n');
 
-    const content = `${AKTIVA_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pageTexts.length} Seiten) ---\n\n${pageBlock}`;
+    const content = `${AKTIVA_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pages.length} relevante Seiten von ${pageTexts.length} gesamt) ---\n\n${pageBlock}`;
 
     const model = config.UTILITY_MODEL || 'claude-haiku-4-5-20251001';
 

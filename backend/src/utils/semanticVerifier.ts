@@ -82,6 +82,17 @@ const SKIP_VERIFICATION_SUFFIXES = [
   '.titel',          // Forderungstitel = synthesized from sub-amounts
 ];
 
+// Prefix patterns for array elements from focused passes.
+// These come from dedicated Stage 2b extractors (Sonnet/Haiku) that read
+// only the relevant pages — Haiku re-verification actively harms quality.
+// Evidence: Sonnet forderungen pass found 77 creditors, Haiku verifier
+// mass-removed 56 glaeubiger names it couldn't find in its page batch.
+const SKIP_VERIFICATION_PREFIXES = [
+  'forderungen.einzelforderungen[',  // from forderungenExtractor (Sonnet)
+  'aktiva.positionen[',              // from aktivaExtractor (Haiku)
+  'anfechtung.vorgaenge[',           // from anfechtungsAnalyzer (Haiku)
+];
+
 export function collectFields(obj: unknown, prefix: string = ''): CollectedField[] {
   const fields: CollectedField[] = [];
 
@@ -89,7 +100,8 @@ export function collectFields(obj: unknown, prefix: string = ''): CollectedField
 
   if (isSourcedField(obj)) {
     const shouldSkip = SKIP_VERIFICATION_PATHS.has(prefix)
-      || SKIP_VERIFICATION_SUFFIXES.some(suffix => prefix.endsWith(suffix));
+      || SKIP_VERIFICATION_SUFFIXES.some(suffix => prefix.endsWith(suffix))
+      || SKIP_VERIFICATION_PREFIXES.some(pfx => prefix.startsWith(pfx));
     if (!wertIsEmpty(obj.wert) && !shouldSkip) {
       fields.push({ ref: obj, path: prefix });
     }

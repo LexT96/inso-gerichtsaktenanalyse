@@ -243,10 +243,13 @@ function buildHints(existingResult: Partial<ExtractionResult>): string {
 export async function analyzeAnfechtung(
   pageTexts: string[],
   documentMap: string | undefined,
-  existingResult: Partial<ExtractionResult>
+  existingResult: Partial<ExtractionResult>,
+  relevantPages?: number[],
 ): Promise<Anfechtungsanalyse | null> {
   try {
-    logger.info('Anfechtungsanalyse gestartet', { pages: pageTexts.length });
+    // Use only relevant pages if routing is available, otherwise all pages
+    const pages = relevantPages ?? pageTexts.map((_, i) => i + 1);
+    logger.info('Anfechtungsanalyse gestartet', { totalPages: pageTexts.length, relevantPages: pages.length });
 
     const mapBlock = documentMap
       ? `\n--- STRUKTURÜBERSICHT (nur zur Orientierung, KEINE Seitenzahlen hieraus verwenden) ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---\n`
@@ -254,11 +257,11 @@ export async function analyzeAnfechtung(
 
     const hintsBlock = buildHints(existingResult);
 
-    const pageBlock = pageTexts
-      .map((text, i) => `=== SEITE ${i + 1} ===\n${text}`)
+    const pageBlock = pages
+      .map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`)
       .join('\n\n');
 
-    const content = `${ANFECHTUNG_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pageTexts.length} Seiten) ---\n\n${pageBlock}`;
+    const content = `${ANFECHTUNG_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pages.length} relevante Seiten von ${pageTexts.length} gesamt) ---\n\n${pageBlock}`;
 
     const model = config.UTILITY_MODEL || 'claude-haiku-4-5-20251001';
 
