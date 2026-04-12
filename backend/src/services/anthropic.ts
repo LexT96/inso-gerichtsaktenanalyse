@@ -843,7 +843,123 @@ export async function extractComprehensive(
     return parseAndValidateResponse(text);
   }
 
-  // For very large PDFs or no buffer: use text-based with all pages
+  // Image mode: render KEY pages to JPEG, send ALL pages as text.
+  // Used for Langdock (supports image but not document content type).
+  // Claude sees images of important pages (forms, handwriting) + full OCR text.
+  // Max 20 images to stay within token budget (~1100 tokens per image at 100 DPI).
+  if (pdfBuffer && pageTexts.length <= 200) {
+    logger.info('Starte umfassende Extraktion (Bild+Text-Modus)', { pages: pageTexts.length });
+
+    try {
+      const { execFileSync } = await import('child_process');
+      const fs = await import('fs');
+      const os = await import('os');
+      const path = await import('path');
+
+      // Select key pages for images: first 5 + pages with forms/handwriting/tables
+      const keyPageIndices: number[] = [];
+      for (let i = 0; i < Math.min(5, pageTexts.length); i++) keyPageIndices.push(i);
+      const formMarkers = /fragebogen|anlage|ergänzungsblatt|vermögensübersicht|schuldenaufstellung|beschluss|zustellungsurkunde/i;
+      for (let i = 0; i < pageTexts.length; i++) {
+        if (keyPageIndices.includes(i)) continue;
+        if (formMarkers.test(pageTexts[i])) keyPageIndices.push(i);
+      }
+      const maxImages = 20;
+      const selectedPages = keyPageIndices.sort((a, b) => a - b).slice(0, maxImages);
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-img-'));
+      const pdfPath = path.join(tmpDir, 'input.pdf');
+      fs.writeFileSync(pdfPath, pdfBuffer);
+
+      // Render only selected pages to JPEG at 100 DPI
+      const pageList = selectedPages.join(',');
+      const script = `
+import fitz, sys, os
+doc = fitz.open(sys.argv[1])
+pages = [int(p) for p in sys.argv[3].split(',') if p]
+for i in pages:
+    if i < len(doc):
+        pix = doc[i].get_pixmap(dpi=100)
+        pix.save(os.path.join(sys.argv[2], f'page_{i:04d}.jpg'))
+doc.close()
+`;
+      execFileSync('python3', ['-c', script, pdfPath, tmpDir, pageList], { timeout: 120_000 });
+
+      const contentBlocks: Anthropic.ContentBlockParam[] = [];
+      const selectedSet = new Set(selectedPages);
+
+      // First: all pages as OCR text (full document context)
+      const allTextBlock = pageTexts.map((t, i) =>
+        `=== SEITE ${i + 1} ===\n${t}`
+      ).join('\n\n');
+      contentBlocks.push({
+        type: 'text' as const,
+        text: `--- VOLLSTÄNDIGER AKTENINHALT (${pageTexts.length} Seiten, OCR-Text) ---\n\n${allTextBlock}`,
+      });
+
+      // Then: key page images for visual context (forms, handwriting, stamps)
+      contentBlocks.push({
+        type: 'text' as const,
+        text: `\n--- BILDANSICHT WICHTIGER SEITEN (${selectedPages.length} Seiten — für Handschrift, Formulare, Stempel) ---`,
+      });
+
+      for (const pageIdx of selectedPages) {
+        const imgPath = path.join(tmpDir, `page_${String(pageIdx).padStart(4, '0')}.jpg`);
+        if (fs.existsSync(imgPath)) {
+          contentBlocks.push({
+            type: 'text' as const,
+            text: `=== BILD SEITE ${pageIdx + 1} ===`,
+          });
+          const b64 = fs.readFileSync(imgPath).toString('base64');
+          contentBlocks.push({
+            type: 'image' as const,
+            source: { type: 'base64' as const, media_type: 'image/jpeg' as const, data: b64 },
+          });
+        }
+      }
+
+      // Prompt at the end
+      const userContent = mapBlock
+        ? `\nAnalysiere dieses Dokument. Der OCR-Text enthält alle ${pageTexts.length} Seiten. Zusätzlich siehst du ${selectedPages.length} Schlüsselseiten als Bilder — nutze sie für Handschrift, Formulare und Stempel die im OCR-Text fehlen könnten.${mapBlock}`
+        : `\nAnalysiere dieses Dokument. Der OCR-Text enthält alle ${pageTexts.length} Seiten. Zusätzlich siehst du ${selectedPages.length} Schlüsselseiten als Bilder.`;
+      contentBlocks.push({ type: 'text' as const, text: userContent });
+
+      logger.info('Bild+Text-Modus vorbereitet', {
+        totalPages: pageTexts.length,
+        imagePages: selectedPages.length,
+        keyPages: selectedPages.map(i => i + 1),
+      });
+
+      const { text: imgText, usage: imgUsage } = await callWithRetry(() => callClaudeStreaming({
+        model: config.EXTRACTION_MODEL,
+        max_tokens: 32_000,
+        system: systemPrompt,
+        messages: [{ role: 'user' as const, content: contentBlocks }],
+      }));
+
+      // Cleanup
+      try {
+        for (const f of fs.readdirSync(tmpDir)) fs.unlinkSync(path.join(tmpDir, f));
+        fs.rmdirSync(tmpDir);
+      } catch { /* ignore */ }
+
+      logger.info('Umfassende Extraktion abgeschlossen (Bild+Text-Modus)', {
+        model: config.EXTRACTION_MODEL,
+        pages: pageTexts.length,
+        images: selectedPages.length,
+        inputTokens: imgUsage.input_tokens,
+        outputTokens: imgUsage.output_tokens,
+      });
+
+      return parseAndValidateResponse(imgText);
+    } catch (imgErr) {
+      logger.warn('Bild+Text-Modus fehlgeschlagen, Fallback auf Text-Modus', {
+        error: imgErr instanceof Error ? imgErr.message : String(imgErr),
+      });
+    }
+  }
+
+  // Pure text fallback: for very large PDFs or when image rendering fails
   logger.info('Starte umfassende Extraktion (Text-Modus)', { pages: pageTexts.length });
   const pageBlock = pageTexts.map((t, i) => `=== SEITE ${i + 1} ===\n${t}`).join('\n\n');
   const content = `${mapBlock}\n--- AKTENINHALT (${pageTexts.length} Seiten) ---\n\n${pageBlock}`;
