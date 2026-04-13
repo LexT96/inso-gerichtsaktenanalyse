@@ -4,10 +4,14 @@ import { apiClient } from '../api/client';
 import { msalInstance, loginRequest } from '../auth/msalConfig';
 import type { ExtractionResult, Pruefstatus } from '../types/extraction';
 import { recomputeLetterStatuses } from '../utils/checklistValidator';
-import mockResult from '../data/mock-result.json';
-import demoPdfUrl from '../assets/demo/test-pdf.pdf?url';
+import { computeExtractionStats } from '@shared/utils/computeStats';
 
 const API_BASE = import.meta.env['VITE_API_URL'] as string || '/api';
+
+function resolveDemoAssetUrl(path: string): string {
+  const staticBase = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+  return `${staticBase}${path}` || path;
+}
 
 /** Get Bearer token for fetch() calls that bypass apiClient */
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -309,31 +313,29 @@ export function useExtraction() {
     abortRef.current?.abort();
     setState(s => ({ ...s, loading: true, error: null, progress: 'Demo wird geladen…', progressPercent: 10 }));
     try {
-      let pdfBlob: Blob;
-      try {
-        const pdfRes = await fetch(demoPdfUrl);
-        if (!pdfRes.ok) throw new Error(`Asset ${pdfRes.status}`);
-        pdfBlob = await pdfRes.blob();
-      } catch {
-        const staticBase = ((import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '') || '/';
-        const fallbackUrl = staticBase ? `${staticBase}/demo/test-pdf.pdf` : '/demo/test-pdf.pdf';
-        const fallbackRes = await fetch(fallbackUrl);
-        if (!fallbackRes.ok) throw new Error('Demo-PDF nicht verfügbar. Bitte Backend starten oder Demo-Dateien prüfen.');
-        pdfBlob = await fallbackRes.blob();
-      }
+      const pdfRes = await fetch(resolveDemoAssetUrl('/demo/test-pdf.pdf'));
+      if (!pdfRes.ok) throw new Error('Demo-PDF nicht verfügbar. Bitte Demo-Dateien prüfen.');
+      const pdfBlob = await pdfRes.blob();
+      // Guard: if server returned HTML instead of PDF (e.g. SPA fallback), reject early
+      const header = await pdfBlob.slice(0, 5).text();
+      if (header !== '%PDF-') throw new Error('Demo-PDF ungültig — Server liefert kein PDF. Bitte Deployment prüfen.');
+
+      const resultRes = await fetch(resolveDemoAssetUrl('/demo/mock-result.json'));
+      if (!resultRes.ok) throw new Error('Demo-Ergebnis nicht verfügbar. Bitte Demo-Dateien prüfen.');
+      const demoResult = await resultRes.json() as ExtractionResult;
+
       const file = new File([pdfBlob], 'demo-test.pdf', { type: 'application/pdf' });
-      const found = 25;
-      const missing = 10;
+      const stats = computeExtractionStats(demoResult);
       setState({
         loading: false,
         progress: '',
         progressPercent: 0,
-        result: mockResult as ExtractionResult,
+        result: demoResult,
         error: null,
         extractionId: null,
-        statsFound: found,
-        statsMissing: missing,
-        statsLettersReady: 1,
+        statsFound: stats.found,
+        statsMissing: stats.missing,
+        statsLettersReady: stats.lettersReady,
         processingTimeMs: 0,
         pdfFile: null,
       });
