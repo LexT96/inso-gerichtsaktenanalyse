@@ -12,7 +12,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { jsonrepair } from 'jsonrepair';
-import { anthropic, callWithRetry, extractJsonFromText } from '../services/anthropic';
+import { callWithRetry, extractJsonFromText, createAnthropicMessage } from '../services/anthropic';
+import { buildEnrichedPageBlock } from './ocrEnricher';
+import { renderPagesToJpeg } from './pageImageRenderer';
+import type { OcrResult } from '../services/ocrService';
 import { config } from '../config';
 import { logger } from './logger';
 import type { AktivaAnalyse } from '../types/extraction';
@@ -236,10 +239,38 @@ function buildHints(existingResult: { ermittlungsergebnisse?: any; forderungen?:
 export async function extractAktiva(
   pageTexts: string[],
   documentMap: string | undefined,
-  existingResult: { ermittlungsergebnisse?: any; forderungen?: any }
+  existingResult: { ermittlungsergebnisse?: any; forderungen?: any },
+  relevantPages?: number[],
+  ocrResult?: OcrResult | null,
+  pdfBuffer?: Buffer | null,
 ): Promise<AktivaAnalyse | null> {
   try {
-    logger.info('Aktiva-Extraktion gestartet', { pages: pageTexts.length });
+    // Use all pages by default. Only use routed subset if all pages exceed token limit.
+    const MAX_CHARS = 450_000; // ~180K tokens at 2.5 chars/tok, under 200K API limit
+    let pages = pageTexts.map((_, i) => i + 1);
+    const totalChars = pageTexts.reduce((sum, t) => sum + t.length, 0);
+
+    if (totalChars > MAX_CHARS) {
+      // First try: use routed pages
+      if (relevantPages && relevantPages.length < pages.length) {
+        pages = relevantPages;
+      }
+      // Second check: if routed pages still exceed budget, truncate to fit
+      let charSum = 0;
+      const fittingPages: number[] = [];
+      for (const p of pages) {
+        charSum += (pageTexts[p - 1] ?? '').length + 20; // +20 for header
+        if (charSum > MAX_CHARS) break;
+        fittingPages.push(p);
+      }
+      if (fittingPages.length < pages.length) {
+        pages = fittingPages;
+      }
+      logger.info('Aktiva-Extraktion: Token-Budget-Guard', {
+        totalChars, maxChars: MAX_CHARS, allPages: pageTexts.length, usingPages: pages.length,
+      });
+    }
+    logger.info('Aktiva-Extraktion gestartet', { totalPages: pageTexts.length, usingPages: pages.length });
 
     const mapBlock = documentMap
       ? `\n--- STRUKTURÜBERSICHT (nur zur Orientierung, KEINE Seitenzahlen hieraus verwenden) ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---\n`
@@ -247,20 +278,40 @@ export async function extractAktiva(
 
     const hintsBlock = buildHints(existingResult);
 
-    const pageBlock = pageTexts
-      .map((text, i) => `=== SEITE ${i + 1} ===\n${text}`)
-      .join('\n\n');
+    const pageBlock = ocrResult
+      ? buildEnrichedPageBlock(ocrResult, pages, pageTexts)
+      : pages.map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`).join('\n\n');
 
-    const content = `${AKTIVA_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pageTexts.length} Seiten) ---\n\n${pageBlock}`;
+    const textContent = `${AKTIVA_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
+
+    // Build content blocks: text + page images (if PDF available, max 30 pages)
+    let messageContent: string | Array<{ type: string; [key: string]: unknown }> = textContent;
+    if (pdfBuffer && pages.length <= 30) {
+      const pageImages = renderPagesToJpeg(pdfBuffer, pages.map(p => p - 1));
+      if (pageImages.size > 0) {
+        const blocks: Array<{ type: string; [key: string]: unknown }> = [];
+        blocks.push({ type: 'text', text: textContent });
+        blocks.push({ type: 'text', text: '\n--- BILDANSICHT (für Tabellen, Bilanzen, Zahlen) ---' });
+        for (const pageNum of pages) {
+          const b64 = pageImages.get(pageNum - 1);
+          if (b64) {
+            blocks.push({ type: 'text', text: `=== BILD SEITE ${pageNum} ===` });
+            blocks.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } });
+          }
+        }
+        messageContent = blocks;
+        logger.info('Aktiva-Extraktion: Bild+Text-Modus', { images: pageImages.size, textPages: pages.length });
+      }
+    }
 
     const model = config.UTILITY_MODEL || 'claude-haiku-4-5-20251001';
 
     const response = await callWithRetry(() =>
-      anthropic.messages.create({
+      createAnthropicMessage({
         model,
         max_tokens: 4096,
         temperature: 0.1,
-        messages: [{ role: 'user' as const, content }],
+        messages: [{ role: 'user' as const, content: messageContent as any }],
       })
     ) as Anthropic.Message;
 

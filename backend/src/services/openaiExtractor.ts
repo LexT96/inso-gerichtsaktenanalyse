@@ -18,10 +18,15 @@ import type { DocumentSegment } from '../utils/documentAnalyzer';
 // Provider detection
 const IS_LANGDOCK = Boolean(process.env.OPENAI_BASE_URL?.includes('langdock'));
 const IS_AZURE = Boolean(process.env.OPENAI_BASE_URL?.includes('azure') || process.env.OPENAI_BASE_URL?.includes('cognitiveservices'));
-// Langdock: use 100 DPI (1100 tokens/page) → 50 pages fit in 60K TPM
-// Direct/Azure: use 150 DPI (2700 tokens/page) → 50 images max (Azure limit)
+// Token budget from env (Langdock default 200K, was 60K before limit increase)
+const LANGDOCK_TPM = Number(process.env.LANGDOCK_TPM_LIMIT) || 200_000;
+// Langdock: use 100 DPI (1100 tokens/page), Direct/Azure: 150 DPI (2700 tokens/page)
 const IMAGE_DPI = IS_LANGDOCK ? 100 : 150;
-const CHUNK_PAGE_THRESHOLD = IS_LANGDOCK ? 50 : 50;
+// Max pages per image-only call: reserve 40K for prompt+output, ~1100 tok/image at 100 DPI
+// At 200K TPM → ~145 pages; at 60K → ~18 pages. Capped at 100 for safety.
+const CHUNK_PAGE_THRESHOLD = IS_LANGDOCK
+  ? Math.min(100, Math.floor((LANGDOCK_TPM - 40_000) / 1100))
+  : 50;
 
 let openaiClient: OpenAI | null = null;
 
@@ -105,12 +110,13 @@ doc.close()
       content.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'high' } });
     }
 
-    logger.info('Sending images to GPT', { pages: files.length, model });
+    logger.info('Sending images to GPT', { pages: files.length, model, jsonMode: true });
 
     const response = await client.chat.completions.create({
       model,
       messages: [{ role: 'user', content }],
       max_completion_tokens: 32000,
+      response_format: { type: 'json_object' },
     });
 
     const text = response.choices[0]?.message?.content || '';
@@ -273,16 +279,32 @@ doc.close()
 `;
     execFileSync('python3', ['-c', script, pdfPath, tmpDir, String(IMAGE_DPI), pageList], { timeout: 60000 });
 
-    // Build content: prompt + full text + selective images
+    // Build content: prompt + text (budget-limited) + selective images
     const content: OpenAI.Chat.ChatCompletionContentPart[] = [
       { type: 'text', text: prompt },
     ];
 
-    // Add ALL pages as text
-    const textBlock = pageTexts.map((t, i) =>
-      `=== SEITE ${i + 1} ===\n${t}`
-    ).join('\n\n');
-    content.push({ type: 'text', text: `\n\n--- VOLLSTÄNDIGER AKTENINHALT (${pageTexts.length} Seiten) ---\n\n${textBlock}` });
+    // Budget for text: TPM - images - prompt - output reserve
+    // ~1100 tokens/image, ~3.5 chars/token for German text
+    const imageTokenBudget = keyPageIndices.length * 5000; // detail:high
+    const textTokenBudget = LANGDOCK_TPM - imageTokenBudget - 40_000; // 40K for prompt+output
+    const maxTextChars = Math.max(50_000, textTokenBudget * 3.5);
+
+    // Add pages as text, truncating if over budget
+    let charCount = 0;
+    const textPages: string[] = [];
+    for (let i = 0; i < pageTexts.length; i++) {
+      const pageHeader = `=== SEITE ${i + 1} ===\n`;
+      const pageContent = pageTexts[i];
+      if (charCount + pageHeader.length + pageContent.length > maxTextChars) {
+        textPages.push(`=== SEITE ${i + 1} === [gekürzt — Textbudget erreicht, ${pageTexts.length - i} Seiten übersprungen]`);
+        break;
+      }
+      textPages.push(pageHeader + pageContent);
+      charCount += pageHeader.length + pageContent.length;
+    }
+    const textBlock = textPages.join('\n\n');
+    content.push({ type: 'text', text: `\n\n--- AKTENINHALT (${textPages.length}/${pageTexts.length} Seiten als Text) ---\n\n${textBlock}` });
 
     // Add key pages as images for visual detail (forms, handwriting, tables)
     content.push({ type: 'text', text: '\n\n--- BILDANSICHT WICHTIGER SEITEN (für Handschrift, Tabellen, Formulare) ---' });
@@ -298,14 +320,17 @@ doc.close()
     }
 
     logger.info('Sending hybrid (text + images) to GPT', {
-      model, totalPages: pageTexts.length, imagePages: keyPageIndices.length,
-      keyPages: keyPageIndices.map(i => i + 1),
+      model, totalPages: pageTexts.length, textPages: textPages.length,
+      textChars: charCount, imagePages: keyPageIndices.length,
+      estimatedTokens: Math.round(charCount / 3.5 + imageTokenBudget),
+      jsonMode: true,
     });
 
     const response = await client.chat.completions.create({
       model,
       messages: [{ role: 'user', content }],
       max_completion_tokens: 32000,
+      response_format: { type: 'json_object' },
     });
 
     const text = response.choices[0]?.message?.content || '';
@@ -345,9 +370,12 @@ export async function extractWithOpenAI(
   if (IS_LANGDOCK && pageCount > CHUNK_PAGE_THRESHOLD) {
     logger.info('OpenAI extraction: hybrid mode (text + key images)', { model, pages: pageCount });
     const startTime = Date.now();
-    // Budget: 60K TPM. Text ~200 tok/page. Images ~1100 tok/page at 100 DPI.
-    // 182 pages text = 36K. Remaining for images: (60K - 36K - 5K prompt) / 1100 = ~17 images
-    const maxImages = Math.max(5, Math.floor((55000 - pageCount * 200) / 1100));
+    // Budget: text gets priority (covers all pages), images supplement key pages.
+    // At 200K TPM with ~9K chars/page (Geldt), 182 pages = 473K tokens of text alone.
+    // So we must limit: allocate 60% to text, 25% to images, 15% to prompt+output.
+    const imageTokenBudgetHybrid = Math.floor(LANGDOCK_TPM * 0.25);
+    const tokensPerImage = 5000; // detail:high at 100 DPI
+    const maxImages = Math.min(20, Math.max(5, Math.floor(imageTokenBudgetHybrid / tokensPerImage)));
     const keyPages = detectKeyPages(pageTexts, maxImages);
     logger.info('Hybrid budget', { pageCount, maxImages, selectedImages: keyPages.length });
 
@@ -427,7 +455,8 @@ export async function extractWithOpenAI(
 
   // Extract each chunk (serialize with delay for rate-limited providers)
   const isLangdock = Boolean(process.env.OPENAI_BASE_URL?.includes('langdock'));
-  const RATE_LIMIT_DELAY = isLangdock ? 62_000 : 0; // 62s for Langdock 60K TPM
+  // Rate limit delay scales with budget: 200K TPM → ~15s, 60K TPM → 62s
+  const RATE_LIMIT_DELAY = isLangdock ? Math.max(10_000, Math.floor(60_000 * (60_000 / LANGDOCK_TPM))) : 0;
   let mergedResult: ExtractionResult | null = null;
 
   for (let ci = 0; ci < chunks.length; ci++) {

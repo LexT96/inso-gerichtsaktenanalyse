@@ -10,7 +10,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { anthropic, callWithRetry } from '../services/anthropic';
+import { callWithRetry, createAnthropicMessage } from '../services/anthropic';
 import { config } from '../config';
 import { logger } from './logger';
 
@@ -182,6 +182,10 @@ export function classifySegmentsForExtraction(
   segments: DocumentSegment[],
   totalPages: number,
 ): ExtractionRouting {
+  const allPages = Array.from({ length: totalPages }, (_, i) => i + 1);
+
+  // Token budget: ~2.5 chars/token for German, 200K limit minus ~10K for prompt/output.
+  // If all pages fit, use all pages (no routing needed — preserves original behavior).
   const forderungenPages = new Set<number>();
   const aktivaPages = new Set<number>();
   const anfechtungPages = new Set<number>();
@@ -199,9 +203,7 @@ export function classifySegmentsForExtraction(
     }
   }
 
-  // Fallback: if no pages matched for a domain, include all pages
-  // (better to send too much than miss data)
-  const allPages = Array.from({ length: totalPages }, (_, i) => i + 1);
+  // Fallback: if no pages matched for a domain, use all pages
   return {
     forderungenPages: forderungenPages.size > 0 ? [...forderungenPages].sort((a, b) => a - b) : allPages,
     aktivaPages: aktivaPages.size > 0 ? [...aktivaPages].sort((a, b) => a - b) : allPages,
@@ -227,7 +229,7 @@ export async function analyzeDocumentStructure(pageTexts: string[]): Promise<Doc
 
   try {
     const response = await callWithRetry(() =>
-      anthropic.messages.create({
+      createAnthropicMessage({
         model: config.UTILITY_MODEL,
         max_tokens: 4096,
         messages: [{ role: 'user' as const, content }],

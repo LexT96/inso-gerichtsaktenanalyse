@@ -41,6 +41,14 @@ docker compose -f docker-compose.dev.yml up --build  # Dev with volume mounts
 ```
 PDF → pdfProcessor (watermark removal) → pageTexts
                         ↓
+          Stage 0 (conditional): ocrService.ts (Azure Document Intelligence)
+          If scanned PDF detected (avg <50 chars/page): OCR via Azure DI prebuilt-layout
+          Caches results by PDF content hash (data/ocr-cache/) — same PDF skips OCR
+          Chunks large PDFs to ≤4MB, auto-detects F0 free tier → per-page fallback
+          Returns clean line text per page only (table/confidence data NOT injected
+          into pageTexts — causes prompt bloat that breaks extraction)
+          Watermark removal applied to OCR output
+                        ↓ pageTexts (now populated for scanned PDFs)
           Stage 1: documentAnalyzer.ts (Haiku)
           Maps document structure + classifies pages by domain (forderungen/aktiva/anfechtung)
                         ↓ documentMap + ExtractionRouting
@@ -120,7 +128,8 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 - **SourcedValue pattern**: Every extracted data field uses `{wert: T | null, quelle: string, verifiziert?: boolean, pruefstatus?: Pruefstatus}`. The `quelle` must reference the exact page ("Seite X, ..."). This pattern is central to the entire data model.
 - **Asymmetric trust in pipeline**: Stage 2 (extractor) is creative — it finds and assigns values. Stage 3 (reviewer) is critical — it can only confirm, correct to values in the document, or remove. The reviewer cannot invent values.
 - **Entity-aware processing**: `isJuristischePerson()` detected via rechtsform regex. Affects: displayed fields, Prüfliste scope, computeStats counting, BeteiligteTab sections.
-- **Watermark removal**: `removeWatermarks()` in pdfProcessor detects text appearing on >80% of pages (whole-line and suffix patterns) and strips it before extraction.
+- **Watermark removal**: `removeWatermarks()` in pdfProcessor has 3 strategies: (1) whole-line watermarks on >80% of pages, (2) suffix watermarks (name+date appended to last line), (3) short-fragment watermarks from OCR debris — only activates when 5+ co-occurring fragments detected (prevents false positives on repeated names).
+- **OCR caching**: `ocrService.ts` caches Azure DI results by SHA-256 PDF hash in `data/ocr-cache/`. Same PDF uploaded again skips OCR entirely.
 - **Boolean schema safety**: `sourcedBooleanSchema` maps "nicht bekannt"/"unbekannt" → `null` (unknown), never to `false`. Only explicit confirmations → `true`.
 - **Merge deduplication**: `einzelforderungen` merge by composite key (glaeubiger + betrag + titel). `aktiva.positionen` merge by beschreibung.
 - **Path alias**: Both frontend and backend use `@shared/*` → `../shared/*` (tsconfig paths + vite alias)
@@ -129,7 +138,7 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 
 ## Environment
 
-Requires `.env` at project root with `ANTHROPIC_API_KEY`, `JWT_SECRET` (min 32 chars), `DEFAULT_ADMIN_PASSWORD`, `DB_ENCRYPTION_KEY` (min 32 chars). Optional: `EXTRACTION_MODEL` (default: `claude-sonnet-4-6`), `UTILITY_MODEL` (default: `claude-haiku-4-5-20251001`). See `.env.example` for all variables.
+Requires `.env` at project root with `ANTHROPIC_API_KEY`, `JWT_SECRET` (min 32 chars), `DEFAULT_ADMIN_PASSWORD`, `DB_ENCRYPTION_KEY` (min 32 chars). Optional: `EXTRACTION_MODEL` (default: `claude-sonnet-4-6`), `UTILITY_MODEL` (default: `claude-haiku-4-5-20251001`), `AZURE_DOC_INTEL_ENDPOINT` + `AZURE_DOC_INTEL_KEY` (enables OCR for scanned PDFs via Azure Document Intelligence). See `.env.example` for all variables.
 
 ## Ports
 

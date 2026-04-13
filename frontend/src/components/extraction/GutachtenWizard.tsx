@@ -97,7 +97,6 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
         { label: 'Geburtsdatum', value: s?.geburtsdatum?.wert, path: 'schuldner.geburtsdatum' },
         { label: 'Familienstand', value: s?.familienstand?.wert, path: 'schuldner.familienstand' },
         { label: 'Adresse', value: s?.aktuelle_adresse?.wert, path: 'schuldner.aktuelle_adresse' },
-        { label: 'Firma', value: s?.firma?.wert, path: 'schuldner.firma' },
       );
     }
     return base;

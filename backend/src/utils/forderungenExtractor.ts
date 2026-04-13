@@ -11,7 +11,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { jsonrepair } from 'jsonrepair';
-import { anthropic, callWithRetry, extractJsonFromText } from '../services/anthropic';
+import { callWithRetry, extractJsonFromText, createAnthropicMessage } from '../services/anthropic';
+import { buildEnrichedPageBlock } from './ocrEnricher';
+import { renderPagesToJpeg } from './pageImageRenderer';
+import type { OcrResult } from '../services/ocrService';
 import { config } from '../config';
 import { logger } from './logger';
 import type { Forderungen } from '../types/extraction';
@@ -127,32 +130,75 @@ export async function extractForderungen(
   pageTexts: string[],
   relevantPages: number[] | undefined,
   documentMap: string | undefined,
+  ocrResult?: OcrResult | null,
+  pdfBuffer?: Buffer | null,
 ): Promise<Forderungen | null> {
   try {
-    // Use only relevant pages if routing is available, otherwise all pages
-    const pages = relevantPages ?? pageTexts.map((_, i) => i + 1);
-    logger.info('Forderungen-Extraktion gestartet', { totalPages: pageTexts.length, relevantPages: pages.length });
+    // Use all pages by default. Only use routed subset if all pages exceed token limit.
+    const MAX_CHARS = 450_000; // ~180K tokens at 2.5 chars/tok, under 200K API limit
+    let pages = pageTexts.map((_, i) => i + 1);
+    const totalChars = pageTexts.reduce((sum, t) => sum + t.length, 0);
+
+    if (totalChars > MAX_CHARS) {
+      if (relevantPages && relevantPages.length < pages.length) {
+        pages = relevantPages;
+      }
+      let charSum = 0;
+      const fittingPages: number[] = [];
+      for (const p of pages) {
+        charSum += (pageTexts[p - 1] ?? '').length + 20;
+        if (charSum > MAX_CHARS) break;
+        fittingPages.push(p);
+      }
+      if (fittingPages.length < pages.length) {
+        pages = fittingPages;
+      }
+      logger.info('Forderungen-Extraktion: Token-Budget-Guard', {
+        totalChars, maxChars: MAX_CHARS, allPages: pageTexts.length, usingPages: pages.length,
+      });
+    }
+    logger.info('Forderungen-Extraktion gestartet', { totalPages: pageTexts.length, usingPages: pages.length });
 
     const mapBlock = documentMap
       ? `\n--- STRUKTURÜBERSICHT (nur zur Orientierung) ---\n${documentMap}\n--- ENDE STRUKTURÜBERSICHT ---\n`
       : '';
 
-    // Build page block with only relevant pages, but keep original page numbers for source references
-    const pageBlock = pages
-      .map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`)
-      .join('\n\n');
+    // Build page block — enriched with table structures + confidence if OCR data available
+    const pageBlock = ocrResult
+      ? buildEnrichedPageBlock(ocrResult, pages, pageTexts)
+      : pages.map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`).join('\n\n');
 
-    const content = `${FORDERUNGEN_PROMPT}${mapBlock}\n--- AKTENINHALT (${pages.length} relevante Seiten von ${pageTexts.length} gesamt) ---\n\n${pageBlock}`;
+    const textContent = `${FORDERUNGEN_PROMPT}${mapBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
+
+    // Build content blocks: text + page images (if PDF available, max 50 pages for forderungen)
+    let messageContent: string | Array<{ type: string; [key: string]: unknown }> = textContent;
+    if (pdfBuffer && pages.length <= 50) {
+      const pageImages = renderPagesToJpeg(pdfBuffer, pages.map(p => p - 1));
+      if (pageImages.size > 0) {
+        const blocks: Array<{ type: string; [key: string]: unknown }> = [];
+        blocks.push({ type: 'text', text: textContent });
+        blocks.push({ type: 'text', text: '\n--- BILDANSICHT (für Tabellen, Gläubigerlisten) ---' });
+        for (const pageNum of pages) {
+          const b64 = pageImages.get(pageNum - 1);
+          if (b64) {
+            blocks.push({ type: 'text', text: `=== BILD SEITE ${pageNum} ===` });
+            blocks.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } });
+          }
+        }
+        messageContent = blocks;
+        logger.info('Forderungen-Extraktion: Bild+Text-Modus', { images: pageImages.size, textPages: pages.length });
+      }
+    }
 
     // Use EXTRACTION_MODEL (Sonnet) — Haiku drops creditor names from long tables
     const model = config.EXTRACTION_MODEL;
 
     const response = await callWithRetry(() =>
-      anthropic.messages.create({
+      createAnthropicMessage({
         model,
         max_tokens: 16384,
         temperature: 0,
-        messages: [{ role: 'user' as const, content }],
+        messages: [{ role: 'user' as const, content: messageContent as any }],
       })
     ) as Anthropic.Message;
 

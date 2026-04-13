@@ -10,7 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { jsonrepair } from 'jsonrepair';
-import { anthropic, callWithRetry, extractJsonFromText } from '../services/anthropic';
+import { callWithRetry, extractJsonFromText, createAnthropicMessage } from '../services/anthropic';
 import { config } from '../config';
 import { logger } from './logger';
 import { parallelLimitSettled } from './parallel';
@@ -82,6 +82,17 @@ const SKIP_VERIFICATION_SUFFIXES = [
   '.titel',          // Forderungstitel = synthesized from sub-amounts
 ];
 
+// Prefix patterns for array elements from focused passes.
+// These come from dedicated Stage 2b extractors (Sonnet/Haiku) that read
+// only the relevant pages — Haiku re-verification actively harms quality.
+// Evidence: Sonnet forderungen pass found 77 creditors, Haiku verifier
+// mass-removed 56 glaeubiger names it couldn't find in its page batch.
+const SKIP_VERIFICATION_PREFIXES = [
+  'forderungen.einzelforderungen[',  // from forderungenExtractor (Sonnet)
+  'aktiva.positionen[',              // from aktivaExtractor (Haiku)
+  'anfechtung.vorgaenge[',           // from anfechtungsAnalyzer (Haiku)
+];
+
 export function collectFields(obj: unknown, prefix: string = ''): CollectedField[] {
   const fields: CollectedField[] = [];
 
@@ -89,7 +100,8 @@ export function collectFields(obj: unknown, prefix: string = ''): CollectedField
 
   if (isSourcedField(obj)) {
     const shouldSkip = SKIP_VERIFICATION_PATHS.has(prefix)
-      || SKIP_VERIFICATION_SUFFIXES.some(suffix => prefix.endsWith(suffix));
+      || SKIP_VERIFICATION_SUFFIXES.some(suffix => prefix.endsWith(suffix))
+      || SKIP_VERIFICATION_PREFIXES.some(pfx => prefix.startsWith(pfx));
     if (!wertIsEmpty(obj.wert) && !shouldSkip) {
       fields.push({ ref: obj, path: prefix });
     }
@@ -430,7 +442,7 @@ ${batch.pageBlock}
 ${fieldList}`;
 
     const response = await callWithRetry(() =>
-      anthropic.messages.create({
+      createAnthropicMessage({
         model: config.UTILITY_MODEL,
         max_tokens: VERIFICATION_MAX_TOKENS,
         messages: [{ role: 'user' as const, content }],
@@ -473,7 +485,7 @@ ${batch.pageBlock}
 ${retryFieldList}`;
 
         const retryResponse = await callWithRetry(() =>
-          anthropic.messages.create({
+          createAnthropicMessage({
             model: config.UTILITY_MODEL,
             max_tokens: VERIFICATION_MAX_TOKENS,
             messages: [{ role: 'user' as const, content: retryContent }],
@@ -510,8 +522,8 @@ ${retryFieldList}`;
     return { mutations: batchMutations, stats: batchStats, inputTokens, outputTokens };
   });
 
-  // Run batches — parallel for direct API, serial with delays for rate-limited providers
-  const isRateLimited = Boolean(config.ANTHROPIC_BASE_URL?.includes('langdock'));
+  // Run batches in parallel — Langdock now has 200K TPM, no longer rate-limited
+  const isRateLimited = false;
 
   let batchResults: (Awaited<ReturnType<typeof batchTasks[0]>> | undefined)[];
   let batchErrors: (Error | undefined)[];

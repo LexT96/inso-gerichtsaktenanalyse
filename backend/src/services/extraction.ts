@@ -1,10 +1,12 @@
 import path from 'path';
-import { extractComprehensive, extractFromPageTexts, anthropic, callWithRetry, extractJsonFromText, EXTRACTION_PROMPT } from './anthropic';
+import { extractComprehensive, extractFromPageTexts, callWithRetry, extractJsonFromText, createAnthropicMessage, EXTRACTION_PROMPT } from './anthropic';
 import { extractWithOpenAI } from './openaiExtractor';
 import { detectProvider, supportsNativePdf, isRateLimited, logProviderConfig } from './extractionProvider';
 import { computeExtractionStats } from '../utils/computeStats';
 import { config } from '../config';
-import { extractTextPerPage } from './pdfProcessor';
+import { extractTextPerPage, removeWatermarksFromTexts } from './pdfProcessor';
+import { isScannedPdf, isOcrConfigured, ocrPdf, type OcrResult } from './ocrService';
+import { registerExtraction } from './rateLimiter';
 import { getDb } from '../db/database';
 import { writeResultJson } from '../db/resultJson';
 import { logger } from '../utils/logger';
@@ -22,10 +24,41 @@ import type { ExtractionResult } from '../types/extraction';
 const isRateLimitedProvider = (): boolean => isRateLimited(detectProvider());
 
 const LARGE_PDF_THRESHOLD = 500; // pages — above this, use chunked fallback
+// Opus is slower and may timeout on large native PDF calls — use lower threshold
+const OPUS_PDF_THRESHOLD = 80; // pages — Opus timed out on 182 pages (3h single call)
 // For rate-limited providers, force chunked mode for any PDF
-const effectiveThreshold = (): number => isRateLimitedProvider() ? 0 : LARGE_PDF_THRESHOLD;
+const effectiveThreshold = (): number => {
+  if (isRateLimitedProvider()) return 0;
+  if (config.EXTRACTION_MODEL.includes('opus')) return OPUS_PDF_THRESHOLD;
+  return LARGE_PDF_THRESHOLD;
+};
 
 import type { ExtractionStats } from '../utils/computeStats';
+
+/**
+ * Build OCR confidence hints for pages with low-quality OCR.
+ * Appended to extractor prompts (NOT pageTexts) so the LLM knows which words are uncertain.
+ * Follows DokumenteAnalyse V3 pattern: >= 0.95 auto-accept, 0.80-0.95 flag, < 0.80 reject.
+ */
+function buildOcrConfidenceHints(ocrResult: OcrResult | null): string {
+  if (!ocrResult) return '';
+
+  const hints: string[] = [];
+  for (const page of ocrResult.pages) {
+    // DokumenteAnalyse V3 threshold: 0.95 (not 0.90) — flag more pages
+    if (!page.avgConfidence || page.avgConfidence >= 0.95) continue;
+    const lowWords = (page.lowConfidenceWords || [])
+      .filter(w => w.confidence < 0.80)
+      .slice(0, 20); // Cap per page to avoid bloat
+    if (lowWords.length === 0) continue;
+
+    const wordList = lowWords.map(w => `"${w.text}" (${(w.confidence * 100).toFixed(0)}%)`).join(', ');
+    hints.push(`Seite ${page.pageNumber} (OCR-Qualität: ${(page.avgConfidence * 100).toFixed(0)}%): Unsichere Wörter: ${wordList}`);
+  }
+
+  if (hints.length === 0) return '';
+  return `\n--- OCR-QUALITÄTSHINWEISE ---\nDie folgenden Seiten haben niedrige OCR-Qualität. Prüfe die markierten Wörter besonders sorgfältig und korrigiere offensichtliche OCR-Fehler anhand des Kontexts.\n${hints.join('\n')}\n--- ENDE OCR-HINWEISE ---\n`;
+}
 
 function isEmpty(field: { wert?: unknown; quelle?: unknown } | null | undefined): boolean {
   if (!field) return true;
@@ -246,7 +279,7 @@ Wenn ein Feld leer ist oder nicht lesbar: NICHT aufnehmen. Nur tatsächlich gele
 
 async function extractHandwrittenFormFields(
   result: ExtractionResult,
-  pdfBuffer: Buffer,
+  pdfBuffer: Buffer | null,
   pageTexts: string[]
 ): Promise<ExtractionResult> {
   const formPages = detectFragebogenPages(pageTexts);
@@ -258,30 +291,45 @@ async function extractHandwrittenFormFields(
   logger.info('Fragebogen pages detected for handwriting extraction', {
     pages: formPages.map(p => p + 1),
     count: formPages.length,
+    mode: pdfBuffer && supportsNativePdf(detectProvider()) ? 'native-pdf' : 'text',
   });
 
-  // Extract only the form pages as a mini-PDF
-  const miniPdf = await extractPdfPages(pdfBuffer, formPages);
-  const base64 = miniPdf.toString('base64');
-
-  // Map page indices to actual page numbers for the prompt
-  const pageMapping = formPages.map((p, i) => `PDF-Seite ${i + 1} = Originalseite ${p + 1}`).join(', ');
-
-  // Use Sonnet for handwriting OCR — Haiku lacks vision quality for handwritten forms
-  // But limit max_tokens since output is a small JSON object (~20 fields)
   const handwritingModel = config.EXTRACTION_MODEL;
-  const response = await callWithRetry(() => anthropic.messages.create({
-    model: handwritingModel,
-    max_tokens: 4096,
-    temperature: 0,
-    messages: [{
-      role: 'user' as const,
-      content: [
-        { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
-        { type: 'text' as const, text: `${HANDWRITING_PROMPT}\n\nSeitenzuordnung: ${pageMapping}\nBitte verwende die Originalseitennummern in der quelle.` },
-      ],
-    }],
-  }));
+  const pageMapping = formPages.map((p, i) => `PDF-Seite ${i + 1} = Originalseite ${p + 1}`).join(', ');
+  const promptSuffix = `\n\nSeitenzuordnung: ${pageMapping}\nBitte verwende die Originalseitennummern in der quelle.`;
+
+  let response;
+  if (pdfBuffer && supportsNativePdf(detectProvider())) {
+    // Native PDF mode: send mini-PDF for vision-based handwriting OCR
+    const miniPdf = await extractPdfPages(pdfBuffer, formPages);
+    const base64 = miniPdf.toString('base64');
+    response = await callWithRetry(() => createAnthropicMessage({
+      model: handwritingModel,
+      max_tokens: 8192,
+      temperature: 0,
+      messages: [{
+        role: 'user' as const,
+        content: [
+          { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+          { type: 'text' as const, text: `${HANDWRITING_PROMPT}${promptSuffix}` },
+        ],
+      }],
+    }));
+  } else {
+    // Text mode (Langdock): send OCR text of form pages — still catches structured fields
+    const formTextBlock = formPages
+      .map(p => `=== SEITE ${p + 1} ===\n${pageTexts[p] ?? ''}`)
+      .join('\n\n');
+    response = await callWithRetry(() => createAnthropicMessage({
+      model: handwritingModel,
+      max_tokens: 8192,
+      temperature: 0,
+      messages: [{
+        role: 'user' as const,
+        content: `${HANDWRITING_PROMPT}${promptSuffix}\n\n--- FORMULARE (OCR-Text) ---\n\n${formTextBlock}`,
+      }],
+    }));
+  }
 
   const text = response.content
     .filter((c) => c.type === 'text')
@@ -291,9 +339,19 @@ async function extractHandwrittenFormFields(
   let parsed: Record<string, { wert: unknown; quelle: string }>;
   try {
     const jsonStr = extractJsonFromText(text);
-    parsed = JSON.parse(jsonStr);
-  } catch {
-    logger.warn('Handwriting extraction JSON parse failed', { sample: text.slice(0, 300) });
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      // JSON likely truncated by max_tokens — try jsonrepair
+      const { jsonrepair } = await import('jsonrepair');
+      parsed = JSON.parse(jsonrepair(jsonStr));
+      logger.info('Handwriting JSON per jsonrepair repariert');
+    }
+  } catch (err) {
+    logger.warn('Handwriting extraction JSON parse failed', {
+      error: err instanceof Error ? err.message : String(err),
+      sample: text.slice(0, 300),
+    });
     return result;
   }
 
@@ -581,6 +639,7 @@ export async function processExtraction(
   const report = onProgress ?? (() => {});
   const db = getDb();
   const startTime = Date.now();
+  const deregisterExtraction = registerExtraction();
 
   // Create extraction record
   const insertResult = db.prepare(
@@ -599,14 +658,60 @@ export async function processExtraction(
     report('Seitentext wird extrahiert…', 8);
 
     // Always extract text per page — needed for analysis and verification
-    const pageTexts = await extractTextPerPage(pdfBuffer);
+    let pageTexts = await extractTextPerPage(pdfBuffer);
     const pageCount = pageTexts.length;
     logger.info('PDF Seitenanzahl ermittelt', { pageCount });
+
+    // Track OCR result for confidence hints
+    let ocrResult: OcrResult | null = null;
+
+    // If scanned PDF (near-zero text), run Azure Document Intelligence OCR
+    if (isScannedPdf(pageTexts) && isOcrConfigured()) {
+      report('Gescanntes PDF erkannt — OCR wird durchgeführt…', 10);
+      logger.info('Gescanntes PDF erkannt, starte Azure Document Intelligence OCR', {
+        avgCharsPerPage: Math.round(pageTexts.reduce((s, t) => s + t.length, 0) / pageTexts.length),
+      });
+      try {
+        ocrResult = await ocrPdf(pdfBuffer);
+        // Build pageTexts from clean OCR line text only.
+        // Table structures and confidence data are available in ocrResult
+        // but NOT injected into pageTexts — they bloat the prompt (129 tables
+        // added ~75K tokens on the Geldt PDF, causing Stage 2a to fail).
+        // Claude sees the PDF images directly via native PDF mode.
+        const ocrPageTexts = new Array<string>(pageCount).fill('');
+        for (const page of ocrResult.pages) {
+          if (page.pageNumber >= 1 && page.pageNumber <= pageCount) {
+            ocrPageTexts[page.pageNumber - 1] = page.text;
+          }
+        }
+        pageTexts = removeWatermarksFromTexts(ocrPageTexts);
+        logger.info('OCR abgeschlossen', {
+          totalChars: ocrResult.totalChars,
+          pagesWithText: ocrResult.pages.filter(p => p.text.length > 0).length,
+          tablesDetected: ocrResult.pages.reduce((s, p) => s + (p.tables?.length || 0), 0),
+        });
+      } catch (err) {
+        logger.error('OCR fehlgeschlagen, verwende Original-Text', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        // Continue with original (sparse) pageTexts — extraction still works via native PDF vision
+      }
+    }
+
+    // Build OCR confidence hints (empty string for digital PDFs)
+    const ocrHints = buildOcrConfidenceHints(ocrResult);
+    if (ocrHints) {
+      logger.info('OCR-Qualitätshinweise erstellt', {
+        pagesWithLowConfidence: ocrResult!.pages.filter(p => p.avgConfidence && p.avgConfidence < 0.90).length,
+      });
+    }
 
     report(`${pageCount} Seiten erkannt — Dokumentstruktur wird analysiert… (Stufe 1/3)`, 15);
 
     // Stage 1: Analyze document structure → text map + parsed segments
-    const { mapText: documentMap, segments } = await analyzeDocumentStructure(pageTexts);
+    const { mapText: rawDocumentMap, segments } = await analyzeDocumentStructure(pageTexts);
+    // Append OCR confidence hints to document map — flows into all extractor prompts
+    const documentMap = ocrHints ? `${rawDocumentMap}${ocrHints}` : rawDocumentMap;
 
     report('Daten werden extrahiert… (Stufe 2/3)', 30);
 
@@ -619,8 +724,40 @@ export async function processExtraction(
 
     if (provider === 'openai') {
       // OpenAI/GPT extraction — vision via images, auto-chunks for large files
-      report(`GPT-Extraktion (${pageCount} S.)… (Stufe 2/3)`, 35);
+      report(`GPT-Extraktion (${pageCount} S.)… (Stufe 2a/3)`, 35);
       result = await extractWithOpenAI(pdfBuffer, pageTexts, EXTRACTION_PROMPT, documentMap, segments);
+
+      // Stage 2b: Run Anthropic-based focused passes (same as Sonnet pipeline)
+      // GPT handles base extraction; Anthropic models handle detail extraction
+      const routing = classifySegmentsForExtraction(segments, pageCount);
+      logger.info('Seitenklassifizierung (GPT + focused passes)', {
+        forderungenPages: routing.forderungenPages.length,
+        aktivaPages: routing.aktivaPages.length,
+        anfechtungPages: routing.anfechtungPages.length,
+      });
+
+      report('Detailanalyse (Forderungen, Aktiva, Anfechtung)… (Stufe 2b/3)', 50);
+      const [forderungenResult, aktivaResult, anfechtungResult] = await Promise.allSettled([
+        extractForderungen(pageTexts, routing.forderungenPages, documentMap, ocrResult, pdfBuffer),
+        extractAktiva(pageTexts, documentMap, result, routing.aktivaPages, ocrResult, pdfBuffer),
+        analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages, ocrResult, pdfBuffer),
+      ]);
+
+      if (forderungenResult.status === 'fulfilled' && forderungenResult.value) {
+        result.forderungen = forderungenResult.value;
+      } else if (forderungenResult.status === 'rejected') {
+        logger.warn('Forderungen-Extraktion fehlgeschlagen', { error: forderungenResult.reason instanceof Error ? forderungenResult.reason.message : String(forderungenResult.reason) });
+      }
+      if (aktivaResult.status === 'fulfilled' && aktivaResult.value) {
+        result.aktiva = aktivaResult.value;
+      } else if (aktivaResult.status === 'rejected') {
+        logger.warn('Aktiva-Extraktion fehlgeschlagen', { error: aktivaResult.reason instanceof Error ? aktivaResult.reason.message : String(aktivaResult.reason) });
+      }
+      if (anfechtungResult.status === 'fulfilled' && anfechtungResult.value) {
+        result.anfechtung = anfechtungResult.value;
+      } else if (anfechtungResult.status === 'rejected') {
+        logger.warn('Anfechtungsanalyse fehlgeschlagen', { error: anfechtungResult.reason instanceof Error ? anfechtungResult.reason.message : String(anfechtungResult.reason) });
+      }
     } else if (pageCount <= effectiveThreshold()) {
       // Multi-pass extraction: base (Sonnet) + focused passes (Haiku) in parallel
       report(`Basisanalyse (${pageCount} S.)… (Stufe 2a/3)`, 35);
@@ -640,13 +777,13 @@ export async function processExtraction(
       if (isRateLimitedProvider()) {
         // Rate-limited: serialize with delays
         logger.info('Rate-limited provider: Detailanalysen seriell');
-        const forderungenResult = await extractForderungen(pageTexts, routing.forderungenPages, documentMap)
+        const forderungenResult = await extractForderungen(pageTexts, routing.forderungenPages, documentMap, ocrResult, pdfBuffer)
           .catch(err => { logger.warn('Forderungen-Extraktion fehlgeschlagen', { error: err instanceof Error ? err.message : String(err) }); return null; });
         await new Promise(r => setTimeout(r, 62_000));
-        const aktivaResult = await extractAktiva(pageTexts, documentMap, result)
+        const aktivaResult = await extractAktiva(pageTexts, documentMap, result, routing.aktivaPages, ocrResult, pdfBuffer)
           .catch(err => { logger.warn('Aktiva-Extraktion fehlgeschlagen', { error: err instanceof Error ? err.message : String(err) }); return null; });
         await new Promise(r => setTimeout(r, 62_000));
-        const anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result)
+        const anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages, ocrResult, pdfBuffer)
           .catch(err => { logger.warn('Anfechtungsanalyse fehlgeschlagen', { error: err instanceof Error ? err.message : String(err) }); return null; });
 
         if (forderungenResult) result.forderungen = forderungenResult;
@@ -655,9 +792,9 @@ export async function processExtraction(
       } else {
         // Normal: run all three in parallel
         const [forderungenResult, aktivaResult, anfechtungResult] = await Promise.allSettled([
-          extractForderungen(pageTexts, routing.forderungenPages, documentMap),
-          extractAktiva(pageTexts, documentMap, result),
-          analyzeAnfechtung(pageTexts, documentMap, result),
+          extractForderungen(pageTexts, routing.forderungenPages, documentMap, ocrResult, pdfBuffer),
+          extractAktiva(pageTexts, documentMap, result, routing.aktivaPages, ocrResult, pdfBuffer),
+          analyzeAnfechtung(pageTexts, documentMap, result, routing.anfechtungPages, ocrResult, pdfBuffer),
         ]);
 
         if (forderungenResult.status === 'fulfilled' && forderungenResult.value) {
@@ -698,24 +835,24 @@ export async function processExtraction(
       if (isRateLimitedProvider()) {
         logger.info('Rate-limited provider: Zusatzanalysen seriell mit Pause');
         report('Aktiva-Analyse… (Rate-Limit-Modus)', 55);
-        aktivaResult = await extractAktiva(pageTexts, documentMap, result)
+        aktivaResult = await extractAktiva(pageTexts, documentMap, result, chunkedRouting.aktivaPages, ocrResult, pdfBuffer)
           .then(v => ({ status: 'fulfilled' as const, value: v }))
           .catch(reason => ({ status: 'rejected' as const, reason }));
         await new Promise(r => setTimeout(r, 62_000));
         report('Anfechtungsanalyse…', 60);
-        anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result)
+        anfechtungResult = await analyzeAnfechtung(pageTexts, documentMap, result, chunkedRouting.anfechtungPages, ocrResult, pdfBuffer)
           .then(v => ({ status: 'fulfilled' as const, value: v }))
           .catch(reason => ({ status: 'rejected' as const, reason }));
         await new Promise(r => setTimeout(r, 62_000));
         report('Forderungen-Analyse…', 62);
-        forderungenChunkedResult = await extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap)
+        forderungenChunkedResult = await extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap, ocrResult, pdfBuffer)
           .then(v => ({ status: 'fulfilled' as const, value: v }))
           .catch(reason => ({ status: 'rejected' as const, reason }));
       } else {
         [aktivaResult, anfechtungResult, forderungenChunkedResult] = await Promise.allSettled([
-          extractAktiva(pageTexts, documentMap, result),
-          analyzeAnfechtung(pageTexts, documentMap, result),
-          extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap),
+          extractAktiva(pageTexts, documentMap, result, chunkedRouting.aktivaPages, ocrResult, pdfBuffer),
+          analyzeAnfechtung(pageTexts, documentMap, result, chunkedRouting.anfechtungPages, ocrResult, pdfBuffer),
+          extractForderungen(pageTexts, chunkedRouting.forderungenPages, documentMap, ocrResult, pdfBuffer),
         ]);
       }
 
@@ -744,22 +881,53 @@ export async function processExtraction(
     const verifyResult = await semanticVerify(result, pageTexts, documentMap);
     result = verifyResult.result;
 
-    // Stage 3b: Targeted re-extraction for fields removed by verifier
-    // Research shows guided re-extraction recovers 5-15% of lost fields
-    if (verifyResult.removedPaths.length > 0 && verifyResult.removedPaths.length <= 20) {
+    // Stage 3b: Targeted re-extraction for scalar fields removed by verifier
+    // Array elements (forderungen[N], aktiva[N], anfechtung[N]) are NOT re-extracted —
+    // they come from focused passes and should not be second-guessed.
+    const scalarRemovedPaths = verifyResult.removedPaths.filter(p =>
+      !p.match(/\beinzelforderungen\[/) && !p.match(/\bpositionen\[/) && !p.match(/\bvorgaenge\[/)
+    );
+    if (scalarRemovedPaths.length > 0 && scalarRemovedPaths.length <= 20) {
       report('Fehlende Felder werden nachextrahiert…', 82);
-      logger.info('Targeted re-extraction', { removedPaths: verifyResult.removedPaths });
+      logger.info('Targeted re-extraction', { removedPaths: scalarRemovedPaths });
       try {
         const reExtractPrompt = `Du bist ein Extraktionsassistent. Die folgenden Felder wurden bei der vorherigen Extraktion als fehlerhaft erkannt und entfernt. Prüfe die Akte erneut SORGFÄLTIG und extrahiere NUR diese spezifischen Felder. Antworte mit einem JSON-Objekt das NUR die gefundenen Felder enthält (Pfad als Key, {wert, quelle} als Value). Wenn ein Feld wirklich nicht in der Akte steht, lasse es weg.
 
-Gesuchte Felder: ${verifyResult.removedPaths.join(', ')}
+Gesuchte Felder: ${scalarRemovedPaths.join(', ')}
 
 Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, ..."}, ...}`;
 
-        const relevantPages = pageTexts.map((t, i) => `=== SEITE ${i + 1} ===\n${t}`).join('\n\n');
-        const reContent = `${reExtractPrompt}\n\n${relevantPages}`;
+        // Only send pages that are likely relevant — extract page numbers from removed field quellen + nearby pages
+        const rePages = new Set<number>();
+        for (const rp of scalarRemovedPaths) {
+          // Try to find the quelle for this field to get its page number
+          const parts = rp.replace(/\[\d+\]/, '').split('.');
+          let obj: unknown = result;
+          for (const part of parts) {
+            if (obj && typeof obj === 'object') obj = (obj as Record<string, unknown>)[part];
+          }
+          if (obj && typeof obj === 'object' && 'quelle' in obj) {
+            const match = String((obj as { quelle: unknown }).quelle).match(/Seite\s+(\d+)/i);
+            if (match) {
+              const p = parseInt(match[1], 10);
+              // Add the page and neighbors (±2) for context
+              for (let i = Math.max(1, p - 2); i <= Math.min(pageTexts.length, p + 2); i++) rePages.add(i);
+            }
+          }
+        }
+        // Fallback: if no pages found, use first 30 pages (cover + key docs)
+        if (rePages.size === 0) {
+          for (let i = 1; i <= Math.min(30, pageTexts.length); i++) rePages.add(i);
+        }
+        const sortedRePages = [...rePages].sort((a, b) => a - b);
+        logger.info('Re-extraction page budget', { pages: sortedRePages.length, total: pageTexts.length });
 
-        const reResponse = await callWithRetry(() => anthropic.messages.create({
+        const relevantPageBlock = sortedRePages
+          .map(p => `=== SEITE ${p} ===\n${pageTexts[p - 1] ?? ''}`)
+          .join('\n\n');
+        const reContent = `${reExtractPrompt}\n\n${relevantPageBlock}`;
+
+        const reResponse = await callWithRetry(() => createAnthropicMessage({
           model: config.UTILITY_MODEL || 'claude-haiku-4-5-20251001',
           max_tokens: 4096,
           temperature: 0,
@@ -805,7 +973,7 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
         }
 
         if (recovered > 0) {
-          logger.info(`Targeted re-extraction recovered ${recovered}/${verifyResult.removedPaths.length} fields`);
+          logger.info(`Targeted re-extraction recovered ${recovered}/${scalarRemovedPaths.length} fields`);
         }
       } catch (reErr) {
         logger.warn('Targeted re-extraction failed', { error: reErr instanceof Error ? reErr.message : String(reErr) });
@@ -813,9 +981,10 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
     }
 
     // Stage 3c: Focused handwriting extraction for Fragebogen pages
-    // Claude's vision CAN read handwriting but misses details when processing 30+ pages at once.
-    // This pass sends ONLY the form pages with a focused prompt → dramatically better results.
-    if (supportsNativePdf(provider) && pdfBuffer) {
+    // With native PDF: sends mini-PDF for vision-based handwriting OCR.
+    // Without native PDF (Langdock): sends OCR text of form pages — still catches
+    // structured form fields that the base extraction missed.
+    if (pdfBuffer || pageTexts.length > 0) {
       report('Handschriftliche Formulare werden gelesen…', 85);
       try {
         result = await extractHandwrittenFormFields(result, pdfBuffer, pageTexts);
@@ -837,7 +1006,73 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
     report('Nachbearbeitung…', 89);
     result = postProcessDefaults(result);
 
-    report('Standardanschreiben werden geprüft…', 90);
+    // Stage 5: Validation-driven retry — check critical fields, retry base extraction once if missing
+    const criticalMissing: string[] = [];
+    if (!result.verfahrensdaten?.aktenzeichen?.wert) criticalMissing.push('Aktenzeichen');
+    if (!result.verfahrensdaten?.gericht?.wert) criticalMissing.push('Gericht');
+    if (!result.schuldner?.name?.wert && !result.schuldner?.firma?.wert) criticalMissing.push('Name/Firma des Schuldners');
+    if (!result.verfahrensdaten?.beschlussdatum?.wert && !result.verfahrensdaten?.antragsdatum?.wert) criticalMissing.push('Beschluss-/Antragsdatum');
+
+    if (criticalMissing.length > 0) {
+      report('Kritische Felder fehlen — Nachextraktion…', 90);
+      logger.info('Validation-driven retry: kritische Felder fehlen', { missing: criticalMissing });
+      try {
+        const retryPrompt = `Bei der Extraktion dieser Insolvenzakte fehlen kritische Felder: ${criticalMissing.join(', ')}.
+
+Prüfe die Akte NOCHMAL SORGFÄLTIG und extrahiere NUR diese fehlenden Felder.
+Denke Schritt für Schritt:
+1. Welche Dokumenttypen enthält die Akte? (Beschluss, Antrag, Anlage)
+2. Wo stehen typischerweise ${criticalMissing.join(', ')}? (Rubrum, Beschluss, Antrag)
+3. Suche gezielt auf den relevanten Seiten.
+
+Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, ..."}, ...}
+Mögliche Felder: verfahrensdaten.aktenzeichen, verfahrensdaten.gericht, verfahrensdaten.beschlussdatum, verfahrensdaten.antragsdatum, schuldner.name, schuldner.vorname, schuldner.firma`;
+
+        // Send first 30 pages (critical data is always at the start)
+        const retryPages = pageTexts.slice(0, Math.min(30, pageTexts.length))
+          .map((t, i) => `=== SEITE ${i + 1} ===\n${t}`).join('\n\n');
+
+        const retryResponse = await callWithRetry(() => createAnthropicMessage({
+          model: config.EXTRACTION_MODEL,
+          max_tokens: 4096,
+          temperature: 0,
+          messages: [{ role: 'user' as const, content: `${retryPrompt}\n\n${retryPages}` }],
+        }));
+
+        const retryText = retryResponse.content
+          .filter((c) => c.type === 'text')
+          .map((c) => (c as { text: string }).text).join('');
+
+        const retryJson = extractJsonFromText(retryText);
+        const retryData = JSON.parse(retryJson) as Record<string, { wert: unknown; quelle: string }>;
+
+        let recovered = 0;
+        for (const [path, value] of Object.entries(retryData)) {
+          if (!value?.wert || !value?.quelle) continue;
+          const parts = path.split('.');
+          let obj: Record<string, unknown> = result as unknown as Record<string, unknown>;
+          for (let i = 0; i < parts.length - 1; i++) {
+            if (!obj[parts[i]] || typeof obj[parts[i]] !== 'object') break;
+            obj = obj[parts[i]] as Record<string, unknown>;
+          }
+          const field = obj[parts[parts.length - 1]] as { wert: unknown; quelle: string } | undefined;
+          if (field && (field.wert === null || field.wert === undefined || field.wert === '')) {
+            field.wert = value.wert;
+            field.quelle = value.quelle;
+            recovered++;
+          }
+        }
+
+        if (recovered > 0) {
+          logger.info(`Validation-retry recovered ${recovered}/${criticalMissing.length} critical fields`);
+          result = postProcessDefaults(result); // Re-run post-processing
+        }
+      } catch (retryErr) {
+        logger.warn('Validation-driven retry failed', { error: retryErr instanceof Error ? retryErr.message : String(retryErr) });
+      }
+    }
+
+    report('Standardanschreiben werden geprüft…', 91);
     result = validateLettersAgainstChecklists(result);
 
     const processingTimeMs = Date.now() - startTime;
@@ -864,8 +1099,10 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
       processingTimeMs,
     });
 
+    deregisterExtraction();
     return { id: extractionId, result, stats, processingTimeMs };
   } catch (error) {
+    deregisterExtraction();
     const processingTimeMs = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : String(error);
 

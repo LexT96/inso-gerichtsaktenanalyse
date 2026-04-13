@@ -91,6 +91,13 @@ export async function extractTextPerPage(buffer: Buffer): Promise<string[]> {
  * 3. Lines appearing on >80% of pages are watermark candidates
  * 4. Remove those lines from all pages
  */
+/**
+ * Exported alias for use by OCR service — applies watermark removal to externally-sourced page texts.
+ */
+export function removeWatermarksFromTexts(pageTexts: string[]): string[] {
+  return removeWatermarks(pageTexts);
+}
+
 function removeWatermarks(pageTexts: string[]): string[] {
   if (pageTexts.length < 3) return pageTexts; // Too few pages to detect patterns
 
@@ -143,29 +150,76 @@ function removeWatermarks(pageTexts: string[]): string[] {
     }
   }
 
-  if (watermarkLines.size === 0 && watermarkSuffixes.length === 0) return pageTexts;
+  // === Strategy 3: Short-fragment watermarks (OCR artifact debris) ===
+  // OCR of diagonal/rotated watermarks produces short text fragments as standalone
+  // lines scattered across pages (e.g. "Alexander Lamberty 18.12.2025" becomes
+  // "Ale", "xan", "d", "er", "Lam", "b", "ert", "y1", "025", "8.1", "2.2").
+  // Detect by finding short standalone lines appearing on many distinct pages.
+  //
+  // Safety: only activate when we find a CLUSTER of 5+ such fragments.
+  // A single repeated name (e.g. judge "Kasel" on every order) would produce 1
+  // candidate, not 5+. Watermark debris always produces many fragments together.
+  const fragmentPageSets = new Map<string, Set<number>>();
+  for (let pageIdx = 0; pageIdx < pageTexts.length; pageIdx++) {
+    const uniqueFrags = new Set(
+      pageTexts[pageIdx].split('\n').map(l => l.trim()).filter(l => l.length >= 1 && l.length <= 8)
+    );
+    for (const frag of uniqueFrags) {
+      if (!fragmentPageSets.has(frag)) fragmentPageSets.set(frag, new Set());
+      fragmentPageSets.get(frag)!.add(pageIdx);
+    }
+  }
 
-  const allPatterns = [...watermarkLines, ...watermarkSuffixes];
+  const watermarkFragments = new Set<string>();
+  const fragThreshold = Math.ceil(pageTexts.length * 0.5);
+  const candidates: Array<{ frag: string; pages: Set<number> }> = [];
+  for (const [frag, pages] of fragmentPageSets) {
+    if (pages.size < fragThreshold) continue;
+    // Exclude pure digits (page numbers, section numbers like "1", "36")
+    if (/^\d+$/.test(frag)) continue;
+    // Exclude common list markers: "a)", "b)", "cc)", etc.
+    if (/^[a-z]{1,3}\)$/.test(frag)) continue;
+    // Exclude "Seite X" patterns
+    if (/^Seite \d+/.test(frag)) continue;
+    candidates.push({ frag, pages });
+  }
+
+  // Only treat as watermark debris if we find a cluster of 5+ co-occurring fragments.
+  // A single repeated name or abbreviation won't reach this threshold.
+  if (candidates.length >= 5) {
+    for (const { frag } of candidates) {
+      watermarkFragments.add(frag);
+    }
+  }
+
+  if (watermarkLines.size === 0 && watermarkSuffixes.length === 0 && watermarkFragments.size === 0) {
+    return pageTexts;
+  }
+
   logger.info('Wasserzeichen erkannt und entfernt', {
     wholeLines: watermarkLines.size,
     suffixes: watermarkSuffixes.length,
-    patterns: allPatterns.slice(0, 5),
+    fragments: watermarkFragments.size,
+    patterns: [...watermarkLines, ...watermarkSuffixes].slice(0, 5),
+    fragmentSamples: [...watermarkFragments].slice(0, 10),
     pagesAffected: pageTexts.length,
   });
 
   // Remove watermarks from all pages
   return pageTexts.map(pageText => {
-    let text = pageText;
+    const lines = pageText.split('\n');
+    const filtered = lines.filter(line => {
+      const trimmed = line.trim();
+      // Strategy 1: whole-line watermarks
+      if (watermarkLines.has(trimmed)) return false;
+      // Strategy 3: short-fragment watermarks (only standalone short lines)
+      if (trimmed.length >= 1 && trimmed.length <= 8 && watermarkFragments.has(trimmed)) return false;
+      return true;
+    });
+    let text = filtered.join('\n');
 
-    // Remove whole-line watermarks
-    if (watermarkLines.size > 0) {
-      const lines = text.split('\n');
-      text = lines.filter(line => !watermarkLines.has(line.trim())).join('\n');
-    }
-
-    // Remove suffix watermarks (from end of lines)
+    // Strategy 2: suffix watermarks (from end of lines)
     for (const suffix of watermarkSuffixes) {
-      // Escape for regex
       const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       text = text.replace(new RegExp('\\s*' + escaped + '\\s*$', 'gm'), '');
     }

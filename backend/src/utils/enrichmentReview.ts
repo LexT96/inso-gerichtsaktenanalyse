@@ -15,7 +15,7 @@
  * Uses a focused Haiku call with specific questions — cheap and fast.
  */
 
-import { anthropic, callWithRetry, extractJsonFromText } from '../services/anthropic';
+import { callWithRetry, extractJsonFromText, createAnthropicMessage } from '../services/anthropic';
 import { config } from '../config';
 import { logger } from './logger';
 import type { ExtractionResult } from '../types/extraction';
@@ -124,7 +124,7 @@ AKTUELLE EXTRAKTION:
   const content = `${REVIEW_PROMPT}\n\n${currentValues}\n\n--- RELEVANTE SEITEN ---\n${pageBlock}`;
 
   try {
-    const response = await callWithRetry(() => anthropic.messages.create({
+    const response = await callWithRetry(() => createAnthropicMessage({
       model: config.UTILITY_MODEL || 'claude-haiku-4-5-20251001',
       max_tokens: 2048,
       temperature: 0,

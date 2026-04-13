@@ -90,7 +90,7 @@ export function AnschreibenTab({ result, letters, missingInfo, onUpdateField }: 
       </div>
 
       <FieldChecklist
-        title="Pflichtfelder f\u00fcr Anschreiben"
+        title="Pflichtfelder für Anschreiben"
         fields={ANSCHREIBEN_REQUIRED_FIELDS}
         result={result}
         onUpdateField={onUpdateField}
