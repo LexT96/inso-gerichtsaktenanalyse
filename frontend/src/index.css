@@ -26,7 +26,7 @@
   /* Header accent line — refined gradient fade */
   header {
     border-bottom: 1px solid #E5E7EB;
-    border-image: linear-gradient(to right, #A52A2A 60px, #C4625A 120px, #E5E7EB 200px) 1;
+    border-image: linear-gradient(to right, #023055 60px, #1a5a8a 120px, #E5E7EB 200px) 1;
   }
 
   /* PDF viewer */
@@ -61,8 +61,8 @@
   }
   input:focus, select:focus, textarea:focus {
     outline: none;
-    border-color: #A52A2A !important;
-    box-shadow: 0 0 0 3px rgba(165, 42, 42, 0.08);
+    border-color: #023055 !important;
+    box-shadow: 0 0 0 3px rgba(2, 48, 85, 0.08);
   }
 
   /* Smooth transitions on interactive elements */
