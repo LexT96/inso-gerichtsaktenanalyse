@@ -168,7 +168,10 @@ export async function extractForderungen(
       ? buildEnrichedPageBlock(ocrResult, pages, pageTexts)
       : pages.map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`).join('\n\n');
 
-    const textContent = `${FORDERUNGEN_PROMPT}${mapBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
+    // Static prompt → cached system prompt (90% savings on repeated calls within 5 min)
+    // Dynamic content → user message
+    const dynamicContent = `${mapBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
+    const textContent = dynamicContent;
 
     // Build content blocks: text + page images (if PDF available, max 50 pages for forderungen)
     let messageContent: string | Array<{ type: string; [key: string]: unknown }> = textContent;
@@ -199,7 +202,7 @@ export async function extractForderungen(
         max_tokens: 16384,
         temperature: 0,
         messages: [{ role: 'user' as const, content: messageContent as any }],
-      })
+      }, FORDERUNGEN_PROMPT)
     ) as Anthropic.Message;
 
     const text = response.content

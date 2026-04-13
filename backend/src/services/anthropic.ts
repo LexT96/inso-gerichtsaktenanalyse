@@ -367,13 +367,32 @@ export async function callWithRetry<T>(fn: () => Promise<T>): Promise<T> {
 
 /**
  * Wrapper for anthropic.messages.create with:
- * 1. Streaming on Langdock (avoids Cloudflare 524 timeout)
- * 2. Global rate limiting (prevents TPM overload with concurrent extractions)
- * Drop-in replacement — returns the same Message type.
+ * 1. Prompt caching — static system prompts cached for 5 min (90% input savings)
+ * 2. Streaming on Langdock (avoids Cloudflare 524 timeout)
+ * 3. Global rate limiting (prevents TPM overload with concurrent extractions)
+ *
+ * Usage with caching (preferred — split static prompt from dynamic content):
+ *   createAnthropicMessage({ model, max_tokens, messages: [{ role: 'user', content: dynamicContent }] }, staticPrompt)
+ *
+ * Usage without caching (backward compatible):
+ *   createAnthropicMessage({ model, max_tokens, messages: [{ role: 'user', content: fullContent }] })
  */
 export async function createAnthropicMessage(
-  params: Anthropic.MessageCreateParamsNonStreaming
+  params: Anthropic.MessageCreateParamsNonStreaming,
+  cachedSystemPrompt?: string,
 ): Promise<Anthropic.Message> {
+  // Add cached system prompt if provided
+  if (cachedSystemPrompt) {
+    params = {
+      ...params,
+      system: [{
+        type: 'text',
+        text: cachedSystemPrompt,
+        cache_control: { type: 'ephemeral' },
+      }] as any,
+    };
+  }
+
   // Estimate tokens for rate limiting
   const content = params.messages?.[0]?.content;
   const estimated = typeof content === 'string'

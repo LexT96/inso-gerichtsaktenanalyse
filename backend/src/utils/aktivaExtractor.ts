@@ -282,7 +282,8 @@ export async function extractAktiva(
       ? buildEnrichedPageBlock(ocrResult, pages, pageTexts)
       : pages.map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`).join('\n\n');
 
-    const textContent = `${AKTIVA_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
+    const dynamicContent = `${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
+    const textContent = dynamicContent;
 
     // Build content blocks: text + page images (if PDF available, max 30 pages)
     let messageContent: string | Array<{ type: string; [key: string]: unknown }> = textContent;
@@ -312,7 +313,7 @@ export async function extractAktiva(
         max_tokens: 4096,
         temperature: 0.1,
         messages: [{ role: 'user' as const, content: messageContent as any }],
-      })
+      }, AKTIVA_PROMPT)
     ) as Anthropic.Message;
 
     const text = response.content

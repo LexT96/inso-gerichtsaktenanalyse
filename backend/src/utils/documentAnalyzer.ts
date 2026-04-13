@@ -225,15 +225,15 @@ export async function analyzeDocumentStructure(pageTexts: string[]): Promise<Doc
   if (pageTexts.length === 0) return { mapText: '', segments: [] };
 
   const pageBlock = buildPageBlock(pageTexts);
-  const content = `${ANALYSIS_PROMPT}\n\n--- AKTENINHALT (${pageTexts.length} Seiten) ---\n\n${pageBlock}`;
+  const dynamicContent = `--- AKTENINHALT (${pageTexts.length} Seiten) ---\n\n${pageBlock}`;
 
   try {
     const response = await callWithRetry(() =>
       createAnthropicMessage({
         model: config.UTILITY_MODEL,
         max_tokens: 4096,
-        messages: [{ role: 'user' as const, content }],
-      })
+        messages: [{ role: 'user' as const, content: dynamicContent }],
+      }, ANALYSIS_PROMPT)
     ) as Anthropic.Message;
 
     const text = response.content

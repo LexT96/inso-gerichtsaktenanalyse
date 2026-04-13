@@ -287,7 +287,8 @@ export async function analyzeAnfechtung(
       ? buildEnrichedPageBlock(ocrResult, pages, pageTexts)
       : pages.map((pageNum) => `=== SEITE ${pageNum} ===\n${pageTexts[pageNum - 1] ?? ''}`).join('\n\n');
 
-    const textContent = `${ANFECHTUNG_PROMPT}${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
+    const dynamicContent = `${mapBlock}${hintsBlock}\n--- AKTENINHALT (${pages.length} Seiten) ---\n\n${pageBlock}`;
+    const textContent = dynamicContent;
 
     // Build content blocks: text + page images (if PDF available, max 20 images)
     let messageContent: string | Array<{ type: string; [key: string]: unknown }> = textContent;
@@ -317,7 +318,7 @@ export async function analyzeAnfechtung(
         max_tokens: 4096,
         temperature: 0.1,
         messages: [{ role: 'user' as const, content: messageContent as any }],
-      })
+      }, ANFECHTUNG_PROMPT)
     ) as Anthropic.Message;
 
     const text = response.content

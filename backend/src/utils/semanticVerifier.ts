@@ -431,8 +431,7 @@ export async function semanticVerify(
 
     const fieldList = buildFieldList(batch.fields);
 
-    const content = `${VERIFICATION_PROMPT}
-${mapBlock}
+    const dynamicContent = `${mapBlock}
 --- AKTENINHALT (${batch.pageCount} relevante Seiten von ${pageTexts.length} gesamt) ---
 
 ${batch.pageBlock}
@@ -445,8 +444,8 @@ ${fieldList}`;
       createAnthropicMessage({
         model: config.UTILITY_MODEL,
         max_tokens: VERIFICATION_MAX_TOKENS,
-        messages: [{ role: 'user' as const, content }],
-      })
+        messages: [{ role: 'user' as const, content: dynamicContent }],
+      }, VERIFICATION_PROMPT)
     ) as Anthropic.Message;
 
     const text = response.content
@@ -474,8 +473,7 @@ ${fieldList}`;
 
       if (remainingFields.length > 0) {
         const retryFieldList = buildFieldList(remainingFields);
-        const retryContent = `${VERIFICATION_PROMPT}
-${mapBlock}
+        const retryDynamicContent = `${mapBlock}
 --- AKTENINHALT (${batch.pageCount} relevante Seiten von ${pageTexts.length} gesamt) ---
 
 ${batch.pageBlock}
@@ -488,8 +486,8 @@ ${retryFieldList}`;
           createAnthropicMessage({
             model: config.UTILITY_MODEL,
             max_tokens: VERIFICATION_MAX_TOKENS,
-            messages: [{ role: 'user' as const, content: retryContent }],
-          })
+            messages: [{ role: 'user' as const, content: retryDynamicContent }],
+          }, VERIFICATION_PROMPT)
         ) as Anthropic.Message;
 
         const retryText = retryResponse.content
