@@ -99,8 +99,8 @@ export function LoginPage() {
         {/* Logo area */}
         <div className="px-10 pt-10 pb-6 text-center border-b border-border/60">
           <img
-            src="/demo/tbsl.png"
-            alt="Professor Schmidt"
+            src="/demo/kp-logo.png"
+            alt="KlareProzesse"
             className="h-14 mx-auto mb-5 object-contain"
           />
           <div className="w-10 h-px bg-gradient-to-r from-transparent via-accent to-transparent mx-auto mb-3" />

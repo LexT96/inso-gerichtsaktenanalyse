@@ -179,7 +179,7 @@ export function DashboardPage() {
 
       {/* Footer */}
       <div className="mt-4 p-3 px-4 bg-surface border border-border/40 rounded-lg text-[8px] text-text-muted leading-relaxed font-mono">
-        <span className="text-accent font-bold tracking-[1.5px]">TBS</span>
+        <span className="text-accent font-bold tracking-[1.5px]">KLARE</span>
         <span className="text-text-dim tracking-wide"> AKTENANALYSE</span>
         <span className="mx-1.5 text-border">|</span>
         Alle extrahierten Daten müssen vor Verwendung manuell geprüft werden.
