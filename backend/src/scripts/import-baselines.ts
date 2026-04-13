@@ -9,6 +9,7 @@ import { PDFDocument } from 'pdf-lib';
 import { initDatabase, getDb } from '../db/database';
 import { readResultJson } from '../db/resultJson';
 import { saveBenchmarkRun, computeDocumentHash } from '../services/benchmarkService';
+import type { ExtractionResult } from '../types/extraction';
 
 async function main(): Promise<void> {
   initDatabase(process.env.DATABASE_PATH || './data/insolvenz.db');
@@ -29,7 +30,7 @@ async function main(): Promise<void> {
       provider: 'anthropic',
       reasoningEnabled: false,
       extractionTimeMs: row113.processing_time_ms,
-      result: result113,
+      result: result113 as ExtractionResult,
       notes: 'Sonnet baseline with Azure DI OCR (scanned PDF)',
     });
     console.log(`Eilers Sonnet imported as benchmark #${id1}`);
