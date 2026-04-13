@@ -403,11 +403,17 @@ export async function createAnthropicMessage(
 
   await acquireSlot(estimated);
   try {
+    // Timeout: 5 minutes per API call. Langdock streaming can stall indefinitely.
+    const CALL_TIMEOUT_MS = 300_000;
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('API call timeout (5 min)')), CALL_TIMEOUT_MS)
+    );
+
     if (USE_STREAMING) {
       const stream = anthropic.messages.stream(params as unknown as Anthropic.MessageStreamParams);
-      return await stream.finalMessage();
+      return await Promise.race([stream.finalMessage(), timeoutPromise]);
     }
-    return await anthropic.messages.create(params);
+    return await Promise.race([anthropic.messages.create(params), timeoutPromise]);
   } finally {
     releaseSlot(estimated);
   }
