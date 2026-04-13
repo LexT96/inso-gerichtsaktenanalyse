@@ -18,6 +18,8 @@ const MAX_PDF_SIZE = 4 * 1024 * 1024; // Azure DI limit: 4MB per request
 interface OcrWordConfidence {
   text: string;
   confidence: number;
+  /** Bounding polygon [x1,y1, x2,y2, x3,y3, x4,y4] in inches from top-left */
+  polygon?: number[];
 }
 
 interface OcrTableCell {
@@ -90,7 +92,7 @@ function loadFromCache(key: string): OcrResult | null {
 
 function saveToCache(key: string, result: OcrResult): void {
   if (!fs.existsSync(OCR_CACHE_DIR)) fs.mkdirSync(OCR_CACHE_DIR, { recursive: true });
-  // Cache line text + confidence metadata (strip full wordConfidences to save disk space)
+  // Cache full OCR data including word positions (needed for OCR text layer generation)
   const slim: OcrResult = {
     pages: result.pages.map(p => ({
       pageNumber: p.pageNumber,
@@ -99,6 +101,7 @@ function saveToCache(key: string, result: OcrResult): void {
       tables: p.tables,
       avgConfidence: p.avgConfidence,
       lowConfidenceWords: p.lowConfidenceWords,
+      wordConfidences: p.wordConfidences, // includes polygon positions for text layer
     })),
     totalChars: result.totalChars,
   };
@@ -228,7 +231,7 @@ function parseAnalyzeResult(result: Record<string, unknown>, pageOffset: number)
     pages?: Array<{
       pageNumber: number;
       lines?: Array<{ content: string }>;
-      words?: Array<{ content: string; confidence: number }>;
+      words?: Array<{ content: string; confidence: number; polygon?: number[] }>;
     }>;
     tables?: Array<{
       rowCount: number;
@@ -272,6 +275,7 @@ function parseAnalyzeResult(result: Record<string, unknown>, pageOffset: number)
     const wordConfidences: OcrWordConfidence[] = (page.words || []).map(w => ({
       text: w.content,
       confidence: w.confidence,
+      polygon: w.polygon,
     }));
 
     const avgConfidence = wordConfidences.length > 0

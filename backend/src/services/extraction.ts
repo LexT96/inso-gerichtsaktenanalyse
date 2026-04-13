@@ -690,6 +690,23 @@ export async function processExtraction(
           pagesWithText: ocrResult.pages.filter(p => p.text.length > 0).length,
           tablesDetected: ocrResult.pages.reduce((s, p) => s + (p.tables?.length || 0), 0),
         });
+
+        // Add invisible OCR text layer to PDF for frontend text highlighting
+        try {
+          const { addOcrTextLayer } = await import('./ocrLayerService');
+          const searchablePdf = addOcrTextLayer(pdfBuffer, ocrResult);
+          if (searchablePdf !== pdfBuffer) {
+            pdfBuffer = searchablePdf;
+            // Re-save PDF with text layer so frontend can highlight/search
+            const pdfDir = path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs');
+            (await import('fs')).writeFileSync(path.join(pdfDir, `${extractionId}.pdf`), pdfBuffer);
+            logger.info('PDF mit OCR-Textlayer gespeichert', { extractionId });
+          }
+        } catch (layerErr) {
+          logger.warn('OCR-Textlayer fehlgeschlagen', {
+            error: layerErr instanceof Error ? layerErr.message : String(layerErr),
+          });
+        }
       } catch (err) {
         logger.error('OCR fehlgeschlagen, verwende Original-Text', {
           error: err instanceof Error ? err.message : String(err),
