@@ -16,6 +16,9 @@ npm run test         # vitest run (one-shot)
 npm run test:watch   # vitest (watch mode)
 npm run verify -- ../path/to/akte.pdf  # Extract + verify PDF (full pipeline)
 npm run verify -- --id=1               # Verify existing extraction from DB
+npm run benchmark -- ../path/to.pdf    # Run extraction + save to benchmark DB
+npm run benchmark:list                 # Show all benchmark runs
+npm run benchmark:compare -- 1,2       # Compare two runs field-by-field
 
 # Frontend (from /frontend)
 npm run dev          # Vite dev server on :3005, proxies /api → :3004
@@ -43,49 +46,53 @@ PDF → pdfProcessor (watermark removal) → pageTexts
                         ↓
           Stage 0 (conditional): ocrService.ts (Azure Document Intelligence)
           If scanned PDF detected (avg <50 chars/page): OCR via Azure DI prebuilt-layout
-          Caches results by PDF content hash (data/ocr-cache/) — same PDF skips OCR
-          Chunks large PDFs to ≤4MB, auto-detects F0 free tier → per-page fallback
-          Returns clean line text per page only (table/confidence data NOT injected
-          into pageTexts — causes prompt bloat that breaks extraction)
+          Caches results by PDF hash (data/ocr-cache/) incl. word polygons + tables
+          Chunks large PDFs to ≤4MB. Adds invisible OCR text layer to PDF (ocrLayerService.ts)
+          for frontend text selection/highlighting on scanned docs.
           Watermark removal applied to OCR output
-                        ↓ pageTexts (now populated for scanned PDFs)
-          Stage 1: documentAnalyzer.ts (Haiku)
+                        ↓ pageTexts + ocrResult (tables, confidence, word positions)
+          Stage 1: documentAnalyzer.ts (Sonnet on Langdock, cached system prompt)
           Maps document structure + classifies pages by domain (forderungen/aktiva/anfechtung)
-                        ↓ documentMap + ExtractionRouting
+                        ↓ documentMap + ExtractionRouting + ocrHints (confidence warnings)
           Stage 2a: anthropic.ts (Sonnet + Extended Thinking)
-          Base extraction: scalar fields only (verfahrensdaten, schuldner, antragsteller, etc.)
-          Trimmed prompt — no detailed forderungen/aktiva/anfechtung instructions
+          Base extraction: scalar fields only. Hybrid image+text mode on Langdock
+          (20 key page images + full OCR text). Native PDF mode on direct Anthropic.
                         ↓ base ExtractionResult
           Stage 2b: Parallel focused passes (overwrite base result sections)
-          ├── forderungenExtractor.ts (Sonnet) — all einzelforderungen from creditor pages
-          ├── aktivaExtractor.ts (Haiku) — all aktiva positions from asset pages
-          └── anfechtungsAnalyzer.ts (Haiku) — anfechtung from transaction pages
+          ├── forderungenExtractor.ts (Sonnet) — enriched text + table structures + page images
+          ├── aktivaExtractor.ts (Sonnet on Langdock) — enriched text + page images
+          └── anfechtungsAnalyzer.ts (Sonnet on Langdock) — enriched text + page images
+          Token budget guard: all pages if <450K chars, routed subset if over, hard truncate if still over.
+          All prompts use cached system prompts (cache_control: ephemeral, 90% input savings).
+          Rate limiter: global semaphore limits concurrent heavy calls (MAX = TPM / 80K).
                         ↓ merged ExtractionResult
-          Stage 3: semanticVerifier.ts (Haiku)
-          Verifies + corrects fields against actual page texts
+          Stage 3: semanticVerifier.ts (Sonnet on Langdock, cached prompt)
+          Verifies scalar fields only. SKIPS array elements from focused passes
+          (einzelforderungen, positionen, vorgaenge — prevents mass-removal).
                         ↓
-          Stage 3b: Targeted re-extraction (Haiku)
-          Re-extracts only fields removed by Stage 3 (recovers 5-15%)
+          Stage 3b: Targeted re-extraction (scalar fields only, source pages only)
                         ↓
-          Stage 3c: Focused handwriting extraction (native PDF only)
-          Detects Fragebogen pages → extracts as mini-PDF → focused OCR prompt
+          Stage 3c: Handwriting extraction (native PDF or text-mode fallback)
+          Detects Fragebogen pages → sends as mini-PDF or OCR text → merges form fields
                         ↓
           Stage 4: Post-processing (deterministic, NO LLM arithmetic)
-          Gender inference, boolean defaults, arbeitnehmer fallback
-          ALWAYS recomputes: summe_aktiva, gesamtforderungen, gesamtpotenzial, freie_masse
-          Parses TEUR amounts from titel ("X TEUR" and "TEUR X" → X * 1000)
-          Computes betrag from Nennbetrag+Zinsen in titel
-          Rejects page references as glaeubiger names
+          Gender inference, boolean defaults, arbeitnehmer fallback, TEUR parsing
+                        ↓
+          Stage 5: Validation-driven retry (if critical fields missing)
+          Checks Aktenzeichen, Gericht, Name/Firma, Datum. Retries with targeted prompt.
                         ↓ verified ExtractionResult
           letterChecklist.ts — validates 10 standard letter types
 ```
 
-- **Stage 1 — Document Analysis** (`src/utils/documentAnalyzer.ts`): Haiku call → text map of document structure. `classifySegmentsForExtraction()` routes pages by keyword matching to forderungen/aktiva/anfechtung domains. Graceful degradation on failure.
-- **Stage 2a — Base Extraction** (`src/services/anthropic.ts`): Sonnet call with Extended Thinking. Trimmed prompt extracts only scalar fields. Forderungen/aktiva/anfechtung sections are stubs ("detaillierte Extraktion erfolgt in separatem Schritt").
-- **Stage 2b — Focused Passes** (parallel): `forderungenExtractor.ts` (Sonnet, not Haiku — Haiku drops names from long tables), `aktivaExtractor.ts` (Haiku), `anfechtungsAnalyzer.ts` (Haiku). Each gets only domain-relevant pages via `ExtractionRouting`. Results REPLACE the corresponding section from base extraction. Rate-limited providers serialize with 62s delays.
-- **Stage 3c — Handwriting Extraction** (`src/services/extraction.ts`): Detects Fragebogen/Anlage pages by text markers, extracts them as mini-PDF via `pdf-lib`, sends to Claude with focused OCR prompt. Merges handwritten fields (telefon, email, betriebsstaette, etc.) into main result. Only runs in native PDF mode (direct Anthropic API).
-- **Stage 4 — Post-processing** (`src/services/extraction.ts`): ALL arithmetic is deterministic code, never LLM. `summe_aktiva` from positions, `gesamtforderungen` from einzelforderungen, `gesamtpotenzial` from vorgaenge, `freie_masse` per position (wert - absonderung - aussonderung). `computeBetragFromTitel()` parses Nennbetrag+Zinsen and TEUR patterns. `looksLikeInvalidGlaeubiger()` rejects numbers, dates, and page references as creditor names. `mergeExtractionResults()` resets derived totals to null before post-processing.
-- **Stage 3 — Semantic Verification** (`src/utils/semanticVerifier.ts`): Collects all `{wert, quelle}` fields (except `SKIP_VERIFICATION_PATHS` and `.titel` suffix fields), verifies against page texts. Can: confirm, correct source, correct value, or remove. Returns `removedPaths` for targeted re-extraction.
+- **Stage 0 — OCR** (`src/services/ocrService.ts`): Azure DI `prebuilt-layout`. Returns text + tables (129 on Eilers) + per-word confidence + bounding polygons. `ocrLayerService.ts` overlays invisible searchable text on scanned PDFs using word polygons. Cache includes all data for text layer regeneration.
+- **Stage 1 — Document Analysis** (`src/utils/documentAnalyzer.ts`): Sonnet call (Haiku not available on Langdock) → text map + segments. `classifySegmentsForExtraction()` routes pages by keywords. Cached system prompt.
+- **Stage 2a — Base Extraction** (`src/services/anthropic.ts`): Sonnet + Extended Thinking. On Langdock: hybrid image+text mode (20 key page images + full OCR text). On direct Anthropic: native PDF mode. Prompt caching on system prompt.
+- **Stage 2b — Focused Passes** (parallel): All use Sonnet on Langdock. `ocrEnricher.ts` provides enriched page content (text + structured tables + confidence warnings from Azure DI). `pageImageRenderer.ts` renders page images via pymupdf for visual context. Token budget guard: send all pages if <450K chars, keyword-routed subset if over, hard truncate to fit.
+- **Stage 3 — Semantic Verification** (`src/utils/semanticVerifier.ts`): Verifies scalar fields ONLY. `SKIP_VERIFICATION_PREFIXES` excludes `einzelforderungen[*]`, `positionen[*]`, `vorgaenge[*]` — focused pass outputs are trusted, not re-verified by the cheaper verifier.
+- **Stage 3c — Handwriting** (`src/services/extraction.ts`): Works in both native PDF mode (mini-PDF) and text mode (Langdock). 13 Fragebogen pages detected on Eilers PDF.
+- **Stage 5 — Validation Retry**: Checks 4 critical fields after post-processing. If missing, retries with two-step reasoning on first 30 pages.
+- **API Layer** (`src/services/anthropic.ts`): `createAnthropicMessage()` handles prompt caching, streaming (Langdock), rate limiting, and timeouts. Smart streaming: <50K tokens → non-streaming (faster), >50K → streaming with retry on stall.
+- **Rate Limiter** (`src/services/rateLimiter.ts`): Global token-aware semaphore. `MAX_CONCURRENT_HEAVY = floor(TPM / 80K)`. Tracks active extractions.
 
 ### Gutachten Generation (`src/utils/gutachtenGenerator.ts`)
 - **Templates**: 3 DOCX templates in `gutachtenvorlagen/` (natürliche Person, juristische Person, Personengesellschaft). Rebuilt from 3 real finalized TBS Gutachten — all `[...]` replaced with `[[SLOT_NNN: descriptive context]]` markers, standard legal boilerplate filled in (VID §4, §17/§19 definitions, Zuständigkeit). Change markers `⚡KI:` for review.
@@ -129,7 +136,12 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 - **Asymmetric trust in pipeline**: Stage 2 (extractor) is creative — it finds and assigns values. Stage 3 (reviewer) is critical — it can only confirm, correct to values in the document, or remove. The reviewer cannot invent values.
 - **Entity-aware processing**: `isJuristischePerson()` detected via rechtsform regex. Affects: displayed fields, Prüfliste scope, computeStats counting, BeteiligteTab sections.
 - **Watermark removal**: `removeWatermarks()` in pdfProcessor has 3 strategies: (1) whole-line watermarks on >80% of pages, (2) suffix watermarks (name+date appended to last line), (3) short-fragment watermarks from OCR debris — only activates when 5+ co-occurring fragments detected (prevents false positives on repeated names).
-- **OCR caching**: `ocrService.ts` caches Azure DI results by SHA-256 PDF hash in `data/ocr-cache/`. Same PDF uploaded again skips OCR entirely.
+- **OCR caching**: `ocrService.ts` caches Azure DI results (text + tables + word polygons + confidence) by SHA-256 PDF hash in `data/ocr-cache/`. Same PDF skips OCR. Cache includes polygon data for text layer regeneration.
+- **OCR text layer**: `ocrLayerService.ts` overlays invisible searchable text on scanned PDFs using Azure DI word-level bounding polygons via pymupdf. Enables text selection/highlighting in frontend PDF viewer.
+- **OCR enrichment for focused passes**: `ocrEnricher.ts` builds enriched page content with structured table data + confidence warnings from Azure DI. Only for focused passes (10-30 pages), NOT base extraction (avoids prompt bloat).
+- **Prompt caching**: All API calls use `createAnthropicMessage()` with optional `cachedSystemPrompt` parameter. Static prompts cached via `cache_control: ephemeral` (5 min TTL, 90% input savings).
+- **Smart streaming**: `createAnthropicMessage()` uses non-streaming for small calls (<50K tokens, faster) and streaming for large calls (avoids Langdock Cloudflare 524 timeout). Streaming calls have 5 min timeout + 1 retry on stall.
+- **Rate limiter**: `rateLimiter.ts` — global token-aware semaphore. Heavy calls (>50K tokens) limited to `floor(TPM / 80K)` concurrent. Tracks active extractions for monitoring.
 - **Boolean schema safety**: `sourcedBooleanSchema` maps "nicht bekannt"/"unbekannt" → `null` (unknown), never to `false`. Only explicit confirmations → `true`.
 - **Merge deduplication**: `einzelforderungen` merge by composite key (glaeubiger + betrag + titel). `aktiva.positionen` merge by beschreibung.
 - **Path alias**: Both frontend and backend use `@shared/*` → `../shared/*` (tsconfig paths + vite alias)
@@ -138,7 +150,11 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 
 ## Environment
 
-Requires `.env` at project root with `ANTHROPIC_API_KEY`, `JWT_SECRET` (min 32 chars), `DEFAULT_ADMIN_PASSWORD`, `DB_ENCRYPTION_KEY` (min 32 chars). Optional: `EXTRACTION_MODEL` (default: `claude-sonnet-4-6`), `UTILITY_MODEL` (default: `claude-haiku-4-5-20251001`), `AZURE_DOC_INTEL_ENDPOINT` + `AZURE_DOC_INTEL_KEY` (enables OCR for scanned PDFs via Azure Document Intelligence). See `.env.example` for all variables.
+Requires `.env` at project root with `ANTHROPIC_API_KEY`, `JWT_SECRET` (min 32 chars), `DEFAULT_ADMIN_PASSWORD`, `DB_ENCRYPTION_KEY` (min 32 chars). Optional: `EXTRACTION_MODEL` (default: `claude-sonnet-4-6`), `UTILITY_MODEL` (default: `claude-haiku-4-5-20251001`), `ANTHROPIC_BASE_URL` (for Langdock EU proxy: `https://api.langdock.com/anthropic/eu`), `AZURE_DOC_INTEL_ENDPOINT` + `AZURE_DOC_INTEL_KEY` (enables OCR for scanned PDFs). See `.env.example` for all variables.
+
+**Production (Langdock EU)**: `ANTHROPIC_BASE_URL=https://api.langdock.com/anthropic/eu`, `EXTRACTION_MODEL=claude-sonnet-4-6-default`, `UTILITY_MODEL=claude-sonnet-4-6-default`. All data stays in EU. 200K TPM per model.
+
+**Benchmark CLI**: `npm run benchmark -- path/to/pdf`, `npm run benchmark:list`, `npm run benchmark:compare -- 1,2`. Results in `data/benchmarks.db`.
 
 ## Ports
 
