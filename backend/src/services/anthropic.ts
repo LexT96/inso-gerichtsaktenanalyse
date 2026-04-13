@@ -403,17 +403,46 @@ export async function createAnthropicMessage(
 
   await acquireSlot(estimated);
   try {
-    // Timeout: 5 minutes per API call. Langdock streaming can stall indefinitely.
-    const CALL_TIMEOUT_MS = 300_000;
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('API call timeout (5 min)')), CALL_TIMEOUT_MS)
-    );
+    const CALL_TIMEOUT_MS = 300_000; // 5 min hard timeout
 
     if (USE_STREAMING) {
-      const stream = anthropic.messages.stream(params as unknown as Anthropic.MessageStreamParams);
-      return await Promise.race([stream.finalMessage(), timeoutPromise]);
+      // Small calls (<50K tokens): try non-streaming first (faster, no stall risk).
+      // Only fall back to streaming for large calls that would hit Cloudflare 524.
+      const STREAMING_THRESHOLD = 50_000;
+      if (estimated < STREAMING_THRESHOLD) {
+        try {
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('non-streaming timeout')), 120_000)
+          );
+          return await Promise.race([anthropic.messages.create(params), timeoutPromise]);
+        } catch (err) {
+          // 524 or timeout → fall through to streaming with retry
+          logger.warn('Non-streaming call failed, retrying with streaming', {
+            error: err instanceof Error ? err.message : String(err),
+            estimated,
+          });
+        }
+      }
+
+      // Large calls or non-streaming fallback: use streaming with timeout + retry
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('streaming timeout')), CALL_TIMEOUT_MS)
+          );
+          const stream = anthropic.messages.stream(params as unknown as Anthropic.MessageStreamParams);
+          return await Promise.race([stream.finalMessage(), timeoutPromise]);
+        } catch (err) {
+          if (attempt === 0 && err instanceof Error && err.message.includes('timeout')) {
+            logger.warn('Streaming call timed out, retrying once', { attempt, estimated });
+            continue;
+          }
+          throw err;
+        }
+      }
     }
-    return await Promise.race([anthropic.messages.create(params), timeoutPromise]);
+
+    return await anthropic.messages.create(params);
   } finally {
     releaseSlot(estimated);
   }
