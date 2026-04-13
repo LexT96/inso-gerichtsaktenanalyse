@@ -1,12 +1,14 @@
-# InsolvenzAkte Extraktor
+# TBS Aktenanalyse
 
-KI-gestütztes Werkzeug für deutsche Insolvenzverwalter-Kanzleien. Analysiert Gerichtsakten (PDF) mittels Claude AI und extrahiert strukturiert alle verfahrensrelevanten Daten — inklusive Quellenangaben, Forderungsaufstellungen und automatischer Prüfung der 9 Standardanschreiben.
+KI-gestütztes Werkzeug für die Insolvenzverwalter-Kanzlei Prof. Dr. Dr. Thomas B. Schmidt. Analysiert Gerichtsakten (PDF) mittels Claude AI und extrahiert strukturiert alle verfahrensrelevanten Daten — inklusive Quellenangaben, Forderungsaufstellungen, Gutachten-Generierung und automatischer Prüfung der 10 Standardanschreiben.
+
+**Benchmark** (Eilers, 76 Seiten, gescannt): 46/54 Felder (85%), 57 Forderungen, 9 Anfechtungsvorgaenge.
 
 ## Voraussetzungen
 
 - **Docker** & **Docker Compose** (empfohlen)
-- Oder: **Node.js 20+** für Entwicklung ohne Docker
-- **Anthropic API Key** ([console.anthropic.com](https://console.anthropic.com))
+- Oder: **Node.js 20+** + **Python 3** (mit pymupdf) für Entwicklung ohne Docker
+- **Anthropic API Key** (direkt oder via [Langdock EU](https://langdock.com))
 
 ## Schnellstart
 
@@ -57,32 +59,40 @@ Nach dem ersten Build werden Änderungen in `backend/src` und `frontend/src` aut
 ## Architektur
 
 ```
-┌─────────────────┐     ┌──────────────────────┐     ┌──────────────┐
-│    Frontend      │────▶│      Backend         │────▶│  Claude API  │
-│  React + Vite    │     │  Express + TypeScript │     │  (Anthropic) │
-│  Tailwind CSS    │     │                      │     └──────────────┘
-│  Port 3005       │     │  JWT Auth            │
-└─────────────────┘     │  Rate Limiting       │     ┌──────────────┐
-                         │  Audit Logging       │────▶│   SQLite     │
-                         │  Port 3004           │     │  (Datenbank) │
-                         └──────────────────────┘     └──────────────┘
+PDF Upload → Watermark-Entfernung → Seitentext-Extraktion
+                    ↓
+  Gescannt? → Azure Document Intelligence OCR
+              (Text + Tabellen + Wort-Polygone → durchsuchbare Text-Ebene)
+                    ↓
+  Stufe 1: Dokumentstruktur-Analyse (Sonnet)
+  Stufe 2a: Basis-Extraktion (Sonnet + Extended Thinking, Hybrid Bild+Text)
+  Stufe 2b: Fokus-Passes parallel (Forderungen, Aktiva, Anfechtung)
+            mit Tabellen-Anreicherung + Seitenbildern aus Azure DI
+  Stufe 3: Semantische Verifikation + Handschrift-Extraktion
+  Stufe 4: Deterministische Nachbearbeitung (keine LLM-Arithmetik)
+  Stufe 5: Validierungs-Retry fuer kritische Felder
+                    ↓
+  Strukturiertes JSON + durchsuchbares PDF + 10 Anschreiben-Checklisten
 ```
 
-## Extraktion verifizieren
+**Modelle**: Claude Sonnet 4.6 via Langdock EU (DSGVO-konform, alle Daten in der EU).
 
-Um zu prüfen, ob alle Werte korrekt extrahiert werden:
+## Extraktion verifizieren & benchmarken
 
 ```bash
 cd backend
 
-# Bestehende Extraktion aus der DB prüfen (nur DATABASE_PATH in .env nötig)
+# Bestehende Extraktion aus der DB pruefen
 npm run verify -- --id=1
 
-# Neue Extraktion durchführen und Bericht ausgeben (volle .env nötig)
-npm run verify -- ../standardschreiben/Bankenanfrage.pdf
-```
+# Neue Extraktion durchfuehren und Bericht ausgeben
+npm run verify -- ../path/to/akte.pdf
 
-Der Bericht zeigt: Feldabdeckung (✓/○ pro Feld), Standardanschreiben-Status, fehlende Informationen.
+# Benchmark: Extraktion + permanente Speicherung zum Modellvergleich
+npm run benchmark -- ../path/to/akte.pdf
+npm run benchmark:list                      # Alle Runs anzeigen
+npm run benchmark:compare -- 1,2            # Zwei Runs vergleichen
+```
 
 ## API-Endpunkte
 
@@ -120,19 +130,21 @@ Dieses Tool verarbeitet vertrauliche Gerichtsakten. Folgende Maßnahmen sind imp
 
 | Variable                           | Pflicht | Beschreibung                           |
 |------------------------------------|---------|----------------------------------------|
-| `ANTHROPIC_API_KEY`                | Ja      | Anthropic API-Schlüssel                |
+| `ANTHROPIC_API_KEY`                | Ja      | Anthropic oder Langdock API-Key        |
+| `ANTHROPIC_BASE_URL`               | Nein    | Langdock: `https://api.langdock.com/anthropic/eu` |
+| `EXTRACTION_MODEL`                 | Nein    | Standard: `claude-sonnet-4-6`. Langdock: `claude-sonnet-4-6-default` |
+| `UTILITY_MODEL`                    | Nein    | Standard: `claude-haiku-4-5-20251001`. Langdock: `claude-sonnet-4-6-default` |
+| `AZURE_DOC_INTEL_ENDPOINT`         | Nein    | Azure DI Endpoint (aktiviert OCR fuer gescannte PDFs) |
+| `AZURE_DOC_INTEL_KEY`              | Nein    | Azure DI Key                           |
 | `JWT_SECRET`                       | Ja      | Mindestens 32 Zeichen                  |
-| `DEFAULT_ADMIN_PASSWORD`           | Ja      | Passwort für initialen Admin-Account   |
+| `DB_ENCRYPTION_KEY`                | Ja      | Mindestens 32 Zeichen (256-bit Hex empfohlen) |
+| `DEFAULT_ADMIN_PASSWORD`           | Ja      | Passwort fuer initialen Admin-Account  |
 | `DEFAULT_ADMIN_USERNAME`           | Nein    | Standard: `admin`                      |
-| `JWT_ACCESS_EXPIRY`                | Nein    | Standard: `15m`                        |
-| `JWT_REFRESH_EXPIRY`               | Nein    | Standard: `7d`                         |
-| `DATABASE_PATH`                    | Nein    | Standard: `./data/insolvenz.db`        |
-| `UPLOAD_MAX_SIZE_MB`               | Nein    | Standard: `50`                         |
-| `RATE_LIMIT_EXTRACTIONS_PER_HOUR`  | Nein    | Standard: `10`                         |
 | `CORS_ORIGIN`                      | Nein    | Standard: `http://localhost:3005`      |
-| `PORT`                             | Nein    | Standard: `3004`                       |
 | `LOG_LEVEL`                        | Nein    | Standard: `info`                       |
+
+Siehe `.env.example` fuer alle Variablen inkl. Provider-Beispiele (Langdock EU, Azure AI Foundry, direkte Anthropic API).
 
 ## Lizenz
 
-Proprietary — Alle Rechte vorbehalten.
+Proprietary — KlareProzesse.de fuer TBS Insolvenzverwalter. Alle Rechte vorbehalten.
