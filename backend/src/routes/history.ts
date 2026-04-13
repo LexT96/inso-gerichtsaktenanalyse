@@ -17,12 +17,14 @@ router.get('/', authMiddleware, (req: Request, res: Response): void => {
 
   const rows = db.prepare(
     `SELECT id, filename, file_size, status, stats_found, stats_missing,
-            stats_letters_ready, processing_time_ms, created_at
+            stats_letters_ready, processing_time_ms, created_at,
+            progress_message, progress_percent
      FROM extractions WHERE user_id = ? ORDER BY created_at DESC LIMIT 100`
   ).all(userId) as Array<{
     id: number; filename: string; file_size: number; status: string;
     stats_found: number; stats_missing: number; stats_letters_ready: number;
     processing_time_ms: number | null; created_at: string;
+    progress_message: string | null; progress_percent: number | null;
   }>;
 
   const items: HistoryItem[] = rows.map(row => ({
@@ -35,6 +37,10 @@ router.get('/', authMiddleware, (req: Request, res: Response): void => {
     statsLettersReady: row.stats_letters_ready,
     processingTimeMs: row.processing_time_ms,
     createdAt: row.created_at,
+    ...(row.status === 'processing' ? {
+      progressMessage: row.progress_message,
+      progressPercent: row.progress_percent,
+    } : {}),
   }));
 
   res.json(items);
@@ -55,10 +61,12 @@ router.get('/:id', authMiddleware, (req: Request, res: Response): void => {
   const row = db.prepare(
     isAdmin
       ? `SELECT id, filename, file_size, result_json, status, error_message,
-              stats_found, stats_missing, stats_letters_ready, processing_time_ms, created_at
+              stats_found, stats_missing, stats_letters_ready, processing_time_ms, created_at,
+              progress_message, progress_percent
          FROM extractions WHERE id = ?`
       : `SELECT id, filename, file_size, result_json, status, error_message,
-              stats_found, stats_missing, stats_letters_ready, processing_time_ms, created_at
+              stats_found, stats_missing, stats_letters_ready, processing_time_ms, created_at,
+              progress_message, progress_percent
          FROM extractions WHERE id = ? AND user_id = ?`
   ).get(...(isAdmin ? [id] : [id, userId])) as {
     id: number; filename: string; file_size: number; result_json: string | null;
@@ -81,7 +89,7 @@ router.get('/:id', authMiddleware, (req: Request, res: Response): void => {
     return;
   }
 
-  const response: ExtractionResponse = {
+  const response: ExtractionResponse & { progressMessage?: string; progressPercent?: number } = {
     id: row.id,
     filename: row.filename,
     status: row.status as ExtractionResponse['status'],
@@ -91,6 +99,10 @@ router.get('/:id', authMiddleware, (req: Request, res: Response): void => {
     statsLettersReady: row.stats_letters_ready,
     processingTimeMs: row.processing_time_ms,
     createdAt: row.created_at,
+    ...((row as any).progress_message ? {
+      progressMessage: (row as any).progress_message,
+      progressPercent: (row as any).progress_percent,
+    } : {}),
   };
 
   res.json(response);

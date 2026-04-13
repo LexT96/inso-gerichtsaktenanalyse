@@ -44,6 +44,8 @@ export interface HistoryItem {
   statsLettersReady: number;
   processingTimeMs: number | null;
   createdAt: string;
+  progressMessage?: string | null;
+  progressPercent?: number | null;
 }
 
 export interface ApiError {

@@ -161,17 +161,17 @@ export function useExtraction() {
     try {
       const { data: items } = await apiClient.get('/history');
       const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
-      const processing = (items as Array<{ id: number; status: string; filename: string; createdAt: string }>)
+      const processing = (items as Array<{ id: number; status: string; filename: string; createdAt: string; progressMessage?: string; progressPercent?: number }>)
         .find(item => item.status === 'processing' && item.createdAt > twentyMinutesAgo);
 
       if (!processing) return false;
 
-      // Found an in-progress extraction — show progress and poll
+      // Found an in-progress extraction — show current progress from DB
       setState(s => ({
         ...s,
         loading: true,
-        progress: 'Extraktion läuft im Hintergrund — warte auf Ergebnis…',
-        progressPercent: 50,
+        progress: processing.progressMessage || 'Extraktion läuft…',
+        progressPercent: processing.progressPercent || 5,
         error: null,
       }));
 
@@ -195,6 +195,15 @@ export function useExtraction() {
               processingTimeMs: updated.processingTimeMs ?? null,
               pdfFile: null,
             });
+          } else if (updated.status === 'processing') {
+            // Update progress from DB
+            if (updated.progressMessage) {
+              setState(s => ({
+                ...s,
+                progress: updated.progressMessage,
+                progressPercent: updated.progressPercent ?? s.progressPercent,
+              }));
+            }
           } else if (updated.status === 'failed') {
             clearInterval(pollInterval);
             setState(s => ({

@@ -636,16 +636,32 @@ export async function processExtraction(
     logger.info('Pro-Modus aktiviert', { model: modelOverride });
   }
   try {
-  const report = onProgress ?? (() => {});
+  const rawProgress = onProgress ?? (() => {});
+  // report() will be assigned after extractionId is known
+  let report: (message: string, percent: number) => void = rawProgress;
   const db = getDb();
   const startTime = Date.now();
   const deregisterExtraction = registerExtraction();
+
+  // Wrap progress callback to also persist to DB
+  const persistProgress = (extractionId: number, message: string, percent: number) => {
+    try {
+      getDb().prepare('UPDATE extractions SET progress_message = ?, progress_percent = ? WHERE id = ?')
+        .run(message, percent, extractionId);
+    } catch { /* non-critical */ }
+  };
 
   // Create extraction record
   const insertResult = db.prepare(
     'INSERT INTO extractions (user_id, filename, file_size, status) VALUES (?, ?, ?, ?)'
   ).run(userId, filename, fileSize, 'processing');
   const extractionId = Number(insertResult.lastInsertRowid);
+
+  // Now that we have extractionId, augment report to persist progress to DB
+  report = (message: string, percent: number) => {
+    rawProgress(message, percent);
+    persistProgress(extractionId, message, percent);
+  };
 
   try {
     // Save PDF to disk for later viewing (stored alongside DB in /data volume)
