@@ -13,6 +13,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { callWithRetry, createAnthropicMessage } from '../services/anthropic';
 import { config } from '../config';
 import { logger } from './logger';
+import type { SegmentSourceType, FieldPackDefinition } from '../types/extraction';
 
 // ─── Types ───
 
@@ -209,6 +210,102 @@ export function classifySegmentsForExtraction(
     aktivaPages: aktivaPages.size > 0 ? [...aktivaPages].sort((a, b) => a - b) : allPages,
     anfechtungPages: anfechtungPages.size > 0 ? [...anfechtungPages].sort((a, b) => a - b) : allPages,
   };
+}
+
+// ─── Segment Source Type Classification ───
+
+// Keyword maps from segment type/description to SegmentSourceType
+// Checked in order — first match wins.
+const SOURCE_TYPE_PATTERNS: Array<{ pattern: RegExp; sourceType: SegmentSourceType }> = [
+  { pattern: /beschluss/i, sourceType: 'beschluss' },
+  { pattern: /insolvenzantrag|eigenantrag|fremdantrag/i, sourceType: 'insolvenzantrag' },
+  { pattern: /zustellungsvermerk|pzu|postzustellungsurkunde/i, sourceType: 'pzu' },
+  { pattern: /handelsregister|hr-auszug|hrauszug|hrb|hra|registerauszug/i, sourceType: 'handelsregister' },
+  { pattern: /meldeauskunft|meldebescheinigung|einwohnermeldeamt/i, sourceType: 'meldeauskunft' },
+  { pattern: /fragebogen|selbstauskunft/i, sourceType: 'fragebogen' },
+  { pattern: /grundbuch|grundstück|grundbuchauszug/i, sourceType: 'grundbuch' },
+  { pattern: /gerichtsvollzieher|gv-|vollstreckungsauftrag|pfändung/i, sourceType: 'gerichtsvollzieher' },
+  { pattern: /vollstreckungsportal|schuldnerverzeichnis/i, sourceType: 'vollstreckungsportal' },
+  { pattern: /forderungstabelle|gläubigertabelle|tabelle/i, sourceType: 'forderungstabelle' },
+  { pattern: /vermögensverzeichnis|vermögensübersicht/i, sourceType: 'vermoegensverzeichnis' },
+  { pattern: /gutachterbestellung|bestellung.*gutachter|gutachter.*bestellung/i, sourceType: 'gutachterbestellung' },
+];
+
+/**
+ * Classify a DocumentSegment into a SegmentSourceType based on keyword matching
+ * on both `type` and `description`. Defaults to 'sonstiges' if no pattern matches.
+ */
+export function classifySegmentSourceType(segment: DocumentSegment): SegmentSourceType {
+  const text = `${segment.type} ${segment.description}`;
+  for (const { pattern, sourceType } of SOURCE_TYPE_PATTERNS) {
+    if (pattern.test(text)) return sourceType;
+  }
+  return 'sonstiges';
+}
+
+// ─── Field Pack Routing ───
+
+export interface FieldPackRouting {
+  [packId: string]: {
+    pages: number[];
+    segmentTypes: SegmentSourceType[];
+  };
+}
+
+/**
+ * Route document segments to field packs based on their source type.
+ *
+ * For each FieldPackDefinition:
+ * 1. Classify every segment to a SegmentSourceType.
+ * 2. Collect pages from segments whose type matches any of the pack's segmentTypes.
+ * 3. If no pages match and fallbackPages is set, use fallback pages.
+ * 4. Cap the result at maxPages.
+ *
+ * Returns a Record keyed by pack id.
+ */
+export function routeSegmentsToFieldPacks(
+  segments: DocumentSegment[],
+  totalPages: number,
+  packDefinitions: FieldPackDefinition[],
+): FieldPackRouting {
+  const routing: FieldPackRouting = {};
+
+  for (const pack of packDefinitions) {
+    const targetTypes = new Set<SegmentSourceType>(pack.segmentTypes);
+    const matchedPages = new Set<number>();
+    const matchedSourceTypes: SegmentSourceType[] = [];
+
+    for (const segment of segments) {
+      const sourceType = classifySegmentSourceType(segment);
+      if (targetTypes.has(sourceType)) {
+        if (!matchedSourceTypes.includes(sourceType)) {
+          matchedSourceTypes.push(sourceType);
+        }
+        for (const p of segment.pages) matchedPages.add(p);
+      }
+    }
+
+    let pages: number[];
+    if (matchedPages.size > 0) {
+      pages = [...matchedPages].sort((a, b) => a - b);
+    } else if (pack.fallbackPages === 'first_8') {
+      const end = Math.min(8, totalPages);
+      pages = Array.from({ length: end }, (_, i) => i + 1);
+    } else if (pack.fallbackPages === 'all') {
+      pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+    } else {
+      pages = [];
+    }
+
+    // Cap at maxPages
+    if (pages.length > pack.maxPages) {
+      pages = pages.slice(0, pack.maxPages);
+    }
+
+    routing[pack.id] = { pages, segmentTypes: matchedSourceTypes };
+  }
+
+  return routing;
 }
 
 // ─── Main ───
