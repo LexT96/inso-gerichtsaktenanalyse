@@ -30,14 +30,20 @@ const isRateLimitedProvider = (): boolean => isRateLimited(detectProvider());
 
 // PDFs above this threshold use the field pack pipeline (smaller API calls, rate-limit safe).
 // Below: monolithic extractComprehensive() for best quality.
-// On Langdock (60K per-model TPM): monolithic fails above ~20 pages, so always use field packs.
-// On direct Anthropic: monolithic works up to 500 pages, no rate limit concern.
-const FIELDPACK_THRESHOLD = 500; // pages — for direct Anthropic
-const OPUS_PDF_THRESHOLD = 80; // pages — Opus slower, lower threshold
+//
+// Langdock budget math (60K per-model TPM, rolling 1-min window):
+//   Stage 1 (doc analysis): ~21K tokens
+//   Stage 2a monolithic: 22K images (20 imgs × 1.1K) + ~1.5K/page text + 10K system
+//   Total budget for text: 60K - 21K (stage 1) - 22K (images) - 10K (system) ≈ 7K → ~5 pages
+//   Without images (text-only fallback): 60K - 21K - 10K ≈ 29K → ~19 pages
+//   Conservative threshold: 15 pages (monolithic with images may retry once, text-only safe)
+const LANGDOCK_THRESHOLD = 15;
+const DIRECT_THRESHOLD = 500; // direct Anthropic — no rate limit concern
+const OPUS_THRESHOLD = 80;    // Opus slower, lower threshold
 const effectiveThreshold = (): number => {
-  if (isRateLimitedProvider()) return 0; // Langdock: always use field packs
-  if (config.EXTRACTION_MODEL.includes('opus')) return OPUS_PDF_THRESHOLD;
-  return FIELDPACK_THRESHOLD;
+  if (isRateLimitedProvider()) return LANGDOCK_THRESHOLD;
+  if (config.EXTRACTION_MODEL.includes('opus')) return OPUS_THRESHOLD;
+  return DIRECT_THRESHOLD;
 };
 
 import type { ExtractionStats } from '../utils/computeStats';
