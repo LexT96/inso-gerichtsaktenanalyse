@@ -11,8 +11,13 @@ import { getDb } from '../db/database';
 import { writeResultJson } from '../db/resultJson';
 import { logger } from '../utils/logger';
 import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
-import { analyzeDocumentStructure, classifySegmentsForExtraction } from '../utils/documentAnalyzer';
-import type { DocumentAnalysis } from '../utils/documentAnalyzer';
+import { analyzeDocumentStructure, classifySegmentsForExtraction, routeSegmentsToFieldPacks } from '../utils/documentAnalyzer';
+import type { DocumentAnalysis, DocumentSegment } from '../utils/documentAnalyzer';
+import { extractAnchor } from '../utils/anchorExtractor';
+import { executeFieldPack } from '../utils/scalarPackExtractor';
+import { ANCHOR_PACK, getPacksForDebtorType } from '../utils/fieldPacks';
+import { buildResultFromCandidates } from '../utils/extractionReducer';
+import type { ExtractionCandidate, AnchorPacket } from '../types/extraction';
 import { extractForderungen } from '../utils/forderungenExtractor';
 import { semanticVerify } from '../utils/semanticVerifier';
 import { extractAktiva } from '../utils/aktivaExtractor';
@@ -621,6 +626,113 @@ function isJuristischePersonResult(result: ExtractionResult): boolean {
 
 export type ProgressCallback = (message: string, percent: number) => void;
 
+// ─── Anchor → Candidates helper ───
+
+/**
+ * Convert an AnchorPacket into ExtractionCandidate[] so they can be fed
+ * into the same reducer pipeline as scalar pack results.
+ *
+ * - Natürliche Person: splits debtor_canonical_name on comma into name + vorname
+ * - Juristische Person / Personengesellschaft: maps to firma + rechtsform
+ */
+function anchorToCandidates(anchor: AnchorPacket): ExtractionCandidate[] {
+  const candidates: ExtractionCandidate[] = [];
+  const packId = 'anchor_core';
+  const segmentType = 'beschluss' as const;
+
+  function add(fieldPath: string, wert: unknown, quelle: string) {
+    if (wert === null || wert === undefined || wert === '') return;
+    candidates.push({ fieldPath, wert, quelle, page: 1, segmentType, packId });
+  }
+
+  // Verfahrensdaten
+  add('verfahrensdaten.aktenzeichen', anchor.aktenzeichen, 'Seite 1, Beschluss (Anker-Pass)');
+  add('verfahrensdaten.gericht', anchor.gericht, 'Seite 1, Beschluss (Anker-Pass)');
+  add('verfahrensdaten.beschlussdatum', anchor.beschlussdatum, 'Seite 1, Beschluss (Anker-Pass)');
+  add('verfahrensdaten.antragsdatum', anchor.antragsdatum, 'Seite 1, Beschluss (Anker-Pass)');
+
+  // Schuldner identity — depends on debtor type
+  if (anchor.debtor_type === 'natuerliche_person') {
+    if (anchor.debtor_canonical_name) {
+      // Format: "Nachname, Vorname" → split
+      const commaIdx = anchor.debtor_canonical_name.indexOf(',');
+      if (commaIdx > 0) {
+        const name = anchor.debtor_canonical_name.slice(0, commaIdx).trim();
+        const vorname = anchor.debtor_canonical_name.slice(commaIdx + 1).trim();
+        add('schuldner.name', name, 'Seite 1, Beschluss (Anker-Pass)');
+        add('schuldner.vorname', vorname, 'Seite 1, Beschluss (Anker-Pass)');
+      } else {
+        // No comma — use as full name
+        add('schuldner.name', anchor.debtor_canonical_name, 'Seite 1, Beschluss (Anker-Pass)');
+      }
+    }
+  } else {
+    // Juristische Person / Personengesellschaft → firma + rechtsform
+    add('schuldner.firma', anchor.debtor_canonical_name, 'Seite 1, Beschluss (Anker-Pass)');
+    add('schuldner.rechtsform', anchor.debtor_rechtsform, 'Seite 1, Beschluss (Anker-Pass)');
+  }
+
+  // Antragsteller
+  add('antragsteller.name', anchor.applicant_canonical_name, 'Seite 1, Beschluss (Anker-Pass)');
+
+  // Gutachter
+  add('gutachterbestellung.gutachter_name', anchor.gutachter_name, 'Seite 1, Beschluss (Anker-Pass)');
+
+  return candidates;
+}
+
+// ─── Field Pack extraction pipeline ───
+
+/**
+ * Anchor + Field Pack extraction — replaces monolithic extractComprehensive().
+ * Makes 1 anchor call + 4-5 scalar pack calls (each 10-25K tokens) instead of
+ * one massive 150K+ token call.
+ */
+async function extractWithFieldPacks(
+  pageTexts: string[],
+  segments: DocumentSegment[],
+  documentMap: string,
+  ocrResult: OcrResult | null,
+  report: (msg: string, pct: number) => void,
+): Promise<ExtractionResult> {
+  const totalPages = pageTexts.length;
+
+  // 1. Route segments for anchor pack
+  const anchorRouting = routeSegmentsToFieldPacks(segments, totalPages, [ANCHOR_PACK]);
+  const anchorPages = anchorRouting[ANCHOR_PACK.id]?.pages ??
+    Array.from({ length: Math.min(8, totalPages) }, (_, i) => i + 1);
+
+  // 2. Anchor pass
+  report('Kernidentifikatoren werden extrahiert… (Anker-Pass)', 32);
+  const anchor = await extractAnchor(pageTexts, anchorPages);
+
+  // 3. Get packs for this debtor type
+  const scalarPacks = getPacksForDebtorType(anchor.debtor_type);
+  const scalarRouting = routeSegmentsToFieldPacks(segments, totalPages, scalarPacks);
+
+  // 4. Execute scalar packs sequentially
+  const allCandidates: ExtractionCandidate[] = [];
+
+  // Add anchor results as candidates
+  allCandidates.push(...anchorToCandidates(anchor));
+
+  for (let i = 0; i < scalarPacks.length; i++) {
+    const pack = scalarPacks[i];
+    const packRoute = scalarRouting[pack.id] ?? { pages: [], segmentTypes: [] };
+    const pct = 35 + Math.round((i / scalarPacks.length) * 15);
+    report(`${pack.name}… (Pack ${i + 1}/${scalarPacks.length})`, pct);
+
+    const candidates = await executeFieldPack(
+      pack, pageTexts, packRoute.pages, packRoute.segmentTypes, anchor, ocrResult,
+    );
+    allCandidates.push(...candidates);
+  }
+
+  // 5. Reduce to ExtractionResult
+  logger.info('Kandidaten-Zusammenführung', { totalCandidates: allCandidates.length, packs: scalarPacks.length + 1 });
+  return buildResultFromCandidates(allCandidates);
+}
+
 export async function processExtraction(
   pdfBuffer: Buffer,
   filename: string,
@@ -792,9 +904,9 @@ export async function processExtraction(
         logger.warn('Anfechtungsanalyse fehlgeschlagen', { error: anfechtungResult.reason instanceof Error ? anfechtungResult.reason.message : String(anfechtungResult.reason) });
       }
     } else if (pageCount <= effectiveThreshold()) {
-      // Multi-pass extraction: base (Sonnet) + focused passes (Haiku) in parallel
-      report(`Basisanalyse (${pageCount} S.)… (Stufe 2a/3)`, 35);
-      result = await extractComprehensive(pdfBuffer, pageTexts, documentMap);
+      // Multi-pass extraction: anchor + field packs + focused passes in parallel
+      report(`Anker + Feldpakete (${pageCount} S.)… (Stufe 2a/3)`, 35);
+      result = await extractWithFieldPacks(pageTexts, segments, documentMap, ocrResult, report);
 
       // Classify pages by domain for focused extraction
       const routing = classifySegmentsForExtraction(segments, pageCount);
@@ -852,8 +964,8 @@ export async function processExtraction(
         ? `dokumentbasiertes Chunking (${segments.length} Segmente)`
         : 'seitenbasiertes Chunking';
       logger.info(`Großes PDF (${pageCount} S.) — verwende ${chunkInfo}`);
-      report(`Großes PDF (${pageCount} S.) — Parallele Extraktion… (Stufe 2/3)`, 35);
-      result = await extractFromPageTexts(pageTexts, documentMap, segments);
+      report(`Großes PDF (${pageCount} S.) — Anker + Feldpakete… (Stufe 2/3)`, 35);
+      result = await extractWithFieldPacks(pageTexts, segments, documentMap, ocrResult, report);
 
       // For chunked extraction, run aktiva + anfechtung + forderungen separately
       // On rate-limited providers, serialize with delay
