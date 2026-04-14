@@ -358,3 +358,57 @@ export interface ExtractionRecord {
   processingTimeMs: number | null;
   createdAt: string;
 }
+
+// ─── Anchor + Field Pack Pipeline Types ───
+
+/** Compact identity packet produced by anchor pass, flows into all subsequent calls */
+export interface AnchorPacket {
+  aktenzeichen: string | null;
+  gericht: string | null;
+  beschlussdatum: string | null;
+  antragsdatum: string | null;
+  debtor_canonical_name: string | null;
+  debtor_rechtsform: string | null;
+  debtor_type: 'natuerliche_person' | 'juristische_person' | 'personengesellschaft';
+  applicant_canonical_name: string | null;
+  gutachter_name: string | null;
+}
+
+/** Source type for authority-based field resolution */
+export type SegmentSourceType =
+  | 'beschluss'
+  | 'insolvenzantrag'
+  | 'pzu'
+  | 'handelsregister'
+  | 'meldeauskunft'
+  | 'fragebogen'
+  | 'grundbuch'
+  | 'gerichtsvollzieher'
+  | 'vollstreckungsportal'
+  | 'forderungstabelle'
+  | 'vermoegensverzeichnis'
+  | 'gutachterbestellung'
+  | 'sonstiges';
+
+/** A single candidate value for a field, with provenance metadata */
+export interface ExtractionCandidate {
+  fieldPath: string;
+  wert: unknown;
+  quelle: string;
+  page: number | null;
+  segmentType: SegmentSourceType;
+  packId: string;
+  confidence?: number;
+}
+
+/** Definition of a field pack */
+export interface FieldPackDefinition {
+  id: string;
+  name: string;
+  fields: string[];
+  segmentTypes: SegmentSourceType[];
+  fallbackPages?: 'first_8' | 'all';
+  maxPages: number;
+  prompt: string;
+  requiresAnchor: boolean;
+}
