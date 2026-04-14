@@ -30,10 +30,12 @@ const isRateLimitedProvider = (): boolean => isRateLimited(detectProvider());
 
 // PDFs above this threshold use the field pack pipeline (smaller API calls, rate-limit safe).
 // Below: monolithic extractComprehensive() for best quality.
-const FIELDPACK_THRESHOLD = 50; // pages
-// Opus is slower and may timeout on large native PDF calls — use lower threshold
-const OPUS_PDF_THRESHOLD = 40; // pages
+// On Langdock (60K per-model TPM): monolithic fails above ~20 pages, so always use field packs.
+// On direct Anthropic: monolithic works up to 500 pages, no rate limit concern.
+const FIELDPACK_THRESHOLD = 500; // pages — for direct Anthropic
+const OPUS_PDF_THRESHOLD = 80; // pages — Opus slower, lower threshold
 const effectiveThreshold = (): number => {
+  if (isRateLimitedProvider()) return 0; // Langdock: always use field packs
   if (config.EXTRACTION_MODEL.includes('opus')) return OPUS_PDF_THRESHOLD;
   return FIELDPACK_THRESHOLD;
 };
