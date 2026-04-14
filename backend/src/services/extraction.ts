@@ -28,14 +28,14 @@ import type { ExtractionResult } from '../types/extraction';
 
 const isRateLimitedProvider = (): boolean => isRateLimited(detectProvider());
 
-const LARGE_PDF_THRESHOLD = 500; // pages — above this, use chunked fallback
+// PDFs above this threshold use the field pack pipeline (smaller API calls, rate-limit safe).
+// Below: monolithic extractComprehensive() for best quality.
+const FIELDPACK_THRESHOLD = 50; // pages
 // Opus is slower and may timeout on large native PDF calls — use lower threshold
-const OPUS_PDF_THRESHOLD = 80; // pages — Opus timed out on 182 pages (3h single call)
-// For rate-limited providers, force chunked mode for any PDF
+const OPUS_PDF_THRESHOLD = 40; // pages
 const effectiveThreshold = (): number => {
-  if (isRateLimitedProvider()) return 0;
   if (config.EXTRACTION_MODEL.includes('opus')) return OPUS_PDF_THRESHOLD;
-  return LARGE_PDF_THRESHOLD;
+  return FIELDPACK_THRESHOLD;
 };
 
 import type { ExtractionStats } from '../utils/computeStats';
@@ -904,9 +904,9 @@ export async function processExtraction(
         logger.warn('Anfechtungsanalyse fehlgeschlagen', { error: anfechtungResult.reason instanceof Error ? anfechtungResult.reason.message : String(anfechtungResult.reason) });
       }
     } else if (pageCount <= effectiveThreshold()) {
-      // Multi-pass extraction: anchor + field packs + focused passes in parallel
-      report(`Anker + Feldpakete (${pageCount} S.)… (Stufe 2a/3)`, 35);
-      result = await extractWithFieldPacks(pageTexts, segments, documentMap, ocrResult, report);
+      // Normal PDFs (≤50 pages): monolithic extraction (best quality)
+      report(`Basisanalyse (${pageCount} S.)… (Stufe 2a/3)`, 35);
+      result = await extractComprehensive(pdfBuffer, pageTexts, documentMap);
 
       // Classify pages by domain for focused extraction
       const routing = classifySegmentsForExtraction(segments, pageCount);
@@ -963,7 +963,7 @@ export async function processExtraction(
       const chunkInfo = segments.length > 0
         ? `dokumentbasiertes Chunking (${segments.length} Segmente)`
         : 'seitenbasiertes Chunking';
-      logger.info(`Großes PDF (${pageCount} S.) — verwende ${chunkInfo}`);
+      logger.info(`Großes PDF (${pageCount} S.) — verwende Anker + Feldpakete (${chunkInfo})`);
       report(`Großes PDF (${pageCount} S.) — Anker + Feldpakete… (Stufe 2/3)`, 35);
       result = await extractWithFieldPacks(pageTexts, segments, documentMap, ocrResult, report);
 
