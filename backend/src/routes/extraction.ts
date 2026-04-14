@@ -5,6 +5,9 @@ import { extractionRateLimit } from '../middleware/rateLimit';
 import { processExtraction } from '../services/extraction';
 import { config } from '../config';
 import { getDb } from '../db/database';
+import { writeResultJson } from '../db/resultJson';
+import { computeExtractionStats } from '../utils/computeStats';
+import { getRateLimiterStatus } from '../services/rateLimiter';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -30,6 +33,15 @@ router.post(
       validatePdfBuffer(req.file.buffer);
     } catch {
       res.status(400).json({ error: 'Datei ist kein gültiges PDF.' });
+      return;
+    }
+
+    // Reject if another extraction is already running (Langdock 60K TPM can't handle concurrent extractions)
+    const rlStatus = getRateLimiterStatus();
+    if (rlStatus.activeExtractions > 0) {
+      res.status(429).json({
+        error: 'Eine andere Extraktion läuft bereits. Bitte warten Sie, bis diese abgeschlossen ist, und versuchen Sie es erneut.',
+      });
       return;
     }
 
@@ -111,5 +123,39 @@ router.post(
     res.end();
   }
 );
+
+// Persist demo extraction so Gutachten generation works without running the pipeline
+router.post('/demo', authMiddleware, (req: Request, res: Response): void => {
+  const userId = req.user!.userId;
+  const { result } = req.body as { result?: unknown };
+
+  if (!result || typeof result !== 'object') {
+    res.status(400).json({ error: 'result erforderlich' });
+    return;
+  }
+
+  const db = getDb();
+
+  // Reuse existing demo extraction if one exists for this user
+  const existing = db.prepare(
+    "SELECT id FROM extractions WHERE user_id = ? AND filename = 'demo-test.pdf' AND status = 'completed' ORDER BY id DESC LIMIT 1"
+  ).get(userId) as { id: number } | undefined;
+
+  if (existing) {
+    db.prepare('UPDATE extractions SET result_json = ? WHERE id = ?')
+      .run(writeResultJson(result), existing.id);
+    res.json({ id: existing.id });
+    return;
+  }
+
+  const stats = computeExtractionStats(result as import('../types/extraction').ExtractionResult);
+
+  const insertResult = db.prepare(
+    `INSERT INTO extractions (user_id, filename, file_size, status, result_json, stats_found, stats_missing, stats_letters_ready, processing_time_ms)
+     VALUES (?, ?, ?, 'completed', ?, ?, ?, ?, 0)`
+  ).run(userId, 'demo-test.pdf', 0, writeResultJson(result), stats.found, stats.missing, stats.lettersReady);
+
+  res.json({ id: Number(insertResult.lastInsertRowid) });
+});
 
 export default router;
