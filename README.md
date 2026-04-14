@@ -58,24 +58,82 @@ Nach dem ersten Build werden Änderungen in `backend/src` und `frontend/src` aut
 
 ## Architektur
 
-```
-PDF Upload → Watermark-Entfernung → Seitentext-Extraktion
-                    ↓
-  Gescannt? → Azure Document Intelligence OCR
-              (Text + Tabellen + Wort-Polygone → durchsuchbare Text-Ebene)
-                    ↓
-  Stufe 1: Dokumentstruktur-Analyse (Sonnet)
-  Stufe 2a: Basis-Extraktion (Sonnet + Extended Thinking, Hybrid Bild+Text)
-  Stufe 2b: Fokus-Passes parallel (Forderungen, Aktiva, Anfechtung)
-            mit Tabellen-Anreicherung + Seitenbildern aus Azure DI
-  Stufe 3: Semantische Verifikation + Handschrift-Extraktion
-  Stufe 4: Deterministische Nachbearbeitung (keine LLM-Arithmetik)
-  Stufe 5: Validierungs-Retry fuer kritische Felder
-                    ↓
-  Strukturiertes JSON + durchsuchbares PDF + 10 Anschreiben-Checklisten
-```
+**Monorepo** mit drei Paketen: `backend/`, `frontend/`, `shared/`.
+
+- **Backend**: Express + TypeScript (Port 3004), SQLite (WAL, verschluesselt)
+- **Frontend**: React 18 + Vite + Tailwind CSS (Port 3005)
+- **Shared**: Kanonische TypeScript-Typdefinitionen (`SourcedValue<T>`, `ExtractionResult`, etc.)
 
 **Modelle**: Claude Sonnet 4.6 via Langdock EU (DSGVO-konform, alle Daten in der EU).
+
+### Extraktions-Pipeline
+
+```
+PDF Upload
+  │
+  ├─ Watermark-Entfernung (3 Strategien: Ganzzeilen, Suffix, Kurzfragmente)
+  ├─ Seitentext-Extraktion
+  │
+  ▼
+Stufe 0 — OCR (bedingt)
+  Erkennung gescannter PDFs (< 50 Zeichen/Seite im Durchschnitt)
+  → Azure Document Intelligence (prebuilt-layout)
+  → Text + 129 Tabellen + Wort-Polygone + Konfidenzwerte
+  → Ergebnisse gecacht nach PDF-Hash (data/ocr-cache/)
+  → Unsichtbare Text-Ebene fuer Suche/Highlighting im PDF-Viewer
+  │
+  ▼
+Stufe 1 — Dokumentstruktur-Analyse
+  Sonnet → Dokumentkarte + Seitenklassifizierung nach Domaene
+  (forderungen / aktiva / anfechtung)
+  │
+  ▼
+Stufe 2a — Basis-Extraktion
+  Sonnet + Extended Thinking
+  Langdock: Hybrid-Modus (20 Schluesselseiten-Bilder + vollstaendiger OCR-Text)
+  Direkte Anthropic API: Nativer PDF-Modus
+  → Skalare Felder (Schuldner, Gericht, Verfahrensdaten, etc.)
+  │
+  ▼
+Stufe 2b — Fokussierte Passes (parallel)
+  ├─ Forderungen-Extraktor: Angereicherte Texte + Tabellenstrukturen + Seitenbilder
+  ├─ Aktiva-Extraktor: Angereicherte Texte + Seitenbilder
+  └─ Anfechtungs-Analysator: Angereicherte Texte + Seitenbilder
+  Token-Budget: Alle Seiten wenn < 450K Zeichen, sonst Keyword-Routing, Notfall-Trunkierung
+  → Ueberschreibt jeweilige Abschnitte im Basis-Ergebnis
+  │
+  ▼
+Stufe 3 — Semantische Verifikation
+  Sonnet prueft skalare Felder (NICHT Array-Elemente aus Fokus-Passes)
+  → Kann bestaetigen, korrigieren oder entfernen — niemals erfinden
+  │
+  ├─ 3b: Gezielte Nachextraktion (nur skalare Felder, nur Quellseiten)
+  └─ 3c: Handschrift-Extraktion (Fragebogen-Seiten → Mini-PDF oder OCR-Text)
+  │
+  ▼
+Stufe 4 — Deterministische Nachbearbeitung (kein LLM)
+  Geschlechtserkennung, Boolean-Defaults, Arbeitnehmer-Fallback, TEUR-Parsing
+  │
+  ▼
+Stufe 5 — Validierungs-Retry
+  Prueft Aktenzeichen, Gericht, Name/Firma, Datum
+  Bei fehlenden Feldern: Retry mit gezieltem Prompt auf den ersten 30 Seiten
+  │
+  ▼
+Ergebnis
+  ├─ Strukturiertes JSON mit Quellenangaben (SourcedValue pro Feld)
+  ├─ Durchsuchbares PDF (mit OCR-Text-Ebene bei gescannten Dokumenten)
+  ├─ 10 Anschreiben-Checklisten (Pflichtfelder pro Brieftyp)
+  └─ Gutachten-Generierung (DOCX aus Vorlage mit 90+ KI-Platzhaltern)
+```
+
+### Schluesselkonzepte
+
+- **SourcedValue-Pattern**: Jedes extrahierte Feld enthaelt `{wert, quelle, verifiziert?, pruefstatus?}`. Die Quelle referenziert die exakte Seite ("Seite X, ...").
+- **Asymmetrisches Vertrauen**: Stufe 2 (Extraktor) findet und weist Werte zu. Stufe 3 (Verifizierer) kann nur bestaetigen, korrigieren oder entfernen — niemals neue Werte erfinden.
+- **Prompt Caching**: Alle API-Aufrufe nutzen `cache_control: ephemeral` (5 Min. TTL, ~90% Einsparung bei Input-Tokens).
+- **Rate Limiter**: Globaler Token-bewusster Semaphor. Schwere Aufrufe (> 50K Tokens) begrenzt auf `floor(TPM / 80K)` gleichzeitig.
+- **Smart Streaming**: Kleine Aufrufe (< 50K Tokens) ohne Streaming (schneller), grosse Aufrufe mit Streaming (verhindert Cloudflare-Timeout).
 
 ## Extraktion verifizieren & benchmarken
 
