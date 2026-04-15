@@ -14,9 +14,10 @@ interface TabNavigationProps {
   onTabChange: (tab: string) => void;
   onNewFile: () => void;
   onExport?: () => void;
+  onAddDocument?: () => void;
 }
 
-export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile, onExport }: TabNavigationProps) {
+export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile, onExport, onAddDocument }: TabNavigationProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [visibleCount, setVisibleCount] = useState(tabs.length);
@@ -145,6 +146,14 @@ export function TabNavigation({ tabs, activeTab, onTabChange, onNewFile, onExpor
       {/* Spacer + action buttons */}
       <div className="flex-1" />
       <div data-actions className="flex items-center gap-1.5 mb-1">
+        {onAddDocument && (
+          <button
+            onClick={onAddDocument}
+            className="px-3 py-1.5 border border-border/80 rounded-md bg-transparent text-text-muted text-[9px] cursor-pointer font-mono hover:border-accent hover:text-accent hover:bg-accent/[0.03] transition-all tracking-wider"
+          >
+            + DOKUMENT
+          </button>
+        )}
         {onExport && (
           <button
             onClick={onExport}

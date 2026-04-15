@@ -18,6 +18,7 @@ import { AnschreibenTab } from '../components/extraction/tabs/AnschreibenTab';
 import { AktivaTab } from '../components/extraction/tabs/AktivaTab';
 import { AnfechtungTab } from '../components/extraction/tabs/AnfechtungTab';
 import { GutachtenTab } from '../components/extraction/tabs/GutachtenTab';
+import { AddDocumentWizard } from '../components/extraction/AddDocumentWizard';
 import { useExtraction } from '../hooks/useExtraction';
 import { ExtractionProvider } from '../contexts/ExtractionContext';
 import { HistoryPanel } from '../components/dashboard/HistoryPanel';
@@ -38,6 +39,7 @@ export function DashboardPage() {
   const { loading, progress, progressPercent, result, error, extractionId, pdfFile, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField, resumeIfProcessing } = useExtraction();
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showAddDoc, setShowAddDoc] = useState(false);
   const [importedFilename, setImportedFilename] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -139,6 +141,7 @@ export function DashboardPage() {
         onTabChange={setTab}
         onNewFile={handleNewFile}
         onExport={extractionId ? () => setShowExport(true) : undefined}
+        onAddDocument={extractionId ? () => setShowAddDoc(true) : undefined}
       />
 
       {tab === 'overview' && (
@@ -215,12 +218,20 @@ export function DashboardPage() {
             <span className="text-ie-amber">⚠</span>
             {importedFilename ? `Import: ${importedFilename}` : 'Verlaufs-Ansicht · PDF nicht verfügbar (wurde nach Extraktion gelöscht)'}
             {extractionId && (
-              <button
-                onClick={() => setShowExport(true)}
-                className="px-2 py-0.5 border border-border rounded-md hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
-              >
-                EXPORTIEREN
-              </button>
+              <>
+                <button
+                  onClick={() => setShowExport(true)}
+                  className="px-2 py-0.5 border border-border rounded-md hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
+                >
+                  EXPORTIEREN
+                </button>
+                <button
+                  onClick={() => setShowAddDoc(true)}
+                  className="px-2 py-0.5 border border-border rounded-md hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
+                >
+                  + DOKUMENT
+                </button>
+              </>
             )}
             <button
               onClick={handleNewFile}
@@ -305,6 +316,17 @@ export function DashboardPage() {
             navigate('/dashboard');
           }}
           onClose={() => setShowImport(false)}
+        />
+      )}
+
+      {showAddDoc && extractionId && (
+        <AddDocumentWizard
+          extractionId={extractionId}
+          onClose={() => setShowAddDoc(false)}
+          onMerged={() => {
+            if (extractionId) loadFromHistory(extractionId);
+            setShowAddDoc(false);
+          }}
         />
       )}
     </div>
