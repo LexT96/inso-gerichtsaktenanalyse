@@ -608,17 +608,16 @@ function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
     });
   };
 
-  // Convert Files to stable ArrayBuffers (once per doc set)
-  const [buffers, setBuffers] = useState<ArrayBuffer[]>([]);
+  // Create object URLs once and store in state — only recreate when docs change
+  const [docUrls, setDocUrls] = useState<string[]>([]);
   useEffect(() => {
-    let cancelled = false;
-    Promise.all(docs.map(d => d.file.arrayBuffer())).then(bufs => {
-      if (!cancelled) setBuffers(bufs);
-    });
-    return () => { cancelled = true; };
-  }, [docs]);
+    const urls = docs.map(d => URL.createObjectURL(d.file));
+    setDocUrls(urls);
+    return () => urls.forEach(u => URL.revokeObjectURL(u));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docs.length]); // Only recreate when doc count changes, not on every render
 
-  if (buffers.length !== docs.length) {
+  if (docUrls.length !== docs.length) {
     return (
       <div className="flex items-center justify-center h-32 text-text-muted text-xs">
         Dokumente werden geladen...
@@ -638,7 +637,7 @@ function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
             </div>
           )}
           <Document
-            file={{ data: buffers[docIdx] }}
+            file={{ url: docUrls[docIdx] }}
             options={PDFJS_OPTIONS}
             onLoadSuccess={(pdf) => handleDocLoad(docIdx, pdf.numPages)}
             onLoadError={(err) => onLoadError(err?.message || 'PDF konnte nicht geladen werden')}
