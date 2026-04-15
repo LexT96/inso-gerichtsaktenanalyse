@@ -608,9 +608,15 @@ function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
     });
   };
 
-  // Stable object URLs
-  const urls = useMemo(() => docs.map(d => URL.createObjectURL(d.file)), [docs]);
-  useEffect(() => () => urls.forEach(u => URL.revokeObjectURL(u)), [urls]);
+  // Stable object URLs — created once per doc set, revoked on unmount
+  const urlsRef = useRef<string[]>([]);
+  if (urlsRef.current.length !== docs.length) {
+    // Revoke old URLs
+    urlsRef.current.forEach(u => URL.revokeObjectURL(u));
+    urlsRef.current = docs.map(d => URL.createObjectURL(d.file));
+  }
+  const urls = urlsRef.current;
+  useEffect(() => () => { urlsRef.current.forEach(u => URL.revokeObjectURL(u)); }, []);
 
   return (
     <>
