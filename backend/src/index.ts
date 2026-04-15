@@ -13,6 +13,7 @@ import historyRoutes from './routes/history';
 import generateLetterRoutes from './routes/generateLetter';
 import generateGutachtenRoutes from './routes/generateGutachten';
 import fieldUpdateRoutes from './routes/fieldUpdate';
+import documentsRoutes from './routes/documents';
 import verwalterRoutes from './routes/verwalter';
 import adminRoutes from './routes/admin';
 import bcrypt from 'bcrypt';
@@ -35,6 +36,7 @@ app.use('/api/history', historyRoutes);
 app.use('/api/generate-letter', generateLetterRoutes);
 app.use('/api/generate-gutachten', generateGutachtenRoutes);
 app.use('/api/extractions', fieldUpdateRoutes);
+app.use('/api/extractions', documentsRoutes);
 app.use('/api/verwalter', verwalterRoutes);
 app.use('/api/admin', adminRoutes);
 
