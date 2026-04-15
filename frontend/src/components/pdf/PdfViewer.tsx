@@ -46,8 +46,10 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
     return docs;
   }, [file, documents]);
 
+  // -1 = show all concatenated, 0+ = individual document
   const [activeDocIndex, setActiveDocIndex] = useState(0);
-  const activeFile = allDocs[activeDocIndex]?.file ?? file;
+  const showAll = activeDocIndex === -1;
+  const activeFile = showAll ? allDocs[0].file : (allDocs[activeDocIndex]?.file ?? file);
 
   const [totalPages, setTotalPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -449,8 +451,8 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
                 value={activeDocIndex}
                 onChange={e => setActiveDocIndex(Number(e.target.value))}
                 className="truncate flex-1 min-w-0 mr-3 bg-transparent border border-border/60 rounded px-1.5 py-0.5 text-[10px] text-text cursor-pointer"
-                title={allDocs[activeDocIndex]?.label}
               >
+                <option value={-1}>Alle Dokumente ({allDocs.length})</option>
                 {allDocs.map((d, i) => (
                   <option key={i} value={i}>{d.label}</option>
                 ))}
@@ -514,6 +516,42 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
               <div className="flex items-center justify-center h-full text-ie-red text-xs p-4">
                 {loadError}
               </div>
+            ) : showAll ? (
+              /* Concatenated view: all documents with separators */
+              allDocs.map((doc, docIdx) => (
+                <div key={docIdx}>
+                  {docIdx > 0 && (
+                    <div className="flex items-center gap-2 py-2 px-4 bg-accent/5 border-y border-accent/20">
+                      <div className="flex-1 h-px bg-accent/20" />
+                      <span className="text-[9px] text-accent font-mono whitespace-nowrap">{doc.label}</span>
+                      <div className="flex-1 h-px bg-accent/20" />
+                    </div>
+                  )}
+                  <Document
+                    file={{ url: URL.createObjectURL(doc.file) }}
+                    options={PDFJS_OPTIONS}
+                    onLoadSuccess={docIdx === 0 ? onDocLoadSuccess : undefined}
+                    onLoadError={(err) => setLoadError(err?.message || 'PDF konnte nicht geladen werden')}
+                    loading={
+                      <div className="flex items-center justify-center h-32 text-text-muted text-xs">
+                        {doc.label} wird gerendert...
+                      </div>
+                    }
+                  >
+                    {/* Render all pages without lazy loading for concatenated view */}
+                    {Array.from({ length: 200 }, (_, i) => (
+                      <Page
+                        key={`${docIdx}-${i}`}
+                        pageNumber={i + 1}
+                        width={pageWidth}
+                        renderTextLayer={true}
+                        renderAnnotationLayer={false}
+                        error={null}
+                      />
+                    )).slice(0, 200)}
+                  </Document>
+                </div>
+              ))
             ) : !fileProp ? (
               <div className="flex items-center justify-center h-full text-text-muted text-xs">
                 PDF wird geladen...
