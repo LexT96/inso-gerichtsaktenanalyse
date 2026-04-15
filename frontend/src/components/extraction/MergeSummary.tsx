@@ -1,6 +1,71 @@
 import { useState } from 'react';
 import type { MergeDiff, MergeFieldChange } from '../../types/extraction';
 
+/** Human-readable labels for dotted field paths */
+const FIELD_LABELS: Record<string, string> = {
+  'verfahrensdaten.aktenzeichen': 'Aktenzeichen',
+  'verfahrensdaten.gericht': 'Gericht',
+  'verfahrensdaten.richter': 'Richter',
+  'verfahrensdaten.beschlussdatum': 'Beschlussdatum',
+  'verfahrensdaten.antragsdatum': 'Antragsdatum',
+  'verfahrensdaten.antragsart': 'Antragsart',
+  'verfahrensdaten.eroeffnungsgrund': 'Eröffnungsgrund',
+  'verfahrensdaten.zustellungsdatum_schuldner': 'Zustellungsdatum',
+  'verfahrensdaten.verfahrensart': 'Verfahrensart',
+  'verfahrensdaten.verfahrensstadium': 'Verfahrensstadium',
+  'verfahrensdaten.eigenverwaltung': 'Eigenverwaltung',
+  'verfahrensdaten.internationaler_bezug': 'Internationaler Bezug',
+  'schuldner.name': 'Schuldner Name',
+  'schuldner.vorname': 'Schuldner Vorname',
+  'schuldner.firma': 'Firma',
+  'schuldner.rechtsform': 'Rechtsform',
+  'schuldner.geburtsdatum': 'Geburtsdatum',
+  'schuldner.aktuelle_adresse': 'Aktuelle Adresse',
+  'schuldner.betriebsstaette_adresse': 'Betriebsstätte',
+  'schuldner.handelsregisternummer': 'HRB-Nummer',
+  'schuldner.familienstand': 'Familienstand',
+  'schuldner.telefon': 'Telefon',
+  'schuldner.email': 'E-Mail',
+  'schuldner.finanzamt': 'Finanzamt',
+  'schuldner.steuernummer': 'Steuernummer',
+  'antragsteller.name': 'Antragsteller',
+  'antragsteller.adresse': 'Antragsteller Adresse',
+  'gutachterbestellung.gutachter_name': 'Gutachter',
+  'gutachterbestellung.gutachter_kanzlei': 'Gutachter Kanzlei',
+  'gutachterbestellung.gutachter_adresse': 'Gutachter Adresse',
+  'gutachterbestellung.bestellungsdatum': 'Bestellungsdatum',
+  'gutachterbestellung.frist_gutachten': 'Frist Gutachten',
+  'gutachterbestellung.sicherungsmassnahmen': 'Sicherungsmaßnahmen',
+  'gutachterbestellung.befugnisse': 'Befugnisse',
+  'ermittlungsergebnisse.grundbuch.ergebnis': 'Grundbuch',
+  'ermittlungsergebnisse.grundbuch.datum': 'Grundbuch Datum',
+  'ermittlungsergebnisse.gerichtsvollzieher.ergebnis': 'Gerichtsvollzieher',
+  'ermittlungsergebnisse.meldeauskunft.ergebnis': 'Meldeauskunft',
+  'ermittlungsergebnisse.vollstreckungsportal.ergebnis': 'Vollstreckungsportal',
+};
+
+function humanLabel(path: string): string {
+  if (FIELD_LABELS[path]) return FIELD_LABELS[path];
+  // Fallback: take last segment, replace underscores, capitalize
+  const last = path.split('.').pop() || path;
+  return last.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatValue(wert: unknown): string {
+  if (wert === null || wert === undefined) return '—';
+  if (typeof wert === 'string') return wert;
+  if (typeof wert === 'boolean') return wert ? 'Ja' : 'Nein';
+  if (typeof wert === 'number') return String(wert);
+  if (Array.isArray(wert)) return wert.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join('; ');
+  if (typeof wert === 'object') {
+    // SourcedValue-like: show wert
+    const obj = wert as Record<string, unknown>;
+    if ('wert' in obj) return formatValue(obj.wert);
+    return JSON.stringify(wert);
+  }
+  return String(wert);
+}
+
 interface MergeSummaryProps {
   diff: MergeDiff;
   onApply: (acceptedPaths: string[], changes: Array<{ path: string; wert: unknown; quelle: string }>) => void;
@@ -21,16 +86,16 @@ function FieldRow({ change, checked, onToggle, variant }: {
   };
 
   return (
-    <label className={`flex items-start gap-2 p-2 rounded border ${colors[variant]} cursor-pointer`}>
-      <input type="checkbox" checked={checked} onChange={onToggle} className="mt-1 accent-accent" />
+    <label className={`flex items-start gap-2 p-2.5 rounded border ${colors[variant]} cursor-pointer`}>
+      <input type="checkbox" checked={checked} onChange={onToggle} className="mt-0.5 accent-accent" />
       <div className="flex-1 min-w-0">
-        <div className="text-[10px] text-text-dim font-mono">{change.path}</div>
+        <div className="text-[10px] text-text-dim font-sans font-medium">{humanLabel(change.path)}</div>
         {change.oldWert !== undefined && (
-          <div className="text-[11px] text-red-400 line-through truncate">{String(change.oldWert)}</div>
+          <div className="text-[11px] text-red-400 line-through mt-0.5">{formatValue(change.oldWert)}</div>
         )}
-        <div className="text-[11px] text-text truncate">{String(change.wert)}</div>
-        <div className="text-[9px] text-text-muted mt-0.5">{change.quelle}</div>
-        {change.reason && <div className="text-[9px] text-text-dim italic mt-0.5">{change.reason}</div>}
+        <div className="text-[12px] text-text mt-0.5 leading-relaxed">{formatValue(change.wert)}</div>
+        <div className="text-[9px] text-text-muted mt-1">{change.quelle}</div>
+        {change.reason && <div className="text-[9px] text-text-dim italic">{change.reason}</div>}
       </div>
     </label>
   );
