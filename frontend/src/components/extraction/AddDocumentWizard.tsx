@@ -51,7 +51,9 @@ export function AddDocumentWizard({ extractionId, onClose, onMerged }: AddDocume
     try {
       const formData = new FormData();
       formData.append('pdf', file);
-      const { data } = await apiClient.post(`/extractions/${extractionId}/documents`, formData);
+      const { data } = await apiClient.post(`/extractions/${extractionId}/documents`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       setDocId(data.docId);
       setSourceType(data.sourceType);
       setPageCount(data.pageCount);
