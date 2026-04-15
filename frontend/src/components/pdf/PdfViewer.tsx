@@ -427,7 +427,7 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
         <div className="w-[45%] min-w-[340px] flex flex-col bg-surface-high border-r border-border">
           {/* Toolbar */}
           <div className="flex items-center justify-between px-3 py-1.5 bg-surface border-b border-border text-[10px] text-text-dim">
-            <span className="truncate max-w-[140px]" title={file.name}>{file.name}</span>
+            <span className="truncate flex-1 min-w-0 mr-3" title={file.name}>{file.name}</span>
             <div className="flex items-center gap-3">
               {/* Zoom controls */}
               <div className="flex items-center gap-1">
