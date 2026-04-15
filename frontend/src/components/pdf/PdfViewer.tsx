@@ -8,6 +8,11 @@ import { PdfContext } from '../../contexts/PdfContext';
 // Worker von CDN – Version muss mit pdfjs-dist übereinstimmen (react-pdf nutzt 5.4.296)
 pdfjs.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@5.4.296/build/pdf.worker.min.mjs';
 
+// WASM modules for JPEG2000 (scanned PDFs) — served from /wasm/ in public/
+const PDFJS_OPTIONS = {
+  wasmUrl: (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/wasm/',
+};
+
 // Only render pages near the viewport to avoid memory issues on large PDFs
 const RENDER_BUFFER = 3; // pages above/below current page to render
 
@@ -486,6 +491,7 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
             ) : (
               <Document
                 file={fileProp}
+                options={PDFJS_OPTIONS}
                 onLoadSuccess={onDocLoadSuccess}
                 onLoadError={(err) => setLoadError(err?.message || 'PDF konnte nicht geladen werden')}
                 loading={
