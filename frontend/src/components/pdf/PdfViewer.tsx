@@ -16,8 +16,15 @@ const PDFJS_OPTIONS = {
 // Only render pages near the viewport to avoid memory issues on large PDFs
 const RENDER_BUFFER = 3; // pages above/below current page to render
 
+interface DocFile {
+  file: File;
+  label: string;
+}
+
 interface PdfViewerProps {
   file: File;
+  /** Additional documents to show in dropdown */
+  documents?: DocFile[];
   children: React.ReactNode;
 }
 
@@ -31,7 +38,17 @@ const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3;
 const DEFAULT_ASPECT = 595 / 842; // A4 fallback
 
-export function PdfViewer({ file, children }: PdfViewerProps) {
+export function PdfViewer({ file, documents, children }: PdfViewerProps) {
+  // Build full document list: primary file + any additional documents
+  const allDocs = useMemo(() => {
+    const docs: DocFile[] = [{ file, label: file.name }];
+    if (documents) docs.push(...documents);
+    return docs;
+  }, [file, documents]);
+
+  const [activeDocIndex, setActiveDocIndex] = useState(0);
+  const activeFile = allDocs[activeDocIndex]?.file ?? file;
+
   const [totalPages, setTotalPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -53,12 +70,12 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
     setTotalPages(0);
     setCurrentPage(1);
     pageRefs.current.clear();
-    const url = URL.createObjectURL(file);
+    const url = URL.createObjectURL(activeFile);
     setObjectUrl(url);
     return () => {
       URL.revokeObjectURL(url);
     };
-  }, [file]);
+  }, [activeFile]);
 
   const fileProp = useMemo(
     () => (objectUrl ? { url: objectUrl } : null),
@@ -427,7 +444,20 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
         <div className="w-[45%] min-w-[340px] flex flex-col bg-surface-high border-r border-border">
           {/* Toolbar */}
           <div className="flex items-center justify-between px-3 py-1.5 bg-surface border-b border-border text-[10px] text-text-dim">
-            <span className="truncate flex-1 min-w-0 mr-3" title={file.name}>{file.name}</span>
+            {allDocs.length > 1 ? (
+              <select
+                value={activeDocIndex}
+                onChange={e => setActiveDocIndex(Number(e.target.value))}
+                className="truncate flex-1 min-w-0 mr-3 bg-transparent border border-border/60 rounded px-1.5 py-0.5 text-[10px] text-text cursor-pointer"
+                title={allDocs[activeDocIndex]?.label}
+              >
+                {allDocs.map((d, i) => (
+                  <option key={i} value={i}>{d.label}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="truncate flex-1 min-w-0 mr-3" title={activeFile.name}>{activeFile.name}</span>
+            )}
             <div className="flex items-center gap-3">
               {/* Zoom controls */}
               <div className="flex items-center gap-1">

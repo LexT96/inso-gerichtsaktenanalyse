@@ -19,6 +19,7 @@ import { AktivaTab } from '../components/extraction/tabs/AktivaTab';
 import { AnfechtungTab } from '../components/extraction/tabs/AnfechtungTab';
 import { GutachtenTab } from '../components/extraction/tabs/GutachtenTab';
 import { AddDocumentWizard } from '../components/extraction/AddDocumentWizard';
+import { apiClient } from '../api/client';
 import { useExtraction } from '../hooks/useExtraction';
 import { ExtractionProvider } from '../contexts/ExtractionContext';
 import { HistoryPanel } from '../components/dashboard/HistoryPanel';
@@ -41,6 +42,8 @@ export function DashboardPage() {
   const [showImport, setShowImport] = useState(false);
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [importedFilename, setImportedFilename] = useState<string | null>(null);
+  const [extraDocs, setExtraDocs] = useState<Array<{ file: File; label: string }>>([]);
+  const [docRefreshKey, setDocRefreshKey] = useState(0);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const historyId = searchParams.get('id');
@@ -82,6 +85,30 @@ export function DashboardPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyId]);
+
+  // Load supplementary documents for the PDF viewer
+  useEffect(() => {
+    if (!extractionId) { setExtraDocs([]); return; }
+    (async () => {
+      try {
+        const { data: docs } = await apiClient.get(`/extractions/${extractionId}/documents`);
+        const supplementDocs = (docs as Array<{ id: number; doc_index: number; source_type: string; original_filename: string }>)
+          .filter(d => d.doc_index > 0);
+        if (supplementDocs.length === 0) { setExtraDocs([]); return; }
+        const loaded: Array<{ file: File; label: string }> = [];
+        for (const doc of supplementDocs) {
+          try {
+            const res = await apiClient.get(`/extractions/${extractionId}/documents/${doc.id}/pdf`, { responseType: 'blob' });
+            loaded.push({
+              file: new File([res.data], doc.original_filename, { type: 'application/pdf' }),
+              label: `${doc.source_type} — ${doc.original_filename}`,
+            });
+          } catch { /* skip */ }
+        }
+        setExtraDocs(loaded);
+      } catch { setExtraDocs([]); }
+    })();
+  }, [extractionId, docRefreshKey]);
 
   const stats = useMemo(() => result ? computeStats(result) : { found: 0, missing: 0, total: 0 }, [result]);
 
@@ -244,7 +271,7 @@ export function DashboardPage() {
 
       {/* Split layout when results are available + file exists */}
       {result && (file || pdfFile) ? (
-        <PdfViewer file={(file || pdfFile)!}>
+        <PdfViewer file={(file || pdfFile)!} documents={extraDocs.length > 0 ? extraDocs : undefined}>
           {resultsContent}
         </PdfViewer>
       ) : result && !file && !pdfFile ? (
@@ -360,6 +387,7 @@ export function DashboardPage() {
           onClose={() => setShowAddDoc(false)}
           onMerged={() => {
             if (extractionId) loadFromHistory(extractionId);
+            setDocRefreshKey(k => k + 1);
             setShowAddDoc(false);
           }}
         />
