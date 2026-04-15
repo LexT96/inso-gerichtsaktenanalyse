@@ -517,12 +517,15 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
                 {loadError}
               </div>
             ) : showAll ? (
-              /* Concatenated view: all documents with separators */
-              <ConcatenatedView
+              /* Concatenated view: reuse parent's lazy rendering infrastructure */
+              <ConcatenatedDocs
                 docs={allDocs}
                 pageWidth={pageWidth}
+                placeholderHeight={placeholderHeight}
+                visibleRange={visibleRange}
+                pageRefCallback={pageRefCallback}
                 onTotalPages={setTotalPages}
-                onLoadError={(msg) => setLoadError(msg)}
+                onFirstDocLoad={onDocLoadSuccess}
               />
             ) : !fileProp ? (
               <div className="flex items-center justify-center h-full text-text-muted text-xs">
@@ -585,78 +588,63 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
   );
 }
 
-/** Renders all documents concatenated with separators, matching single-doc styling */
-function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
+/**
+ * Concatenated multi-document view.
+ * Reuses the parent PdfViewer's IntersectionObserver for lazy rendering
+ * by using the same pageRefCallback and visibleRange.
+ */
+function ConcatenatedDocs({ docs, pageWidth, placeholderHeight, visibleRange, pageRefCallback, onTotalPages, onFirstDocLoad }: {
   docs: DocFile[];
   pageWidth: number | undefined;
+  placeholderHeight: number;
+  visibleRange: { start: number; end: number };
+  pageRefCallback: (page: number) => (el: HTMLDivElement | null) => void;
   onTotalPages: (n: number) => void;
-  onLoadError: (msg: string) => void;
+  onFirstDocLoad: (pdf: { numPages: number; getPage: (n: number) => Promise<{ getViewport: (o: { scale: number }) => { width: number; height: number } }> }) => void;
 }) {
-  const [pageCounts, setPageCounts] = useState<number[]>(() => new Array(docs.length).fill(0));
+  const [pageCounts, setPageCounts] = useState<number[]>([]);
+  const [docUrls, setDocUrls] = useState<string[]>([]);
 
-  // Update total when any doc loads
+  // Create stable URLs
+  useEffect(() => {
+    const urls = docs.map(d => URL.createObjectURL(d.file));
+    setDocUrls(urls);
+    setPageCounts(new Array(docs.length).fill(0));
+    return () => urls.forEach(u => URL.revokeObjectURL(u));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docs.length]);
+
+  const docFiles = useMemo(() => docUrls.map(url => ({ url })), [docUrls]);
+
+  // Update total pages when docs load
   useEffect(() => {
     const total = pageCounts.reduce((s, n) => s + n, 0);
     if (total > 0) onTotalPages(total);
   }, [pageCounts, onTotalPages]);
 
-  const [currentGlobalPage, setCurrentGlobalPage] = useState(1);
-
-  const handleDocLoad = (docIdx: number, numPages: number) => {
+  const handleDocLoad = useCallback((docIdx: number, numPages: number) => {
     setPageCounts(prev => {
       const next = [...prev];
       next[docIdx] = numPages;
       return next;
     });
-  };
+  }, []);
 
-  // Lazy rendering: only render pages near viewport
-  const BUFFER = 3;
-  const totalPages = pageCounts.reduce((s, n) => s + n, 0);
-  const visibleStart = Math.max(1, currentGlobalPage - BUFFER);
-  const visibleEnd = Math.min(totalPages, currentGlobalPage + BUFFER);
-  const placeholderH = pageWidth ? Math.round(pageWidth / (595 / 842)) + 24 : 800;
-
-  // Track scroll position to update currentGlobalPage
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    // Find the scrollable parent (the container div)
-    const el = scrollRef.current?.closest('.overflow-auto');
-    if (!el) return;
-    const handleScroll = () => {
-      const children = el.querySelectorAll('[data-global-page]');
-      for (const child of children) {
-        const rect = (child as HTMLElement).getBoundingClientRect();
-        if (rect.top >= 0 && rect.top < window.innerHeight / 2) {
-          const pg = Number((child as HTMLElement).dataset.globalPage);
-          if (pg && pg !== currentGlobalPage) setCurrentGlobalPage(pg);
-          break;
-        }
-      }
-    };
-    el.addEventListener('scroll', handleScroll, { passive: true });
-    return () => el.removeEventListener('scroll', handleScroll);
-  }, [currentGlobalPage]);
-
-  // Create object URLs once and store in state — only recreate when docs change
-  const [docUrls, setDocUrls] = useState<string[]>([]);
-  useEffect(() => {
-    const urls = docs.map(d => URL.createObjectURL(d.file));
-    setDocUrls(urls);
-    return () => urls.forEach(u => URL.revokeObjectURL(u));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docs.length]); // Only recreate when doc count changes, not on every render
+  // Compute global page offset per document
+  const offsets = useMemo(() => {
+    const o: number[] = [0];
+    for (let i = 0; i < pageCounts.length - 1; i++) {
+      o.push(o[i] + pageCounts[i]);
+    }
+    return o;
+  }, [pageCounts]);
 
   if (docUrls.length !== docs.length) {
-    return (
-      <div className="flex items-center justify-center h-32 text-text-muted text-xs">
-        Dokumente werden geladen...
-      </div>
-    );
+    return <div className="flex items-center justify-center h-32 text-text-muted text-xs">Dokumente werden geladen...</div>;
   }
 
   return (
-    <div ref={scrollRef}>
+    <>
       {docs.map((doc, docIdx) => (
         <div key={docIdx}>
           {docIdx > 0 && (
@@ -667,10 +655,12 @@ function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
             </div>
           )}
           <Document
-            file={{ url: docUrls[docIdx] }}
+            file={docFiles[docIdx]}
             options={PDFJS_OPTIONS}
-            onLoadSuccess={(pdf) => handleDocLoad(docIdx, pdf.numPages)}
-            onLoadError={(err) => onLoadError(err?.message || 'PDF konnte nicht geladen werden')}
+            onLoadSuccess={(pdf) => {
+              handleDocLoad(docIdx, pdf.numPages);
+              if (docIdx === 0) onFirstDocLoad(pdf);
+            }}
             loading={
               <div className="flex items-center justify-center h-32 text-text-muted text-xs">
                 {doc.label} wird gerendert...
@@ -678,12 +668,16 @@ function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
             }
           >
             {pageCounts[docIdx] > 0 && Array.from({ length: pageCounts[docIdx] }, (_, i) => {
-              // Global page index for lazy rendering
-              const globalPage = pageCounts.slice(0, docIdx).reduce((s, n) => s + n, 0) + i + 1;
-              const inRange = globalPage >= visibleStart && globalPage <= visibleEnd;
+              const globalPage = (offsets[docIdx] ?? 0) + i + 1;
+              const inRange = globalPage >= visibleRange.start && globalPage <= visibleRange.end;
               return (
-                <div key={i} data-global-page={globalPage} className="mb-1 border-b border-border/30 flex flex-col items-center"
-                  style={!inRange ? { height: `${placeholderH}px` } : undefined}>
+                <div
+                  key={i}
+                  data-page={globalPage}
+                  ref={pageRefCallback(globalPage)}
+                  className="mb-1 border-b border-border/30 flex flex-col items-center"
+                  style={!inRange ? { height: `${placeholderHeight}px` } : undefined}
+                >
                   {inRange ? (
                     <Page
                       pageNumber={i + 1}
@@ -705,6 +699,6 @@ function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
           </Document>
         </div>
       ))}
-    </div>
+    </>
   );
 }
