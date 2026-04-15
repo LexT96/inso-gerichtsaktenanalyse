@@ -162,13 +162,14 @@ router.post('/:extractionId/documents/:docId/extract', authMiddleware, async (re
   if (!doc) { res.status(404).json({ error: 'Dokument nicht gefunden' }); return; }
 
   // Allow source type override
-  const sourceType = (req.body?.sourceType as SegmentSourceType) || doc.sourceType as SegmentSourceType;
+  const sourceType = (req.body?.sourceType as SegmentSourceType) || (doc as any).source_type as SegmentSourceType;
 
   // Read PDF and extract text
   const dir = pdfDir(extractionId);
-  const pdfFilename = `doc_${doc.docIndex}.pdf`;
+  const pdfFilename = `doc_${(doc as any).doc_index}.pdf`;
   const pdfPath = path.join(dir, pdfFilename);
-  if (!fs.existsSync(pdfPath)) { res.status(404).json({ error: 'PDF-Datei nicht gefunden' }); return; }
+  logger.info('Document extract: resolving PDF', { dir, pdfFilename, pdfPath, exists: fs.existsSync(pdfPath) });
+  if (!fs.existsSync(pdfPath)) { res.status(404).json({ error: `PDF-Datei nicht gefunden: ${pdfFilename} in ${dir}` }); return; }
 
   const pdfBuffer = fs.readFileSync(pdfPath);
   const pageTexts = await extractTextPerPage(pdfBuffer);
@@ -219,7 +220,7 @@ router.post('/:extractionId/documents/:docId/extract', authMiddleware, async (re
       );
       // Prefix quellen with document type
       for (const c of candidates) {
-        if (c.quelle && !c.quelle.includes(doc.originalFilename)) {
+        if (c.quelle && !c.quelle.includes((doc as any).original_filename)) {
           c.quelle = c.quelle.replace(/^Seite/i, `${sourceType.charAt(0).toUpperCase() + sourceType.slice(1)}, Seite`);
         }
       }
@@ -386,12 +387,12 @@ router.get('/:extractionId/documents/:docId/pdf', authMiddleware, (req: Request,
 
   const dir = pdfDir(extractionId);
   // For gerichtsakte (doc_index 0), use 0_gerichtsakte.pdf naming
-  const pdfFilename = doc.docIndex === 0 ? '0_gerichtsakte.pdf' : `doc_${doc.docIndex}.pdf`;
+  const pdfFilename = (doc as any).doc_index === 0 ? '0_gerichtsakte.pdf' : `doc_${(doc as any).doc_index}.pdf`;
   const pdfPath = path.join(dir, pdfFilename);
   if (!fs.existsSync(pdfPath)) { res.status(404).json({ error: 'PDF nicht verfügbar' }); return; }
 
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.originalFilename)}"`);
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent((doc as any).original_filename)}"`);
   fs.createReadStream(pdfPath).pipe(res);
 });
 
