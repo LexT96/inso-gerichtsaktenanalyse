@@ -600,6 +600,8 @@ function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
     if (total > 0) onTotalPages(total);
   }, [pageCounts, onTotalPages]);
 
+  const [currentGlobalPage, setCurrentGlobalPage] = useState(1);
+
   const handleDocLoad = (docIdx: number, numPages: number) => {
     setPageCounts(prev => {
       const next = [...prev];
@@ -607,6 +609,34 @@ function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
       return next;
     });
   };
+
+  // Lazy rendering: only render pages near viewport
+  const BUFFER = 3;
+  const totalPages = pageCounts.reduce((s, n) => s + n, 0);
+  const visibleStart = Math.max(1, currentGlobalPage - BUFFER);
+  const visibleEnd = Math.min(totalPages, currentGlobalPage + BUFFER);
+  const placeholderH = pageWidth ? Math.round(pageWidth / (595 / 842)) + 24 : 800;
+
+  // Track scroll position to update currentGlobalPage
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    // Find the scrollable parent (the container div)
+    const el = scrollRef.current?.closest('.overflow-auto');
+    if (!el) return;
+    const handleScroll = () => {
+      const children = el.querySelectorAll('[data-global-page]');
+      for (const child of children) {
+        const rect = (child as HTMLElement).getBoundingClientRect();
+        if (rect.top >= 0 && rect.top < window.innerHeight / 2) {
+          const pg = Number((child as HTMLElement).dataset.globalPage);
+          if (pg && pg !== currentGlobalPage) setCurrentGlobalPage(pg);
+          break;
+        }
+      }
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [currentGlobalPage]);
 
   // Create object URLs once and store in state — only recreate when docs change
   const [docUrls, setDocUrls] = useState<string[]>([]);
@@ -626,7 +656,7 @@ function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
   }
 
   return (
-    <>
+    <div ref={scrollRef}>
       {docs.map((doc, docIdx) => (
         <div key={docIdx}>
           {docIdx > 0 && (
@@ -647,22 +677,34 @@ function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
               </div>
             }
           >
-            {pageCounts[docIdx] > 0 && Array.from({ length: pageCounts[docIdx] }, (_, i) => (
-              <div key={i} className="mb-1 border-b border-border/30 flex flex-col items-center">
-                <Page
-                  pageNumber={i + 1}
-                  width={pageWidth}
-                  renderTextLayer={true}
-                  renderAnnotationLayer={false}
-                />
-                <div className="text-center text-[8px] text-text-muted py-0.5">
-                  Seite {i + 1}
+            {pageCounts[docIdx] > 0 && Array.from({ length: pageCounts[docIdx] }, (_, i) => {
+              // Global page index for lazy rendering
+              const globalPage = pageCounts.slice(0, docIdx).reduce((s, n) => s + n, 0) + i + 1;
+              const inRange = globalPage >= visibleStart && globalPage <= visibleEnd;
+              return (
+                <div key={i} data-global-page={globalPage} className="mb-1 border-b border-border/30 flex flex-col items-center"
+                  style={!inRange ? { height: `${placeholderH}px` } : undefined}>
+                  {inRange ? (
+                    <Page
+                      pageNumber={i + 1}
+                      width={pageWidth}
+                      renderTextLayer={true}
+                      renderAnnotationLayer={false}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-text-muted text-[9px]">
+                      Seite {i + 1}
+                    </div>
+                  )}
+                  <div className="text-center text-[8px] text-text-muted py-0.5">
+                    Seite {i + 1}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </Document>
         </div>
       ))}
-    </>
+    </div>
   );
 }
