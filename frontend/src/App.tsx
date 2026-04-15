@@ -7,11 +7,15 @@ import { AdminPage } from './pages/AdminPage';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 
 export default function App() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
   return (
     <Routes>
-      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+      <Route path="/" element={loading ? (
+        <div className="min-h-screen bg-bg flex items-center justify-center">
+          <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin-fast" />
+        </div>
+      ) : user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
       <Route
         path="/dashboard"
         element={
