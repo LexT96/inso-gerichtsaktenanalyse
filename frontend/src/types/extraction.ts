@@ -36,6 +36,11 @@ export type {
   Ehegatte,
   Beschaeftigung,
   Pfaendungsberechnung,
+  DocumentInfo,
+  MergeFieldChange,
+  MergeDiff,
+  ApplyRequest,
+  SegmentSourceType,
 } from '@shared/types/extraction';
 
 export interface VerwalterProfile {
