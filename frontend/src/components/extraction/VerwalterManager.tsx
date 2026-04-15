@@ -11,7 +11,6 @@ interface VerwalterManagerProps {
 
 const EMPTY_PROFILE: Omit<VerwalterProfile, 'id'> = {
   name: '', titel: '', geschlecht: 'maennlich', diktatzeichen: '',
-  sachbearbeiter_name: '', sachbearbeiter_email: '', sachbearbeiter_durchwahl: '',
   standort: '', anderkonto_iban: '', anderkonto_bank: '',
 };
 
@@ -79,21 +78,6 @@ export function VerwalterManager({ profiles, onSave, onUpdate, onDelete, onClose
                   className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text" placeholder="La/Bi" />
               </div>
               <div>
-                <label className="text-[10px] text-text-dim block mb-1">Sachbearbeiter</label>
-                <input value={editing.sachbearbeiter_name} onChange={e => updateField('sachbearbeiter_name', e.target.value)}
-                  className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text" placeholder="Christoph Orthen LL.M." />
-              </div>
-              <div>
-                <label className="text-[10px] text-text-dim block mb-1">E-Mail Sachbearbeiter</label>
-                <input value={editing.sachbearbeiter_email} onChange={e => updateField('sachbearbeiter_email', e.target.value)}
-                  className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text" placeholder="name@tbs-insolvenzverwalter.de" />
-              </div>
-              <div>
-                <label className="text-[10px] text-text-dim block mb-1">Durchwahl</label>
-                <input value={editing.sachbearbeiter_durchwahl} onChange={e => updateField('sachbearbeiter_durchwahl', e.target.value)}
-                  className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text" placeholder="0651 / 170 830 - 124" />
-              </div>
-              <div>
                 <label className="text-[10px] text-text-dim block mb-1">Standort</label>
                 <input value={editing.standort} onChange={e => updateField('standort', e.target.value)}
                   className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text" placeholder="Zell/Mosel" />
@@ -127,7 +111,7 @@ export function VerwalterManager({ profiles, onSave, onUpdate, onDelete, onClose
                   <div key={p.id} className="flex items-center justify-between py-2 px-3 border border-border/60 rounded hover:bg-bg/50">
                     <div>
                       <div className="text-[11px] font-semibold text-text">{p.name}</div>
-                      <div className="text-[9px] text-text-dim">{p.diktatzeichen} · {p.standort} · {p.sachbearbeiter_name}</div>
+                      <div className="text-[9px] text-text-dim">{p.diktatzeichen} · {p.standort}</div>
                     </div>
                     <div className="flex gap-1">
                       <button onClick={() => setEditing(p)} className="px-2 py-1 text-[9px] text-text-muted hover:text-text border border-border rounded">Bearbeiten</button>

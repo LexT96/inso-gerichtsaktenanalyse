@@ -44,9 +44,6 @@ export interface VerwalterProfile {
   titel: string;
   geschlecht: 'maennlich' | 'weiblich';
   diktatzeichen: string;
-  sachbearbeiter_name: string;
-  sachbearbeiter_email: string;
-  sachbearbeiter_durchwahl: string;
   standort: string;
   anderkonto_iban: string;
   anderkonto_bank: string;

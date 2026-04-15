@@ -57,6 +57,9 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
   const [anderkontoBank, setAnderkontoBank] = useState('');
   const [geschaeftsfuehrer, setGeschaeftsfuehrer] = useState('');
   const [lastGavv, setLastGavv] = useState('');
+  const [sachbearbeiterName, setSachbearbeiterName] = useState('');
+  const [sachbearbeiterEmail, setSachbearbeiterEmail] = useState('');
+  const [sachbearbeiterDurchwahl, setSachbearbeiterDurchwahl] = useState('');
 
   const { profiles, loading: loadingProfiles, createProfile, updateProfile, deleteProfile } = useVerwalter();
 
@@ -124,9 +127,9 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
     };
     const adresse = STANDORT_ADRESSEN[selectedVerwalter?.standort || ''] || 'Schlossstraße 7, 56856 Zell';
     body.verwalter_adresse = adresse;
-    if (selectedVerwalter?.sachbearbeiter_name) body.sachbearbeiter_name = selectedVerwalter.sachbearbeiter_name;
-    if (selectedVerwalter?.sachbearbeiter_email) body.sachbearbeiter_email = selectedVerwalter.sachbearbeiter_email;
-    if (selectedVerwalter?.sachbearbeiter_durchwahl) body.sachbearbeiter_durchwahl = selectedVerwalter.sachbearbeiter_durchwahl;
+    if (sachbearbeiterName.trim()) body.sachbearbeiter_name = sachbearbeiterName.trim();
+    if (sachbearbeiterEmail.trim()) body.sachbearbeiter_email = sachbearbeiterEmail.trim();
+    if (sachbearbeiterDurchwahl.trim()) body.sachbearbeiter_durchwahl = sachbearbeiterDurchwahl.trim();
     // Anderkonto: prefer wizard input, fallback to profile
     const iban = anderkontoIban.trim() || selectedVerwalter?.anderkonto_iban || '';
     const bank = anderkontoBank.trim() || selectedVerwalter?.anderkonto_bank || '';
@@ -256,7 +259,6 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
                     ['Diktatzeichen', selectedVerwalter.diktatzeichen],
                     ['Geschlecht', selectedVerwalter.geschlecht === 'weiblich' ? 'weiblich' : 'männlich'],
                     ['Standort', selectedVerwalter.standort],
-                    ['Sachbearbeiter', selectedVerwalter.sachbearbeiter_name],
                   ].map(([l, v]) => (
                     <div key={l} className="bg-bg border border-border/60 rounded px-3 py-2">
                       <div className="text-[9px] text-text-dim">{l}</div>
@@ -323,6 +325,27 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
           {/* Step 3: Fehlende Angaben */}
           {step === 3 && (
             <div className="space-y-3">
+              {/* Sachbearbeiter — per Akte */}
+              <div>
+                <label className="text-[10px] text-text-dim block mb-1">Sachbearbeiter/in</label>
+                <input value={sachbearbeiterName} onChange={e => setSachbearbeiterName(e.target.value)}
+                  className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text"
+                  placeholder="Name des Sachbearbeiters" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-text-dim block mb-1">E-Mail Sachbearbeiter</label>
+                  <input value={sachbearbeiterEmail} onChange={e => setSachbearbeiterEmail(e.target.value)}
+                    className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text font-mono"
+                    placeholder="email@kanzlei.de" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-text-dim block mb-1">Durchwahl Sachbearbeiter</label>
+                  <input value={sachbearbeiterDurchwahl} onChange={e => setSachbearbeiterDurchwahl(e.target.value)}
+                    className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text font-mono"
+                    placeholder="+49 651 ..." />
+                </div>
+              </div>
               {!selectedVerwalter?.anderkonto_iban && (
                 <div>
                   <label className="text-[10px] text-text-dim block mb-1">Anderkonto IBAN</label>
