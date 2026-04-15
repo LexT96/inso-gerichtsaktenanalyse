@@ -518,40 +518,12 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
               </div>
             ) : showAll ? (
               /* Concatenated view: all documents with separators */
-              allDocs.map((doc, docIdx) => (
-                <div key={docIdx}>
-                  {docIdx > 0 && (
-                    <div className="flex items-center gap-2 py-2 px-4 bg-accent/5 border-y border-accent/20">
-                      <div className="flex-1 h-px bg-accent/20" />
-                      <span className="text-[9px] text-accent font-mono whitespace-nowrap">{doc.label}</span>
-                      <div className="flex-1 h-px bg-accent/20" />
-                    </div>
-                  )}
-                  <Document
-                    file={{ url: URL.createObjectURL(doc.file) }}
-                    options={PDFJS_OPTIONS}
-                    onLoadSuccess={docIdx === 0 ? onDocLoadSuccess : undefined}
-                    onLoadError={(err) => setLoadError(err?.message || 'PDF konnte nicht geladen werden')}
-                    loading={
-                      <div className="flex items-center justify-center h-32 text-text-muted text-xs">
-                        {doc.label} wird gerendert...
-                      </div>
-                    }
-                  >
-                    {/* Render all pages without lazy loading for concatenated view */}
-                    {Array.from({ length: 200 }, (_, i) => (
-                      <Page
-                        key={`${docIdx}-${i}`}
-                        pageNumber={i + 1}
-                        width={pageWidth}
-                        renderTextLayer={true}
-                        renderAnnotationLayer={false}
-                        error={null}
-                      />
-                    )).slice(0, 200)}
-                  </Document>
-                </div>
-              ))
+              <ConcatenatedView
+                docs={allDocs}
+                pageWidth={pageWidth}
+                onTotalPages={setTotalPages}
+                onLoadError={(msg) => setLoadError(msg)}
+              />
             ) : !fileProp ? (
               <div className="flex items-center justify-center h-full text-text-muted text-xs">
                 PDF wird geladen...
@@ -610,5 +582,74 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
         </div>
       </div>
     </PdfContext.Provider>
+  );
+}
+
+/** Renders all documents concatenated with separators, matching single-doc styling */
+function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
+  docs: DocFile[];
+  pageWidth: number | undefined;
+  onTotalPages: (n: number) => void;
+  onLoadError: (msg: string) => void;
+}) {
+  const [pageCounts, setPageCounts] = useState<number[]>(() => new Array(docs.length).fill(0));
+
+  // Update total when any doc loads
+  useEffect(() => {
+    const total = pageCounts.reduce((s, n) => s + n, 0);
+    if (total > 0) onTotalPages(total);
+  }, [pageCounts, onTotalPages]);
+
+  const handleDocLoad = (docIdx: number, numPages: number) => {
+    setPageCounts(prev => {
+      const next = [...prev];
+      next[docIdx] = numPages;
+      return next;
+    });
+  };
+
+  // Stable object URLs
+  const urls = useMemo(() => docs.map(d => URL.createObjectURL(d.file)), [docs]);
+  useEffect(() => () => urls.forEach(u => URL.revokeObjectURL(u)), [urls]);
+
+  return (
+    <>
+      {docs.map((doc, docIdx) => (
+        <div key={docIdx}>
+          {docIdx > 0 && (
+            <div className="flex items-center gap-2 py-2 px-4 bg-accent/5 border-y border-accent/20">
+              <div className="flex-1 h-px bg-accent/20" />
+              <span className="text-[9px] text-accent font-mono whitespace-nowrap">{doc.label}</span>
+              <div className="flex-1 h-px bg-accent/20" />
+            </div>
+          )}
+          <Document
+            file={{ url: urls[docIdx] }}
+            options={PDFJS_OPTIONS}
+            onLoadSuccess={(pdf) => handleDocLoad(docIdx, pdf.numPages)}
+            onLoadError={(err) => onLoadError(err?.message || 'PDF konnte nicht geladen werden')}
+            loading={
+              <div className="flex items-center justify-center h-32 text-text-muted text-xs">
+                {doc.label} wird gerendert...
+              </div>
+            }
+          >
+            {pageCounts[docIdx] > 0 && Array.from({ length: pageCounts[docIdx] }, (_, i) => (
+              <div key={i} className="mb-1 border-b border-border/30 flex flex-col items-center">
+                <Page
+                  pageNumber={i + 1}
+                  width={pageWidth}
+                  renderTextLayer={true}
+                  renderAnnotationLayer={false}
+                />
+                <div className="text-center text-[8px] text-text-muted py-0.5">
+                  Seite {i + 1}
+                </div>
+              </div>
+            ))}
+          </Document>
+        </div>
+      ))}
+    </>
   );
 }
