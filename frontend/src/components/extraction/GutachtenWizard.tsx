@@ -41,7 +41,7 @@ function templateLabel(type: TemplateType): string {
   }
 }
 
-const STEP_LABELS = ['Verwalter', 'Schuldner & Verfahren', 'Fehlende Angaben', 'Generieren'];
+const STEP_LABELS = ['Verwalter', 'Sachbearbeiter', 'Schuldner & Verfahren', 'Fehlende Angaben', 'Generieren'];
 
 export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }: GutachtenWizardProps) {
   const [step, setStep] = useState(1);
@@ -199,6 +199,7 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
 
   const canAdvance = (s: number): boolean => {
     if (s === 1) return selectedVerwalter !== null;
+    if (s === 3) return missingCount === 0; // Schuldner & Verfahren
     return true;
   };
 
@@ -279,8 +280,34 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
             </div>
           )}
 
-          {/* Step 2: Schuldner & Verfahren */}
+          {/* Step 2: Sachbearbeiter */}
           {step === 2 && (
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] text-text-dim block mb-1">Sachbearbeiter/in *</label>
+                <input value={sachbearbeiterName} onChange={e => setSachbearbeiterName(e.target.value)}
+                  className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text"
+                  placeholder="Name des Sachbearbeiters" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-text-dim block mb-1">E-Mail</label>
+                  <input value={sachbearbeiterEmail} onChange={e => setSachbearbeiterEmail(e.target.value)}
+                    className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text font-mono"
+                    placeholder="email@kanzlei.de" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-text-dim block mb-1">Durchwahl</label>
+                  <input value={sachbearbeiterDurchwahl} onChange={e => setSachbearbeiterDurchwahl(e.target.value)}
+                    className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text font-mono"
+                    placeholder="+49 651 ..." />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Schuldner & Verfahren */}
+          {step === 3 && (
             <div className="space-y-3">
               {missingCount > 0 && (
                 <div className="p-2 bg-accent/10 border border-accent/30 rounded text-[11px] text-accent">
@@ -322,30 +349,9 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
             </div>
           )}
 
-          {/* Step 3: Fehlende Angaben */}
-          {step === 3 && (
+          {/* Step 4: Fehlende Angaben */}
+          {step === 4 && (
             <div className="space-y-3">
-              {/* Sachbearbeiter — per Akte */}
-              <div>
-                <label className="text-[10px] text-text-dim block mb-1">Sachbearbeiter/in</label>
-                <input value={sachbearbeiterName} onChange={e => setSachbearbeiterName(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text"
-                  placeholder="Name des Sachbearbeiters" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-text-dim block mb-1">E-Mail Sachbearbeiter</label>
-                  <input value={sachbearbeiterEmail} onChange={e => setSachbearbeiterEmail(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text font-mono"
-                    placeholder="email@kanzlei.de" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-text-dim block mb-1">Durchwahl Sachbearbeiter</label>
-                  <input value={sachbearbeiterDurchwahl} onChange={e => setSachbearbeiterDurchwahl(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text font-mono"
-                    placeholder="+49 651 ..." />
-                </div>
-              </div>
               {!selectedVerwalter?.anderkonto_iban && (
                 <div>
                   <label className="text-[10px] text-text-dim block mb-1">Anderkonto IBAN</label>
@@ -386,8 +392,8 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
             </div>
           )}
 
-          {/* Step 4: Vorschau & Generieren */}
-          {step === 4 && (
+          {/* Step 5: Vorschau & Generieren */}
+          {step === 5 && (
             <div className="space-y-4">
               {!preparing && slots.length === 0 && (
                 <div className="text-center py-6">
@@ -440,16 +446,16 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
             className="px-4 py-1.5 text-[11px] text-text-muted hover:text-text disabled:opacity-30">
             ← Zurück
           </button>
-          {step < 4 ? (
+          {step < 5 ? (
             <button onClick={() => {
-              if (step === 3) handlePrepare(); // Start preparation when moving to step 4
-              setStep(s => Math.min(4, s + 1));
+              if (step === 4) handlePrepare(); // Start preparation when moving to step 5
+              setStep(s => Math.min(5, s + 1));
             }} disabled={!canAdvance(step)}
               className="px-4 py-1.5 bg-accent text-white rounded text-[11px] font-semibold disabled:opacity-50">
               Weiter →
             </button>
           ) : (
-            <div /> // Generate button is in the step 4 content
+            <div /> // Generate button is in the step 5 content
           )}
         </div>
       </div>
