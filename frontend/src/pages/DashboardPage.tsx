@@ -118,18 +118,50 @@ export function DashboardPage() {
 
   const anschreibenBadge = missingInfo.length > 0 ? missingInfo.length : bereit > 0 ? bereit : undefined;
 
+  const groups = useMemo(() => [
+    { id: 'akte', label: 'Akte' },
+    { id: 'finanzen', label: 'Finanzen' },
+    { id: 'analyse', label: 'Analyse' },
+    { id: 'ausgabe', label: 'Ausgabe' },
+  ], []);
+
   const tabs = useMemo(() => [
     { id: 'overview', label: 'Übersicht', icon: '◎', group: 'akte' },
+    { id: 'beteiligte', label: 'Beteiligte', icon: '●', group: 'akte' },
     { id: 'quellen', label: 'Quellen', icon: '□', group: 'akte' },
-    { id: 'beteiligte', label: 'Beteiligte', icon: '●', group: 'parteien' },
-    { id: 'forderungen', label: 'Forderungen', icon: '€', group: 'parteien' },
-    { id: 'aktiva', label: 'Aktiva', icon: '▣', group: 'parteien' },
-    { id: 'anfechtung', label: 'Anfechtung', icon: '⚡', group: 'analyse' },
+    { id: 'forderungen', label: 'Forderungen', icon: '€', group: 'finanzen' },
+    { id: 'aktiva', label: 'Aktiva', icon: '▣', group: 'finanzen' },
+    { id: 'anfechtung', label: 'Anfechtung', icon: '⚡', group: 'finanzen' },
     { id: 'ermittlung', label: 'Ermittlung', icon: '◐', group: 'analyse' },
     { id: 'pruefliste', label: 'Prüfliste', icon: '✓', badge: unconfirmedCount, group: 'analyse' },
     { id: 'briefe', label: 'Anschreiben', icon: '✉', badge: anschreibenBadge, group: 'ausgabe' },
     { id: 'gutachten', label: 'Gutachten', icon: '◇', group: 'ausgabe' },
   ], [anschreibenBadge, unconfirmedCount]);
+
+  // Compute group progress from extraction stats
+  const groupProgress = useMemo(() => {
+    if (!result) return {} as Record<string, 'complete' | 'partial' | 'empty'>;
+    const hasVal = (field: unknown): boolean => {
+      if (!field || typeof field !== 'object') return false;
+      const f = field as { wert?: unknown };
+      return f.wert !== null && f.wert !== undefined && String(f.wert).trim() !== '';
+    };
+    const v = result.verfahrensdaten;
+    const s = result.schuldner;
+    const akteFields = [v?.aktenzeichen, v?.gericht, s?.name, s?.firma].filter(hasVal).length;
+    const forderungenCount = result.forderungen?.einzelforderungen?.length || 0;
+    const aktivaCount = result.aktiva?.positionen?.length || 0;
+    const ermittlungFields = [
+      result.ermittlungsergebnisse?.grundbuch?.ergebnis,
+      result.ermittlungsergebnisse?.gerichtsvollzieher?.vollstreckungen,
+    ].filter(hasVal).length;
+    return {
+      akte: akteFields >= 3 ? 'complete' as const : akteFields > 0 ? 'partial' as const : 'empty' as const,
+      finanzen: (forderungenCount > 0 && aktivaCount > 0) ? 'complete' as const : (forderungenCount > 0 || aktivaCount > 0) ? 'partial' as const : 'empty' as const,
+      analyse: ermittlungFields > 0 ? 'partial' as const : 'empty' as const,
+      ausgabe: bereit > 0 ? 'partial' as const : 'empty' as const,
+    };
+  }, [result, bereit]);
 
   // ─── Results content (used in both layouts) ───
   const resultsContent = result && (
@@ -137,11 +169,13 @@ export function DashboardPage() {
     <div className="animate-fade-up-fast">
       <TabNavigation
         tabs={tabs}
+        groups={groups}
         activeTab={tab}
         onTabChange={setTab}
         onNewFile={handleNewFile}
         onExport={extractionId ? () => setShowExport(true) : undefined}
         onAddDocument={extractionId ? () => setShowAddDoc(true) : undefined}
+        groupProgress={groupProgress}
       />
 
       {tab === 'overview' && (
