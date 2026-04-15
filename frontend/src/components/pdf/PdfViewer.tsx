@@ -608,15 +608,23 @@ function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
     });
   };
 
-  // Stable object URLs — created once per doc set, revoked on unmount
-  const urlsRef = useRef<string[]>([]);
-  if (urlsRef.current.length !== docs.length) {
-    // Revoke old URLs
-    urlsRef.current.forEach(u => URL.revokeObjectURL(u));
-    urlsRef.current = docs.map(d => URL.createObjectURL(d.file));
+  // Convert Files to stable ArrayBuffers (once per doc set)
+  const [buffers, setBuffers] = useState<ArrayBuffer[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(docs.map(d => d.file.arrayBuffer())).then(bufs => {
+      if (!cancelled) setBuffers(bufs);
+    });
+    return () => { cancelled = true; };
+  }, [docs]);
+
+  if (buffers.length !== docs.length) {
+    return (
+      <div className="flex items-center justify-center h-32 text-text-muted text-xs">
+        Dokumente werden geladen...
+      </div>
+    );
   }
-  const urls = urlsRef.current;
-  useEffect(() => () => { urlsRef.current.forEach(u => URL.revokeObjectURL(u)); }, []);
 
   return (
     <>
@@ -630,7 +638,7 @@ function ConcatenatedView({ docs, pageWidth, onTotalPages, onLoadError }: {
             </div>
           )}
           <Document
-            file={{ url: urls[docIdx] }}
+            file={{ data: buffers[docIdx] }}
             options={PDFJS_OPTIONS}
             onLoadSuccess={(pdf) => handleDocLoad(docIdx, pdf.numPages)}
             onLoadError={(err) => onLoadError(err?.message || 'PDF konnte nicht geladen werden')}
