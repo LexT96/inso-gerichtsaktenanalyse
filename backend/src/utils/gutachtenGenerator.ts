@@ -666,7 +666,7 @@ function tblCell(text: string, opts?: { bold?: boolean; rightAlign?: boolean; wi
   const tcPr: string[] = [];
   if (opts?.width) tcPr.push(`<w:tcW w:w="${opts.width}" w:type="pct"/>`);
   if (opts?.shading) tcPr.push(`<w:shd w:val="clear" w:color="auto" w:fill="${opts.shading}"/>`);
-  const rPr: string[] = ['<w:sz w:val="18"/><w:szCs w:val="18"/>'];
+  const rPr: string[] = ['<w:rFonts w:ascii="Avenir LT Std 35 Light" w:hAnsi="Avenir LT Std 35 Light"/><w:sz w:val="18"/><w:szCs w:val="18"/>'];
   if (opts?.bold) rPr.push('<w:b/><w:bCs/>');
   const pPr = opts?.rightAlign ? '<w:pPr><w:jc w:val="right"/></w:pPr>' : '';
   return `<w:tc>${tcPr.length ? `<w:tcPr>${tcPr.join('')}</w:tcPr>` : ''}<w:p>${pPr}<w:r><w:rPr>${rPr.join('')}</w:rPr><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p></w:tc>`;
@@ -1003,8 +1003,9 @@ function injectDynamicTables(xml: string, result: ExtractionResult): string {
 // #61: "Entfernen wenn keine selbstständige Tätigkeit" → Adapt örtl. Zuständigkeit
 
 function isVorlaeufigverwalter(result: ExtractionResult): boolean {
-  const befugnisse = result.gutachterbestellung?.befugnisse ?? [];
-  return befugnisse.some(b =>
+  const raw = result.gutachterbestellung?.befugnisse;
+  const befugnisse = Array.isArray(raw) ? raw : [];
+  return befugnisse.some((b: unknown) => typeof b === 'string' &&
     /vorl.{0,5}ufig.*insolvenzverwalter|vorl.{0,5}ufig.*verwalter/i.test(b)
   );
 }
