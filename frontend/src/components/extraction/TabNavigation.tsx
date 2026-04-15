@@ -18,15 +18,13 @@ interface TabNavigationProps {
   groups: GroupDef[];
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onNewFile: () => void;
-  onExport?: () => void;
   onAddDocument?: () => void;
   /** Per-group progress: 'complete' | 'partial' | 'empty' */
   groupProgress?: Record<string, 'complete' | 'partial' | 'empty'>;
 }
 
 export function TabNavigation({
-  tabs, groups, activeTab, onTabChange, onNewFile, onExport, onAddDocument, groupProgress,
+  tabs, groups, activeTab, onTabChange, onAddDocument, groupProgress,
 }: TabNavigationProps) {
   // Determine which group the active tab belongs to
   const activeGroup = useMemo(() => {
@@ -91,25 +89,13 @@ export function TabNavigation({
           })}
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-1.5 mb-1">
-          {onAddDocument && (
-            <button onClick={onAddDocument}
-              className="px-2.5 py-1.5 border border-border/80 rounded-md bg-transparent text-text-muted text-[9px] cursor-pointer font-mono hover:border-accent hover:text-accent hover:bg-accent/[0.03] transition-all tracking-wider">
-              + DOK
-            </button>
-          )}
-          {onExport && (
-            <button onClick={onExport}
-              className="px-2.5 py-1.5 border border-border/80 rounded-md bg-transparent text-text-muted text-[9px] cursor-pointer font-mono hover:border-accent hover:text-accent hover:bg-accent/[0.03] transition-all tracking-wider">
-              ↗
-            </button>
-          )}
-          <button onClick={onNewFile}
-            className="px-2.5 py-1.5 border border-border/80 rounded-md bg-transparent text-text-muted text-[9px] cursor-pointer font-mono hover:border-accent hover:text-accent hover:bg-accent/[0.03] transition-all tracking-wider">
-            NEU
+        {/* Add document button */}
+        {onAddDocument && (
+          <button onClick={onAddDocument}
+            className="px-3 py-1.5 border border-accent/40 rounded-md bg-transparent text-accent text-[10px] cursor-pointer font-sans hover:border-accent hover:bg-accent/[0.05] transition-all mb-1">
+            + Weiteres Dokument hochladen
           </button>
-        </div>
+        )}
       </div>
 
       {/* Sub-tabs for selected group */}

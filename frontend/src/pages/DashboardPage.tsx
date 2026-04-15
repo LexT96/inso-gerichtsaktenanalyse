@@ -172,8 +172,6 @@ export function DashboardPage() {
         groups={groups}
         activeTab={tab}
         onTabChange={setTab}
-        onNewFile={handleNewFile}
-        onExport={extractionId ? () => setShowExport(true) : undefined}
         onAddDocument={extractionId ? () => setShowAddDoc(true) : undefined}
         groupProgress={groupProgress}
       />
@@ -228,7 +226,10 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-bg text-text font-mono">
-      <Header />
+      <Header
+        onExport={extractionId ? () => setShowExport(true) : undefined}
+        onNewFile={result ? handleNewFile : undefined}
+      />
 
       {/* Subtle grid background on upload view */}
       {!result && (

@@ -1,7 +1,12 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
-export function Header() {
+interface HeaderProps {
+  onExport?: () => void;
+  onNewFile?: () => void;
+}
+
+export function Header({ onExport, onNewFile }: HeaderProps = {}) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -28,6 +33,16 @@ export function Header() {
         </div>
       </div>
       <div className="flex-1" />
+      {onExport && (
+        <button onClick={onExport} className={navBtn}>
+          Export
+        </button>
+      )}
+      {onNewFile && (
+        <button onClick={onNewFile} className={navBtn}>
+          Neue Akte
+        </button>
+      )}
       {user?.role === 'admin' && (
         <button
           onClick={() => navigate('/admin')}
