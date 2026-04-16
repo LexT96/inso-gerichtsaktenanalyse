@@ -24,6 +24,17 @@ function parseUserInputs(body: Record<string, unknown>): GutachtenUserInputs | n
     anderkonto_bank: body.anderkonto_bank ? String(body.anderkonto_bank) : undefined,
     geschaeftsfuehrer: body.geschaeftsfuehrer ? String(body.geschaeftsfuehrer) : undefined,
     last_gavv: body.last_gavv ? String(body.last_gavv) : undefined,
+    verwalter_name: body.verwalter_name ? String(body.verwalter_name) : undefined,
+    verwalter_titel: body.verwalter_titel ? String(body.verwalter_titel) : undefined,
+    verwalter_adresse: body.verwalter_adresse ? String(body.verwalter_adresse) : undefined,
+    verwalter_kanzlei: body.verwalter_kanzlei ? String(body.verwalter_kanzlei) : undefined,
+    verwalter_telefon: body.verwalter_telefon ? String(body.verwalter_telefon) : undefined,
+    verwalter_email: body.verwalter_email ? String(body.verwalter_email) : undefined,
+    verwalter_standort: body.verwalter_standort ? String(body.verwalter_standort) : undefined,
+    sachbearbeiter_name: body.sachbearbeiter_name ? String(body.sachbearbeiter_name) : undefined,
+    sachbearbeiter_email: body.sachbearbeiter_email ? String(body.sachbearbeiter_email) : undefined,
+    sachbearbeiter_durchwahl: body.sachbearbeiter_durchwahl ? String(body.sachbearbeiter_durchwahl) : undefined,
+    verwalter_standort_telefon: body.verwalter_standort_telefon ? String(body.verwalter_standort_telefon) : undefined,
   };
 }
 

@@ -43,6 +43,14 @@ function templateLabel(type: TemplateType): string {
 
 const STEP_LABELS = ['Verwalter', 'Sachbearbeiter', 'Schuldner & Verfahren', 'Fehlende Angaben', 'Generieren'];
 
+const STANDORT_DATA: Record<string, { adresse: string; telefon: string }> = {
+  'Trier': { adresse: 'Balduinstraße 22-24, 54290 Trier', telefon: '0651 / 170 830 - 0' },
+  'Zell/Mosel': { adresse: 'Schlossstraße 7, 56856 Zell', telefon: '06542 / 9699 - 0' },
+  'Wiesbaden': { adresse: 'Luisenstraße 7, 65185 Wiesbaden', telefon: '0611 / 950 157 - 0' },
+  'Koblenz': { adresse: 'Löhrstraße 99, 56068 Koblenz', telefon: '0261 / 134 69 - 0' },
+  'Bad Kreuznach': { adresse: 'Kurhausstraße 15, 55543 Bad Kreuznach', telefon: '0671 / 920 148 - 0' },
+};
+
 export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }: GutachtenWizardProps) {
   const [step, setStep] = useState(1);
   const [selectedVerwalter, setSelectedVerwalter] = useState<VerwalterProfile | null>(null);
@@ -70,11 +78,15 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
   const isJuristisch = templateType === 'juristische_person';
   const isNatuerlich = templateType === 'natuerliche_person';
 
-  // When Verwalter is selected, pre-fill anderkonto if available
+  // When Verwalter is selected, pre-fill anderkonto and Sachbearbeiter if available
   const handleSelectVerwalter = (profile: VerwalterProfile) => {
     setSelectedVerwalter(profile);
     if (profile.anderkonto_iban) setAnderkontoIban(profile.anderkonto_iban);
     if (profile.anderkonto_bank) setAnderkontoBank(profile.anderkonto_bank);
+    // Auto-fill Sachbearbeiter from profile defaults (user can override in step 2)
+    if (profile.sachbearbeiter_name) setSachbearbeiterName(profile.sachbearbeiter_name);
+    if (profile.sachbearbeiter_email) setSachbearbeiterEmail(profile.sachbearbeiter_email);
+    if (profile.sachbearbeiter_durchwahl) setSachbearbeiterDurchwahl(profile.sachbearbeiter_durchwahl);
   };
 
   // Key fields to check in Step 2
@@ -116,17 +128,11 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
     if (selectedVerwalter?.name) body.verwalter_name = selectedVerwalter.name;
     if (selectedVerwalter?.titel) body.verwalter_titel = selectedVerwalter.titel;
     if (selectedVerwalter?.standort) body.verwalter_standort = selectedVerwalter.standort;
-    // Kanzlei name is always the same; address depends on standort
+    // Kanzlei name is always the same; address and phone depend on standort
     body.verwalter_kanzlei = 'Prof. Dr. Dr. Thomas B. Schmidt Insolvenzverwalter Rechtsanwälte Partnerschaft mbB';
-    const STANDORT_ADRESSEN: Record<string, string> = {
-      'Zell/Mosel': 'Schlossstraße 7, 56856 Zell',
-      'Trier': 'Balduinstraße 22-24, 54290 Trier',
-      'Wiesbaden': 'Luisenstraße 7, 65185 Wiesbaden',
-      'Koblenz': 'Löhrstraße 99, 56068 Koblenz',
-      'Bad Kreuznach': 'Kurhausstraße 15, 55543 Bad Kreuznach',
-    };
-    const adresse = STANDORT_ADRESSEN[selectedVerwalter?.standort || ''] || 'Schlossstraße 7, 56856 Zell';
-    body.verwalter_adresse = adresse;
+    const standort = STANDORT_DATA[selectedVerwalter?.standort || ''];
+    body.verwalter_adresse = standort?.adresse || 'Schlossstraße 7, 56856 Zell';
+    body.verwalter_standort_telefon = standort?.telefon || '0651 / 170 830 - 0';
     if (sachbearbeiterName.trim()) body.sachbearbeiter_name = sachbearbeiterName.trim();
     if (sachbearbeiterEmail.trim()) body.sachbearbeiter_email = sachbearbeiterEmail.trim();
     if (sachbearbeiterDurchwahl.trim()) body.sachbearbeiter_durchwahl = sachbearbeiterDurchwahl.trim();

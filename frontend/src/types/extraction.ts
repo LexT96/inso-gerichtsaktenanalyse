@@ -52,4 +52,7 @@ export interface VerwalterProfile {
   standort: string;
   anderkonto_iban: string;
   anderkonto_bank: string;
+  sachbearbeiter_name: string;
+  sachbearbeiter_email: string;
+  sachbearbeiter_durchwahl: string;
 }

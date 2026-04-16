@@ -35,6 +35,7 @@ export interface GutachtenUserInputs {
   sachbearbeiter_name?: string;
   sachbearbeiter_email?: string;
   sachbearbeiter_durchwahl?: string;
+  verwalter_standort_telefon?: string;
 }
 
 export type TemplateType = 'natuerliche_person' | 'juristische_person' | 'personengesellschaft';
@@ -521,6 +522,28 @@ function computeGutachtenField(
       }, 0);
       return total > 0 ? formatEUR(total) : '';
     }
+
+    // --- Briefkopf ---
+    case 'mein_zeichen': {
+      const gericht = getByPath(result, 'verfahrensdaten.gericht.wert');
+      const az = getByPath(result, 'verfahrensdaten.aktenzeichen.wert');
+      if (gericht && az) return `${gericht}, Az. ${az}`;
+      if (az) return az;
+      return '';
+    }
+
+    case 'ihr_zeichen':
+      return getByPath(result, 'verfahrensdaten.aktenzeichen.wert');
+
+    case 'briefkopf_datum': {
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      return `${day}.${month}.${now.getFullYear()}`;
+    }
+
+    case 'briefkopf_ort':
+      return inputs.verwalter_standort || 'Trier';
 
     // --- Verwalter gender variants ---
     case 'verwalter_der_die_gross':
