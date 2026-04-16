@@ -14,6 +14,32 @@ function findTemplatesDir(): string {
 }
 const TEMPLATES_DIR = findTemplatesDir();
 const MAPPING_PATH = path.join(TEMPLATES_DIR, 'gutachten-mapping.json');
+const KANZLEI_PATH = path.join(TEMPLATES_DIR, 'kanzlei.json');
+
+// Lazy-loaded court address lookup from kanzlei.json
+let _kanzleiData: Record<string, unknown> | null = null;
+function getKanzleiData(): Record<string, unknown> {
+  if (!_kanzleiData) {
+    _kanzleiData = JSON.parse(fs.readFileSync(KANZLEI_PATH, 'utf-8')) as Record<string, unknown>;
+  }
+  return _kanzleiData;
+}
+
+/** Expose path and cache reset for the kanzlei admin API */
+export { KANZLEI_PATH };
+export function invalidateKanzleiCache(): void { _kanzleiData = null; }
+
+function lookupGerichtAddress(gerichtName: string): { adresse: string; plz_ort: string } | null {
+  const data = getKanzleiData();
+  const gerichte = data.insolvenzgerichte as Record<string, { name: string; adresse: string; plz_ort: string }> | undefined;
+  if (!gerichte) return null;
+  // Match by city name extracted from gericht (e.g., "Amtsgericht Wittlich" → "Wittlich")
+  const lower = gerichtName.toLowerCase();
+  for (const [city, info] of Object.entries(gerichte)) {
+    if (lower.includes(city.toLowerCase())) return info;
+  }
+  return null;
+}
 
 // --- Types ---
 
@@ -544,6 +570,18 @@ function computeGutachtenField(
 
     case 'briefkopf_ort':
       return inputs.verwalter_standort || 'Trier';
+
+    case 'gericht_adresse': {
+      const gericht = getByPath(result, 'verfahrensdaten.gericht.wert');
+      const court = lookupGerichtAddress(gericht);
+      return court?.adresse || '';
+    }
+
+    case 'gericht_plz_ort': {
+      const gericht2 = getByPath(result, 'verfahrensdaten.gericht.wert');
+      const court2 = lookupGerichtAddress(gericht2);
+      return court2?.plz_ort || '';
+    }
 
     // --- Verwalter gender variants ---
     case 'verwalter_der_die_gross':

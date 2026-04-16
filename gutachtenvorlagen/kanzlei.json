@@ -17,6 +17,20 @@
     "Limburg/Lahn": { "adresse": "", "telefon": "" },
     "Mainz": { "adresse": "", "telefon": "" }
   },
+  "insolvenzgerichte": {
+    "Wittlich": { "name": "Amtsgericht Wittlich", "adresse": "Kurfürstenstraße 63", "plz_ort": "54516 Wittlich" },
+    "Trier": { "name": "Amtsgericht Trier", "adresse": "Justizstraße 2-6", "plz_ort": "54290 Trier" },
+    "Koblenz": { "name": "Amtsgericht Koblenz", "adresse": "Karmeliterstraße 14", "plz_ort": "56068 Koblenz" },
+    "Bad Kreuznach": { "name": "Amtsgericht Bad Kreuznach", "adresse": "Mühlenstraße 34", "plz_ort": "55543 Bad Kreuznach" },
+    "Mainz": { "name": "Amtsgericht Mainz", "adresse": "Diether-von-Isenburg-Straße 1", "plz_ort": "55116 Mainz" },
+    "Wiesbaden": { "name": "Amtsgericht Wiesbaden", "adresse": "Mainzer Straße 124", "plz_ort": "65189 Wiesbaden" },
+    "Idar-Oberstein": { "name": "Amtsgericht Idar-Oberstein", "adresse": "Georg-Maus-Straße 2", "plz_ort": "55743 Idar-Oberstein" },
+    "Frankfurt am Main": { "name": "Amtsgericht Frankfurt am Main", "adresse": "Gerichtsstraße 2", "plz_ort": "60313 Frankfurt am Main" },
+    "Limburg": { "name": "Amtsgericht Limburg a. d. Lahn", "adresse": "Schiede 20", "plz_ort": "65549 Limburg a. d. Lahn" },
+    "Montabaur": { "name": "Amtsgericht Montabaur", "adresse": "Peter-Altmeier-Platz 3", "plz_ort": "56410 Montabaur" },
+    "Gießen": { "name": "Amtsgericht Gießen", "adresse": "Gutfleischstraße 1", "plz_ort": "35390 Gießen" },
+    "Cuxhaven": { "name": "Amtsgericht Cuxhaven", "adresse": "Deichstraße 12", "plz_ort": "27472 Cuxhaven" }
+  },
   "partner": [
     { "name": "Ingo Grünewald", "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht\nFachanwalt für Handels- und Gesellschaftsrecht", "kategorie": "PARTNER" },
     { "name": "Dr. Alexander Thomas Lamberty LL.M.", "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht", "kategorie": "PARTNER" },

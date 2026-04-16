@@ -113,7 +113,9 @@
     "KI_Mein_Zeichen": { "computed": "mein_zeichen" },
     "KI_Ihr_Zeichen": { "computed": "ihr_zeichen" },
     "KI_Briefkopf_Datum": { "computed": "briefkopf_datum" },
-    "KI_Briefkopf_Ort": { "computed": "briefkopf_ort" }
+    "KI_Briefkopf_Ort": { "computed": "briefkopf_ort" },
+    "KI_Gericht_Adresse": { "computed": "gericht_adresse" },
+    "KI_Gericht_PLZ_Ort": { "computed": "gericht_plz_ort" }
   },
   "templates": {
     "natuerliche_person": "Gutachten Muster nat\u00fcrliche Person.docx",

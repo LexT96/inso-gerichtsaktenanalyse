@@ -16,6 +16,7 @@ import fieldUpdateRoutes from './routes/fieldUpdate';
 import documentsRoutes from './routes/documents';
 import verwalterRoutes from './routes/verwalter';
 import adminRoutes from './routes/admin';
+import kanzleiRoutes from './routes/kanzlei';
 import bcrypt from 'bcrypt';
 
 const app = express();
@@ -39,6 +40,7 @@ app.use('/api/extractions', fieldUpdateRoutes);
 app.use('/api/extractions', documentsRoutes);
 app.use('/api/verwalter', verwalterRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/kanzlei', kanzleiRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
