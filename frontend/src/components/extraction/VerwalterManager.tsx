@@ -12,7 +12,6 @@ interface VerwalterManagerProps {
 const EMPTY_PROFILE: Omit<VerwalterProfile, 'id'> = {
   name: '', titel: '', geschlecht: 'maennlich', diktatzeichen: '',
   standort: '', anderkonto_iban: '', anderkonto_bank: '',
-  sachbearbeiter_name: '', sachbearbeiter_email: '', sachbearbeiter_durchwahl: '',
 };
 
 export function VerwalterManager({ profiles, onSave, onUpdate, onDelete, onClose }: VerwalterManagerProps) {

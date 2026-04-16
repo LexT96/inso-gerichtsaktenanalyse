@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { apiClient } from '../../api/client';
 import { useVerwalter } from '../../hooks/useVerwalter';
+import { useSachbearbeiter } from '../../hooks/useSachbearbeiter';
 import { VerwalterManager } from './VerwalterManager';
-import type { ExtractionResult, VerwalterProfile, Pruefstatus } from '../../types/extraction';
+import type { ExtractionResult, VerwalterProfile, SachbearbeiterProfile, Pruefstatus } from '../../types/extraction';
 
 interface GutachtenWizardProps {
   result: ExtractionResult;
@@ -65,11 +66,14 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
   const [anderkontoBank, setAnderkontoBank] = useState('');
   const [geschaeftsfuehrer, setGeschaeftsfuehrer] = useState('');
   const [lastGavv, setLastGavv] = useState('');
-  const [sachbearbeiterName, setSachbearbeiterName] = useState('');
-  const [sachbearbeiterEmail, setSachbearbeiterEmail] = useState('');
-  const [sachbearbeiterDurchwahl, setSachbearbeiterDurchwahl] = useState('');
+  const [selectedSachbearbeiter, setSelectedSachbearbeiter] = useState<SachbearbeiterProfile | null>(null);
+  const [showNewSb, setShowNewSb] = useState(false);
+  const [newSbName, setNewSbName] = useState('');
+  const [newSbEmail, setNewSbEmail] = useState('');
+  const [newSbDurchwahl, setNewSbDurchwahl] = useState('');
 
   const { profiles, loading: loadingProfiles, createProfile, updateProfile, deleteProfile } = useVerwalter();
+  const { profiles: sbProfiles, loading: loadingSb, createProfile: createSb } = useSachbearbeiter();
 
   const templateType = useMemo(
     () => detectTemplateType(result.schuldner?.rechtsform?.wert as string | null),
@@ -83,10 +87,6 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
     setSelectedVerwalter(profile);
     if (profile.anderkonto_iban) setAnderkontoIban(profile.anderkonto_iban);
     if (profile.anderkonto_bank) setAnderkontoBank(profile.anderkonto_bank);
-    // Auto-fill Sachbearbeiter from profile defaults (user can override in step 2)
-    if (profile.sachbearbeiter_name) setSachbearbeiterName(profile.sachbearbeiter_name);
-    if (profile.sachbearbeiter_email) setSachbearbeiterEmail(profile.sachbearbeiter_email);
-    if (profile.sachbearbeiter_durchwahl) setSachbearbeiterDurchwahl(profile.sachbearbeiter_durchwahl);
   };
 
   // Key fields to check in Step 2
@@ -133,9 +133,9 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
     const standort = STANDORT_DATA[selectedVerwalter?.standort || ''];
     body.verwalter_adresse = standort?.adresse || 'Schlossstraße 7, 56856 Zell';
     body.verwalter_standort_telefon = standort?.telefon || '0651 / 170 830 - 0';
-    if (sachbearbeiterName.trim()) body.sachbearbeiter_name = sachbearbeiterName.trim();
-    if (sachbearbeiterEmail.trim()) body.sachbearbeiter_email = sachbearbeiterEmail.trim();
-    if (sachbearbeiterDurchwahl.trim()) body.sachbearbeiter_durchwahl = sachbearbeiterDurchwahl.trim();
+    if (selectedSachbearbeiter?.name) body.sachbearbeiter_name = selectedSachbearbeiter.name;
+    if (selectedSachbearbeiter?.email) body.sachbearbeiter_email = selectedSachbearbeiter.email;
+    if (selectedSachbearbeiter?.durchwahl) body.sachbearbeiter_durchwahl = selectedSachbearbeiter.durchwahl;
     // Anderkonto: prefer wizard input, fallback to profile
     const iban = anderkontoIban.trim() || selectedVerwalter?.anderkonto_iban || '';
     const bank = anderkontoBank.trim() || selectedVerwalter?.anderkonto_bank || '';
@@ -205,6 +205,7 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
 
   const canAdvance = (s: number): boolean => {
     if (s === 1) return selectedVerwalter !== null;
+    if (s === 2) return selectedSachbearbeiter !== null;
     if (s === 3) return missingCount === 0; // Schuldner & Verfahren
     return true;
   };
@@ -290,25 +291,81 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
           {step === 2 && (
             <div className="space-y-3">
               <div>
-                <label className="text-[10px] text-text-dim block mb-1">Sachbearbeiter/in *</label>
-                <input value={sachbearbeiterName} onChange={e => setSachbearbeiterName(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text"
-                  placeholder="Name des Sachbearbeiters" />
+                <label className="text-[10px] text-text-dim block mb-1">Sachbearbeiter/in auswählen *</label>
+                <select
+                  value={selectedSachbearbeiter?.id || ''}
+                  onChange={e => {
+                    const p = sbProfiles.find(p => p.id === Number(e.target.value));
+                    if (p) setSelectedSachbearbeiter(p);
+                  }}
+                  className="w-full px-2 py-2 bg-bg border border-border rounded text-[12px] text-text"
+                >
+                  <option value="">— Bitte wählen —</option>
+                  {sbProfiles.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} {p.email ? `(${p.email})` : ''}</option>
+                  ))}
+                </select>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-text-dim block mb-1">E-Mail</label>
-                  <input value={sachbearbeiterEmail} onChange={e => setSachbearbeiterEmail(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text font-mono"
-                    placeholder="email@kanzlei.de" />
+              {selectedSachbearbeiter && (
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    ['Name', selectedSachbearbeiter.name],
+                    ['E-Mail', selectedSachbearbeiter.email],
+                    ['Durchwahl', selectedSachbearbeiter.durchwahl],
+                  ].map(([l, v]) => (
+                    <div key={l} className="bg-bg border border-border/60 rounded px-3 py-2">
+                      <div className="text-[9px] text-text-dim">{l}</div>
+                      <div className="text-[12px] text-text">{v || '—'}</div>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <label className="text-[10px] text-text-dim block mb-1">Durchwahl</label>
-                  <input value={sachbearbeiterDurchwahl} onChange={e => setSachbearbeiterDurchwahl(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text font-mono"
-                    placeholder="+49 651 ..." />
+              )}
+              {loadingSb ? (
+                <p className="text-[10px] text-text-muted">Lade Profile…</p>
+              ) : sbProfiles.length === 0 && !showNewSb ? (
+                <p className="text-[10px] text-text-muted">Noch keine Sachbearbeiter angelegt.</p>
+              ) : null}
+
+              {/* Inline create */}
+              {!showNewSb ? (
+                <button onClick={() => setShowNewSb(true)}
+                  className="text-[10px] text-accent hover:underline">
+                  + Neuen Sachbearbeiter anlegen
+                </button>
+              ) : (
+                <div className="p-3 bg-bg border border-border/60 rounded-lg space-y-2">
+                  <div className="text-[10px] text-text-dim font-semibold">Neuer Sachbearbeiter</div>
+                  <input value={newSbName} onChange={e => setNewSbName(e.target.value)}
+                    className="w-full px-2 py-1.5 bg-surface border border-border rounded text-[11px] text-text"
+                    placeholder="Name *" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={newSbEmail} onChange={e => setNewSbEmail(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-surface border border-border rounded text-[11px] text-text font-mono"
+                      placeholder="E-Mail" />
+                    <input value={newSbDurchwahl} onChange={e => setNewSbDurchwahl(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-surface border border-border rounded text-[11px] text-text font-mono"
+                      placeholder="Durchwahl" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        if (!newSbName.trim()) return;
+                        const created = await createSb({ name: newSbName.trim(), email: newSbEmail.trim(), durchwahl: newSbDurchwahl.trim() });
+                        setSelectedSachbearbeiter(created);
+                        setNewSbName(''); setNewSbEmail(''); setNewSbDurchwahl('');
+                        setShowNewSb(false);
+                      }}
+                      disabled={!newSbName.trim()}
+                      className="px-3 py-1 bg-accent text-white rounded text-[10px] font-semibold disabled:opacity-50">
+                      Speichern
+                    </button>
+                    <button onClick={() => setShowNewSb(false)}
+                      className="px-3 py-1 text-[10px] text-text-muted hover:text-text">
+                      Abbrechen
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
