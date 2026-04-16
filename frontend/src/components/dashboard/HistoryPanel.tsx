@@ -22,7 +22,8 @@ interface HistoryPanelProps {
 }
 
 function formatDate(iso: string): string {
-  const d = new Date(iso);
+  // SQLite stores UTC without 'Z' suffix — append it so JS parses as UTC
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
   const now = new Date();
   const diff = now.getTime() - d.getTime();
   if (diff < 86400000) return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
