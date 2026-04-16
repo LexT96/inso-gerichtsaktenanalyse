@@ -1,12 +1,15 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { ExtractionProgressBar } from '../common/ExtractionProgressBar';
 
 interface HeaderProps {
   onExport?: () => void;
   onNewFile?: () => void;
+  /** Show compact extraction progress in the header */
+  extractionProgress?: { message: string; percent: number } | null;
 }
 
-export function Header({ onExport, onNewFile }: HeaderProps = {}) {
+export function Header({ onExport, onNewFile, extractionProgress }: HeaderProps = {}) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -33,6 +36,13 @@ export function Header({ onExport, onNewFile }: HeaderProps = {}) {
         </div>
       </div>
       <div className="flex-1" />
+      {extractionProgress && (
+        <ExtractionProgressBar
+          progress={extractionProgress.percent}
+          message={extractionProgress.message}
+          compact
+        />
+      )}
       {onExport && (
         <button onClick={onExport} className={navBtn}>
           Export

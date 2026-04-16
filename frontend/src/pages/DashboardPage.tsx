@@ -256,6 +256,7 @@ export function DashboardPage() {
       <Header
         onExport={extractionId ? () => setShowExport(true) : undefined}
         onNewFile={result ? handleNewFile : undefined}
+        extractionProgress={loading && progress ? { message: progress, percent: progressPercent } : null}
       />
 
       {/* Subtle grid background on upload view */}
