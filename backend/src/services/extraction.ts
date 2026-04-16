@@ -31,13 +31,10 @@ const isRateLimitedProvider = (): boolean => isRateLimited(detectProvider());
 // PDFs above this threshold use the field pack pipeline (smaller API calls, rate-limit safe).
 // Below: monolithic extractComprehensive() for best quality.
 //
-// Langdock budget math (60K per-model TPM, rolling 1-min window):
-//   Stage 1 (doc analysis): ~21K tokens
-//   Stage 2a monolithic: 22K images (20 imgs × 1.1K) + ~1.5K/page text + 10K system
-//   Total budget for text: 60K - 21K (stage 1) - 22K (images) - 10K (system) ≈ 7K → ~5 pages
-//   Without images (text-only fallback): 60K - 21K - 10K ≈ 29K → ~19 pages
-//   Conservative threshold: 15 pages (monolithic with images may retry once, text-only safe)
-const LANGDOCK_THRESHOLD = 15;
+// As of 2026-04-16: Langdock increased per-model TPM to 200K.
+// 87-page PDF (150K+ tokens) completes successfully via monolithic pipeline.
+// Field packs only needed as fallback for extremely large PDFs.
+const LANGDOCK_THRESHOLD = 500;
 const DIRECT_THRESHOLD = 500; // direct Anthropic — no rate limit concern
 const OPUS_THRESHOLD = 80;    // Opus slower, lower threshold
 const effectiveThreshold = (): number => {
