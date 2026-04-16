@@ -378,7 +378,7 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
                 </div>
               )}
               {missingCount === 0 && (
-                <div className="p-2 bg-green-900/20 border border-green-800/40 rounded text-[11px] text-green-400">
+                <div className="p-2 bg-white border border-green-300 rounded text-[11px] text-green-700">
                   ✓ Alle Pflichtfelder vorhanden
                 </div>
               )}
