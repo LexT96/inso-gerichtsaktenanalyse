@@ -632,7 +632,12 @@ export function buildReplacements(
       replacements[feld] = computeGutachtenField(def.computed, result, userInputs);
     } else if (def.input) {
       const inputKey = def.input as keyof GutachtenUserInputs;
-      replacements[feld] = (userInputs[inputKey] as string) ?? '';
+      let val = (userInputs[inputKey] as string) ?? '';
+      // Split comma-separated titles into line breaks for DOCX rendering
+      if (inputKey === 'verwalter_titel' && val.includes(',')) {
+        val = val.split(',').map(s => s.trim()).join('\n');
+      }
+      replacements[feld] = val;
     }
   }
 
@@ -1285,7 +1290,13 @@ function trackInsert(text: string, rprXml?: string): string {
   // 3. escapeXml re-escapes properly for Word XML
   let cleaned = unescapeXmlEntities(text);
   cleaned = cleaned.replace(/\[(?!TODO:|SLOT_|\[)([^\]]*)\]/g, '$1');
-  return `<w:ins w:id="${id}" w:author="${escapeXml(TRACK_CHANGES_AUTHOR)}" w:date="${TRACK_CHANGES_DATE}"><w:r>${rpr}<w:t xml:space="preserve">${escapeXml(cleaned)}</w:t></w:r></w:ins>`;
+  // Support line breaks (\n) in replacement values → <w:br/> in Word XML
+  const lines = cleaned.split('\n');
+  const runs = lines.map((line, i) => {
+    const br = i < lines.length - 1 ? '<w:br/>' : '';
+    return `<w:r>${rpr}<w:t xml:space="preserve">${escapeXml(line)}</w:t>${br}</w:r>`;
+  }).join('');
+  return `<w:ins w:id="${id}" w:author="${escapeXml(TRACK_CHANGES_AUTHOR)}" w:date="${TRACK_CHANGES_DATE}">${runs}</w:ins>`;
 }
 
 /** Build a <w:del> tracked deletion run */
@@ -1296,16 +1307,25 @@ function trackDelete(text: string, rprXml?: string): string {
 }
 
 /**
- * Replace KI_* fields with tracked changes.
- * For each paragraph containing KI_* placeholders:
- * - The original text (with placeholders) is wrapped in <w:del>
- * - The replaced text (with values) is wrapped in <w:ins>
+ * Replace KI_* fields. Two strategies:
+ * - Paragraphs with tabs or complex structure -> in-place (preserves formatting)
+ * - Simple paragraphs -> tracked changes (visible markers for review)
  */
 function replaceFieldsInXml(xml: string, replacements: Record<string, string>): string {
   const sortedKeys = Object.keys(replacements).sort((a, b) => b.length - a.length);
 
+  function doReplace(fullText: string): string {
+    let replaced = fullText;
+    for (const key of sortedKeys) {
+      const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped + '(?:_\\d+)?', 'g');
+      replaced = replaced.replace(regex, replacements[key] ?? '');
+    }
+    replaced = replaced.replace(/KI_[\w\u00C0-\u024F]+/g, '');
+    return replaced;
+  }
+
   return xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, (paragraph) => {
-    // Collect text from all <w:t> elements
     const tRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
     const texts: string[] = [];
     let match;
@@ -1317,28 +1337,35 @@ function replaceFieldsInXml(xml: string, replacements: Record<string, string>): 
     const fullText = texts.join('');
     if (!fullText.includes('KI_')) return paragraph;
 
-    // Compute replacement
-    let replaced = fullText;
-    for (const key of sortedKeys) {
-      const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(escaped + '(?:_\\d+)?', 'g');
-      replaced = replaced.replace(regex, replacements[key] ?? '');
-    }
-    replaced = replaced.replace(/KI_[\w\u00C0-\u024F]+/g, '');
-
-    if (replaced.trim() === '' && fullText.trim() === '') return paragraph;
+    const replaced = doReplace(fullText);
     if (replaced === fullText) return paragraph;
 
-    // Extract rPr from first run for formatting consistency
+    // Paragraphs with tabs -> in-place replacement (preserve tabs + formatting)
+    if (paragraph.includes('<w:tab/>') || paragraph.includes('<w:tab ')) {
+      let result = paragraph;
+      let firstDone = false;
+      const tRegex2 = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+      let m;
+      while ((m = tRegex2.exec(paragraph)) !== null) {
+        if (!firstDone) {
+          result = result.replace(
+            m[0],
+            () => `<w:t xml:space="preserve">${escapeXml(unescapeXmlEntities(replaced))}</w:t>`
+          );
+          firstDone = true;
+        } else {
+          result = result.replace(m[0], () => '<w:t></w:t>');
+        }
+      }
+      return result;
+    }
+
+    // Simple paragraphs -> tracked changes for review visibility
     const rprMatch = paragraph.match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);
     const rprXml = rprMatch ? rprMatch[1] : '';
 
-    // Replace ALL <w:r> elements with tracked change (del + ins at paragraph level)
-    // Remove all existing runs, then insert del+ins as siblings inside <w:p>
     let result = paragraph;
-    // Remove all <w:r>...</w:r> elements
     result = result.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, '');
-    // Insert tracked change before closing </w:p>
     result = result.replace(
       /<\/w:p>/,
       () => trackDelete(fullText, rprXml) + trackInsert(replaced, rprXml) + '</w:p>'

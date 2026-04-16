@@ -76,12 +76,25 @@ def build_sidebar_text(data):
     return "\n".join(lines)
 
 
+VML_NS = "urn:schemas-microsoft-com:vml"
+
+
 def find_sidebar_textbox(doc):
-    """Find the text box containing 'PARTNER' in the document body XML."""
+    """Find the text box containing 'PARTNER' in the document body XML.
+    Searches both Word 2010+ (wps:txbxContent) and VML (v:textbox) formats."""
     body = doc.element.body
+    # Word 2010+ format
     for txbx in body.iter(f"{{{WPS_NS}}}txbxContent"):
         full_text = "".join(t.text or "" for t in txbx.iter(f"{{{WP_NS}}}t"))
         if "PARTNER" in full_text:
+            return txbx
+    # VML format (used by Briefkopf templates)
+    for txbx in body.iter(f"{{{VML_NS}}}textbox"):
+        full_text = "".join(t.text or "" for t in txbx.iter(f"{{{WP_NS}}}t"))
+        if "PARTNER" in full_text:
+            # Return the w:txbxContent inside the v:textbox
+            for content in txbx.iter(f"{{{WP_NS}}}txbxContent"):
+                return content
             return txbx
     return None
 

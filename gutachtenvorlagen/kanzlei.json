@@ -6,41 +6,164 @@
     "partnerschaftsregister": "Amtsgericht Koblenz – PR 20203"
   },
   "standorte": {
-    "Trier": { "adresse": "Balduinstraße 22-24, 54290 Trier", "telefon": "0651 / 170 830 - 0" },
-    "Zell/Mosel": { "adresse": "Schlossstraße 7, 56856 Zell", "telefon": "06542 / 9699 - 0" },
-    "Wiesbaden": { "adresse": "Luisenstraße 7, 65185 Wiesbaden", "telefon": "0611 / 950 157 - 0" },
-    "Koblenz": { "adresse": "Löhrstraße 99, 56068 Koblenz", "telefon": "0261 / 134 69 - 0" },
-    "Bad Kreuznach": { "adresse": "Kurhausstraße 15, 55543 Bad Kreuznach", "telefon": "0671 / 920 148 - 0" },
-    "Frankfurt am Main": { "adresse": "", "telefon": "" },
-    "Idar-Oberstein": { "adresse": "", "telefon": "" },
-    "Langgöns": { "adresse": "", "telefon": "" },
-    "Limburg/Lahn": { "adresse": "", "telefon": "" },
-    "Mainz": { "adresse": "", "telefon": "" }
+    "Trier": {
+      "adresse": "Balduinstraße 22-24, 54290 Trier",
+      "telefon": "0651 / 170 830 - 0"
+    },
+    "Zell/Mosel": {
+      "adresse": "Schlossstraße 7, 56856 Zell",
+      "telefon": "06542 / 9699 - 0"
+    },
+    "Wiesbaden": {
+      "adresse": "Luisenstraße 7, 65185 Wiesbaden",
+      "telefon": "0611 / 950 157 - 0"
+    },
+    "Koblenz": {
+      "adresse": "Löhrstraße 99, 56068 Koblenz",
+      "telefon": "0261 / 134 69 - 0"
+    },
+    "Bad Kreuznach": {
+      "adresse": "Kurhausstraße 15, 55543 Bad Kreuznach",
+      "telefon": "0671 / 920 148 - 0"
+    },
+    "Frankfurt am Main": {
+      "adresse": "",
+      "telefon": ""
+    },
+    "Idar-Oberstein": {
+      "adresse": "",
+      "telefon": ""
+    },
+    "Langgöns": {
+      "adresse": "",
+      "telefon": ""
+    },
+    "Limburg/Lahn": {
+      "adresse": "",
+      "telefon": ""
+    },
+    "Mainz": {
+      "adresse": "",
+      "telefon": ""
+    }
   },
   "insolvenzgerichte": {
-    "Wittlich": { "name": "Amtsgericht Wittlich", "adresse": "Kurfürstenstraße 63", "plz_ort": "54516 Wittlich" },
-    "Trier": { "name": "Amtsgericht Trier", "adresse": "Justizstraße 2-6", "plz_ort": "54290 Trier" },
-    "Koblenz": { "name": "Amtsgericht Koblenz", "adresse": "Karmeliterstraße 14", "plz_ort": "56068 Koblenz" },
-    "Bad Kreuznach": { "name": "Amtsgericht Bad Kreuznach", "adresse": "Mühlenstraße 34", "plz_ort": "55543 Bad Kreuznach" },
-    "Mainz": { "name": "Amtsgericht Mainz", "adresse": "Diether-von-Isenburg-Straße 1", "plz_ort": "55116 Mainz" },
-    "Wiesbaden": { "name": "Amtsgericht Wiesbaden", "adresse": "Mainzer Straße 124", "plz_ort": "65189 Wiesbaden" },
-    "Idar-Oberstein": { "name": "Amtsgericht Idar-Oberstein", "adresse": "Georg-Maus-Straße 2", "plz_ort": "55743 Idar-Oberstein" },
-    "Frankfurt am Main": { "name": "Amtsgericht Frankfurt am Main", "adresse": "Gerichtsstraße 2", "plz_ort": "60313 Frankfurt am Main" },
-    "Limburg": { "name": "Amtsgericht Limburg a. d. Lahn", "adresse": "Schiede 20", "plz_ort": "65549 Limburg a. d. Lahn" },
-    "Montabaur": { "name": "Amtsgericht Montabaur", "adresse": "Peter-Altmeier-Platz 3", "plz_ort": "56410 Montabaur" },
-    "Gießen": { "name": "Amtsgericht Gießen", "adresse": "Gutfleischstraße 1", "plz_ort": "35390 Gießen" },
-    "Cuxhaven": { "name": "Amtsgericht Cuxhaven", "adresse": "Deichstraße 12", "plz_ort": "27472 Cuxhaven" }
+    "Wittlich": {
+      "name": "Amtsgericht Wittlich",
+      "adresse": "Kurfürstenstraße 63",
+      "plz_ort": "54516 Wittlich"
+    },
+    "Trier": {
+      "name": "Amtsgericht Trier",
+      "adresse": "Justizstraße 2-6",
+      "plz_ort": "54290 Trier"
+    },
+    "Koblenz": {
+      "name": "Amtsgericht Koblenz",
+      "adresse": "Karmeliterstraße 14",
+      "plz_ort": "56068 Koblenz"
+    },
+    "Bad Kreuznach": {
+      "name": "Amtsgericht Bad Kreuznach",
+      "adresse": "Mühlenstraße 34",
+      "plz_ort": "55543 Bad Kreuznach"
+    },
+    "Mainz": {
+      "name": "Amtsgericht Mainz",
+      "adresse": "Diether-von-Isenburg-Straße 1",
+      "plz_ort": "55116 Mainz"
+    },
+    "Wiesbaden": {
+      "name": "Amtsgericht Wiesbaden",
+      "adresse": "Mainzer Straße 124",
+      "plz_ort": "65189 Wiesbaden"
+    },
+    "Idar-Oberstein": {
+      "name": "Amtsgericht Idar-Oberstein",
+      "adresse": "Georg-Maus-Straße 2",
+      "plz_ort": "55743 Idar-Oberstein"
+    },
+    "Frankfurt am Main": {
+      "name": "Amtsgericht Frankfurt am Main",
+      "adresse": "Gerichtsstraße 2",
+      "plz_ort": "60313 Frankfurt am Main"
+    },
+    "Limburg": {
+      "name": "Amtsgericht Limburg a. d. Lahn",
+      "adresse": "Schiede 20",
+      "plz_ort": "65549 Limburg a. d. Lahn"
+    },
+    "Montabaur": {
+      "name": "Amtsgericht Montabaur",
+      "adresse": "Peter-Altmeier-Platz 3",
+      "plz_ort": "56410 Montabaur"
+    },
+    "Gießen": {
+      "name": "Amtsgericht Gießen",
+      "adresse": "Gutfleischstraße 1",
+      "plz_ort": "35390 Gießen"
+    },
+    "Cuxhaven": {
+      "name": "Amtsgericht Cuxhaven",
+      "adresse": "Deichstraße 12",
+      "plz_ort": "27472 Cuxhaven"
+    }
   },
   "partner": [
-    { "name": "Ingo Grünewald", "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht\nFachanwalt für Handels- und Gesellschaftsrecht", "kategorie": "PARTNER" },
-    { "name": "Dr. Alexander Thomas Lamberty LL.M.", "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht", "kategorie": "PARTNER" },
-    { "name": "Fatma Kreft", "titel": "Fachanwältin für Insolvenz- und Sanierungsrecht\nFachanwältin für Steuerrecht", "kategorie": "PARTNER" },
-    { "name": "Dr. Arne Löser", "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht\nFachanwalt für Handels- und Gesellschaftsrecht", "kategorie": "PARTNER" },
-    { "name": "Dr. Thomas Thöne", "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht\nFachanwalt für Steuerrecht\nNotar in Wiesbaden", "kategorie": "PARTNER" },
-    { "name": "Eva Meyer", "titel": "Fachanwältin für Insolvenz- und Sanierungsrecht", "kategorie": "ANGESTELLTE RECHTSANWÄLTE" },
-    { "name": "Bettina Dax", "titel": "Rechtsanwältin", "kategorie": "ANGESTELLTE RECHTSANWÄLTE" },
-    { "name": "Cornelia Kriege", "titel": "Rechtsanwältin", "kategorie": "ANGESTELLTE RECHTSANWÄLTE" },
-    { "name": "Lars Wacker", "titel": "Rechtsanwalt", "kategorie": "ANGESTELLTE RECHTSANWÄLTE" },
-    { "name": "Justizrat Prof. Dr. Dr. Thomas B. Schmidt M.A.", "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht", "kategorie": "OF COUNSEL" }
+    {
+      "name": "Ingo Grünewald",
+      "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht\nFachanwalt für Handels- und Gesellschaftsrecht",
+      "kategorie": "PARTNER"
+    },
+    {
+      "name": "Dr. Alexander Thomas Lamberty LL.M.",
+      "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht",
+      "kategorie": "PARTNER"
+    },
+    {
+      "name": "Fatma Kreft",
+      "titel": "Fachanwältin für Insolvenz- und Sanierungsrecht\nFachanwältin für Steuerrecht",
+      "kategorie": "PARTNER"
+    },
+    {
+      "name": "Dr. Arne Löser",
+      "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht\nFachanwalt für Handels- und Gesellschaftsrecht",
+      "kategorie": "PARTNER"
+    },
+    {
+      "name": "Dr. Thomas Thöne",
+      "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht\nFachanwalt für Steuerrecht\nNotar in Wiesbaden",
+      "kategorie": "PARTNER"
+    },
+    {
+      "name": "Eva Meyer",
+      "titel": "Fachanwältin für Insolvenz- und Sanierungsrecht",
+      "kategorie": "ANGESTELLTE RECHTSANWÄLTE"
+    },
+    {
+      "name": "Bettina Dax",
+      "titel": "Rechtsanwältin",
+      "kategorie": "ANGESTELLTE RECHTSANWÄLTE"
+    },
+    {
+      "name": "Cornelia Kriege",
+      "titel": "Rechtsanwältin",
+      "kategorie": "ANGESTELLTE RECHTSANWÄLTE"
+    },
+    {
+      "name": "Lars Wacker",
+      "titel": "Rechtsanwalt",
+      "kategorie": "ANGESTELLTE RECHTSANWÄLTE"
+    },
+    {
+      "name": "Justizrat Prof. Dr. Dr. Thomas B. Schmidt M.A.",
+      "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht",
+      "kategorie": "OF COUNSEL"
+    },
+    {
+      "name": "Thorsten Lex",
+      "titel": "Fachanwalt für Business",
+      "kategorie": "PARTNER"
+    }
   ]
 }

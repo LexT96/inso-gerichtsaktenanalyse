@@ -19,6 +19,7 @@ import { AktivaTab } from '../components/extraction/tabs/AktivaTab';
 import { AnfechtungTab } from '../components/extraction/tabs/AnfechtungTab';
 import { GutachtenTab } from '../components/extraction/tabs/GutachtenTab';
 import { AddDocumentWizard } from '../components/extraction/AddDocumentWizard';
+import { KanzleiSettings } from '../components/admin/KanzleiSettings';
 import { apiClient } from '../api/client';
 import { useExtraction } from '../hooks/useExtraction';
 import { ExtractionProvider } from '../contexts/ExtractionContext';
@@ -41,6 +42,7 @@ export function DashboardPage() {
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showAddDoc, setShowAddDoc] = useState(false);
+  const [showKanzlei, setShowKanzlei] = useState(false);
   const [importedFilename, setImportedFilename] = useState<string | null>(null);
   const [extraDocs, setExtraDocs] = useState<Array<{ file: File; label: string }>>([]);
   const [docRefreshKey, setDocRefreshKey] = useState(0);
@@ -256,6 +258,7 @@ export function DashboardPage() {
       <Header
         onExport={extractionId ? () => setShowExport(true) : undefined}
         onNewFile={result ? handleNewFile : undefined}
+        onKanzlei={() => setShowKanzlei(true)}
         extractionProgress={loading && progress ? { message: progress, percent: progressPercent } : null}
       />
 
@@ -392,6 +395,20 @@ export function DashboardPage() {
             setShowAddDoc(false);
           }}
         />
+      )}
+
+      {showKanzlei && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-lg shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between p-3 border-b border-border">
+              <span className="text-[12px] font-semibold text-text font-sans">Kanzleidaten bearbeiten</span>
+              <button onClick={() => setShowKanzlei(false)} className="text-text-muted hover:text-text text-lg leading-none">&times;</button>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              <KanzleiSettings />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

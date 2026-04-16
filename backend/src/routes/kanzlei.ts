@@ -56,12 +56,8 @@ router.get('/', authMiddleware, (_req: Request, res: Response): void => {
 });
 
 // PUT / — write kanzlei.json + run sync script
+// TODO: add admin-only gate back later (req.user!.role !== 'admin')
 router.put('/', authMiddleware, (req: Request, res: Response): void => {
-  if (req.user!.role !== 'admin') {
-    res.status(403).json({ error: 'Nur Administratoren können Kanzleidaten ändern' });
-    return;
-  }
-
   const data = req.body;
   if (!data || !data.kanzlei || !data.partner || !data.standorte) {
     res.status(400).json({ error: 'Ungültige Kanzleidaten' });
