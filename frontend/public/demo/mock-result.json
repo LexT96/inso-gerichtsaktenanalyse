@@ -73,6 +73,8 @@
     {"typ": "Steuerberater-Kontakt", "empfaenger": "Dr. Schmitz Steuerberater", "status": "bereit", "begruendung": "Steuerberater ist bekannt", "fehlende_daten": []}
   ],
   "fehlende_informationen": [],
-  "zusammenfassung": "Demo-Extraktion zum Testen der PDF-Vorschau und Quellennavigation.",
+  "zusammenfassung": [
+    {"wert": "Demo-Extraktion zum Testen der PDF-Vorschau und Quellennavigation.", "quelle": "Seite 1"}
+  ],
   "risiken_hinweise": []
 }
