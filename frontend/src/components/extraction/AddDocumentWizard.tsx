@@ -163,7 +163,7 @@ export function AddDocumentWizard({ extractionId, onClose, onMerged }: AddDocume
           {step === 2 && (
             <div className="space-y-3">
               {warning && (
-                <div className="p-2 bg-amber-900/20 border border-amber-800/40 rounded text-[11px] text-amber-300">
+                <div className="p-2 bg-white border border-amber-600 rounded text-[11px] text-amber-900">
                   {warning}
                 </div>
               )}
