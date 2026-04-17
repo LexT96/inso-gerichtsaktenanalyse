@@ -150,7 +150,7 @@ function DetailCell({ line, e }: { line: ErmittlungLine; e: Ermittlungsergebniss
   };
 
   const quelle = getQuelle();
-  const match = quelle.match(/(?:Seiten?\s+|S\.?\s*|page\s+|p\.?\s*)(\d+)/i);
+  const match = quelle ? quelle.match(/(?:Seiten?\s+|S\.?\s*|page\s+|p\.?\s*)(\d+)/i) : null;
   if (!match) return <span className="text-text-muted">{'\u2014'}</span>;
 
   return (

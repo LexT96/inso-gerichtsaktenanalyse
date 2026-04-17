@@ -32,7 +32,8 @@ function getVerifiziert(field: AnySourced): boolean | undefined {
 /** Extract page number from quelle string.
  *  Handles: Seite 3, Seiten 3-5, S. 3, S.3, S3, page 3, p. 3, p.3
  */
-function parsePageNumber(quelle: string): number | null {
+function parsePageNumber(quelle: string | null | undefined): number | null {
+  if (!quelle) return null;
   const match = quelle.match(/(?:Seiten?\s+|S\.?\s*|page\s+|p\.?\s*)(\d+)/i);
   return match ? parseInt(match[1], 10) : null;
 }
