@@ -17,6 +17,63 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 }
 
 /**
+ * Normalize a string for similarity comparison:
+ * lowercase, collapse whitespace, strip punctuation, strip common legal suffixes.
+ */
+function normalizeForCompare(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '') // strip diacritics
+    .replace(/[.,;:/\\&()\[\]"']/g, ' ')
+    .replace(/\bverfahren\b/g, '') // "Regelinsolvenz" ≈ "Regelinsolvenzverfahren"
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Levenshtein distance — iterative, O(n*m) */
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const m = a.length, n = b.length;
+  let prev = new Array(n + 1);
+  let curr = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+
+/**
+ * Returns true if two values are substantially the same — handles whitespace,
+ * casing, minor typos, common suffix/prefix additions. Used to suppress
+ * redundant "update" suggestions in the merge diff.
+ */
+function areSubstantiallySimilar(a: string, b: string): boolean {
+  const na = normalizeForCompare(a);
+  const nb = normalizeForCompare(b);
+  if (na === nb) return true;
+  if (!na || !nb) return false;
+  // One fully contains the other (e.g. "Amtsgericht Wittlich" vs "Amtsgericht Wittlich - Insolvenzabteilung")
+  if (na.includes(nb) || nb.includes(na)) {
+    const shorter = Math.min(na.length, nb.length);
+    const longer = Math.max(na.length, nb.length);
+    if (shorter / longer >= 0.5) return true;
+  }
+  // Normalized Levenshtein similarity ≥ 0.85 → treat as same
+  const dist = levenshtein(na, nb);
+  const maxLen = Math.max(na.length, nb.length);
+  return maxLen > 0 && 1 - dist / maxLen >= 0.85;
+}
+
+/**
  * Determine the source type of an existing field value based on its quelle string.
  * Heuristic: look for document type keywords in the quelle.
  */
@@ -61,6 +118,14 @@ export function computeMergeDiff(
 
       // Same value -- no change needed
       if (String(existingWert) === String(candidate.wert)) continue;
+
+      // Normalized + fuzzy match: skip near-identical values
+      // (whitespace, casing, trailing suffixes like "- Insolvenzabteilung",
+      //  minor typos, synonyms like "Regelinsolvenz" vs "Regelinsolvenzverfahren")
+      if (existingWert != null && candidate.wert != null &&
+          areSubstantiallySimilar(String(existingWert), String(candidate.wert))) {
+        continue;
+      }
 
       // Existing is empty -- new field
       if (existingWert === null || existingWert === undefined || existingWert === '') {
