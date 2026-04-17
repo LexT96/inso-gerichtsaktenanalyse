@@ -81,6 +81,7 @@ export function cleanupExpiredExtractions(retentionHours?: number): void {
        SET result_json = NULL, status = 'expired'
        WHERE result_json IS NOT NULL
          AND status = 'completed'
+         AND filename != 'demo-test.pdf'
          AND created_at < datetime('now', '-' || ? || ' hours')`
     ).run(String(hours));
     if (result.changes > 0) {

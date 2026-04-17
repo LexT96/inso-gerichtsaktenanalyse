@@ -136,13 +136,13 @@ router.post('/demo', authMiddleware, (req: Request, res: Response): void => {
 
   const db = getDb();
 
-  // Reuse existing demo extraction if one exists for this user
+  // Reuse existing demo extraction if one exists for this user (revive expired rows)
   const existing = db.prepare(
-    "SELECT id FROM extractions WHERE user_id = ? AND filename = 'demo-test.pdf' AND status = 'completed' ORDER BY id DESC LIMIT 1"
+    "SELECT id FROM extractions WHERE user_id = ? AND filename = 'demo-test.pdf' ORDER BY id DESC LIMIT 1"
   ).get(userId) as { id: number } | undefined;
 
   if (existing) {
-    db.prepare('UPDATE extractions SET result_json = ? WHERE id = ?')
+    db.prepare("UPDATE extractions SET result_json = ?, status = 'completed' WHERE id = ?")
       .run(writeResultJson(result), existing.id);
     res.json({ id: existing.id });
     return;
