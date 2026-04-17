@@ -10,6 +10,7 @@ import { executeFieldPack } from '../utils/scalarPackExtractor';
 import { SCALAR_PACKS } from '../utils/fieldPacks';
 import { computeMergeDiff } from '../services/documentMerge';
 import { computeExtractionStats } from '../utils/computeStats';
+import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
 import { extractTextPerPage } from '../services/pdfProcessor';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -312,12 +313,13 @@ router.post('/:extractionId/documents/:docId/apply', authMiddleware, (req: Reque
     }
   }
 
-  // Recompute stats and save
-  const stats = computeExtractionStats(result);
+  // Revalidate letter statuses (e.g. Beschlussdatum now available) and recompute stats
+  const revalidated = validateLettersAgainstChecklists(result);
+  const stats = computeExtractionStats(revalidated);
   db.prepare(`
     UPDATE extractions SET result_json = ?, stats_found = ?, stats_missing = ?, stats_letters_ready = ?
     WHERE id = ?
-  `).run(writeResultJson(result), stats.found, stats.missing, stats.lettersReady, extractionId);
+  `).run(writeResultJson(revalidated), stats.found, stats.missing, stats.lettersReady, extractionId);
 
   // Audit log
   db.prepare(
@@ -333,7 +335,7 @@ router.post('/:extractionId/documents/:docId/apply', authMiddleware, (req: Reque
     statsFound: stats.found,
   });
 
-  res.json({ statsFound: stats.found, statsMissing: stats.missing, statsLettersReady: stats.lettersReady });
+  res.json({ result: revalidated, statsFound: stats.found, statsMissing: stats.missing, statsLettersReady: stats.lettersReady });
 });
 
 // --- 4. List documents for an extraction ---
