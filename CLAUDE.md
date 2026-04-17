@@ -103,6 +103,25 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 - **Two endpoints**: `POST /:id/prepare` (JSON with slots) → `POST /:id/generate` (DOCX download)
 - **Template rebuild script**: `scripts/rebuild-templates.py` — Python script using python-docx to update templates from real Gutachten examples.
 
+### Kanzlei Settings (`src/routes/kanzlei.ts`)
+- `kanzlei.json` in `gutachtenvorlagen/` — firm data (partners, standorte, insolvenzgerichte), used by computed KI_* fields
+- `GET/PUT /api/kanzlei` — read/write kanzlei.json. `invalidateKanzleiCache()` after write.
+- Template upload: `PUT /api/kanzlei/templates/:type` — validates required KI_* placeholders via PizZip text extraction (joins `<w:t>` to handle Word run-splitting). Creates `.backup.docx` before overwrite.
+- Sidebar (partner listing) is static in templates — edited by TBS in Word, not programmatically
+
+### DOCX Generation Gotchas
+- **Word run-splitting**: Word splits placeholder text across `<w:r>` elements (e.g., `KI_` + `Gericht_Ort`). Always join all `<w:t>` content before searching for placeholders.
+- **mc:AlternateContent**: Text boxes have TWO copies in DOCX XML — `wps:txbxContent` (modern) inside `mc:Choice` AND `w:txbxContent` inside `v:textbox` (VML fallback). Must update both or they desync.
+- **Tracked changes vs tabs**: `replaceFieldsInXml` uses tracked changes for simple paragraphs but in-place replacement for paragraphs with `<w:tab/>` (preserves tabs + per-run bold formatting).
+- **verwalter_titel line breaks**: Comma-separated titles split into `\n`, rendered as `<w:br/>` in DOCX via `trackInsert`.
+
+### Forderungen: Gesicherte vs Ungesicherte (InsO §§47-51)
+- Computed deterministically in post-processing from `einzelforderungen[].sicherheit.absonderungsberechtigt`
+- Absonderung (true): Grundschuld §49, Sicherungsübereignung §51 Nr.1, Pfandrecht §50, Globalzession §51 Nr.1
+- No Absonderung (false): Bürgschaft (personal, no estate lien), einfacher Eigentumsvorbehalt (§47 = Aussonderung)
+- Partial security: `min(betrag, geschaetzter_wert)` caps the gesicherte portion
+- `getNum`/`safeWert` in frontend: check for comma before applying German format parsing (prevents "566765.38" → 56M bug)
+
 ### Frontend (React 18 + Vite + Tailwind CSS, port 3005)
 - **Design**: Geist Mono + DM Sans fonts, maroon accent (#A52A2A), shadows + rounded corners
 - **Pages**: Login (TBS branded) → Dashboard (upload + results + PDF viewer) → History
