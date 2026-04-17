@@ -3,7 +3,8 @@ import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/database';
 import { readResultJson, writeResultJson } from '../db/resultJson';
 import { recordCorrection } from '../utils/fewShotCollector';
-import type { Pruefstatus } from '../types/extraction';
+import { computeExtractionStats } from '../utils/computeStats';
+import type { Pruefstatus, ExtractionResult } from '../types/extraction';
 
 const router = Router();
 
@@ -83,9 +84,11 @@ router.patch('/:id/fields', authMiddleware, (req: Request, res: Response): void 
   field.wert = wert;
   field.pruefstatus = pruefstatus;
 
+  // Recompute stats so history dashboard stays in sync with the live view
+  const stats = computeExtractionStats(result as unknown as ExtractionResult);
   db.prepare(
-    'UPDATE extractions SET result_json = ? WHERE id = ? AND user_id = ?'
-  ).run(writeResultJson(result), id, userId);
+    'UPDATE extractions SET result_json = ?, stats_found = ?, stats_missing = ?, stats_letters_ready = ? WHERE id = ? AND user_id = ?'
+  ).run(writeResultJson(result), stats.found, stats.missing, stats.lettersReady, id, userId);
 
   // Audit log
   db.prepare(
