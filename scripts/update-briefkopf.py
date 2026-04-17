@@ -36,14 +36,15 @@ def load_kanzlei():
         return json.load(f)
 
 
-def build_sidebar_text(data):
-    """Build the partner sidebar text from kanzlei.json data."""
+def build_sidebar_lines(data):
+    """Build structured sidebar lines with role info for formatting.
+    Roles: 'name' (bold), 'title' (regular), 'header' (regular), 'empty' (spacer)"""
     lines = []
-    lines.append(data["kanzlei"]["website"])
-    lines.append("Partnerschaftsregister des")
-    lines.append(data["kanzlei"]["partnerschaftsregister"])
-    lines.append("")
-    lines.append("")
+    lines.append(("name", data["kanzlei"]["website"]))
+    lines.append(("title", "Partnerschaftsregister des"))
+    lines.append(("title", data["kanzlei"]["partnerschaftsregister"]))
+    lines.append(("empty", ""))
+    lines.append(("empty", ""))
 
     # Group partners by category, preserving order
     categories = {}
@@ -56,91 +57,113 @@ def build_sidebar_text(data):
     for cat_name in ["PARTNER", "ANGESTELLTE RECHTSANWÄLTE", "OF COUNSEL"]:
         if cat_name not in categories:
             continue
-        lines.append("")
-        lines.append(cat_name)
+        lines.append(("empty", ""))
+        lines.append(("header", cat_name))
         for p in categories[cat_name]:
-            lines.append(p["name"])
+            lines.append(("name", p["name"]))
             for title_line in p["titel"].split("\n"):
-                lines.append(title_line)
-            lines.append("")
+                lines.append(("title", title_line))
+            lines.append(("empty", ""))
 
     # Standorte (two columns)
-    lines.append("")
-    lines.append("STANDORTE")
+    lines.append(("empty", ""))
+    lines.append(("header", "STANDORTE"))
     standorte = list(data["standorte"].keys())
     for i in range(0, len(standorte), 2):
         left = standorte[i]
         right = standorte[i + 1] if i + 1 < len(standorte) else ""
-        lines.append(f"{left}\t\t{right}")
+        lines.append(("title", f"{left}\t\t{right}"))
 
-    return "\n".join(lines)
+    return lines
 
 
 VML_NS = "urn:schemas-microsoft-com:vml"
 
 
-def find_sidebar_textbox(doc):
-    """Find the text box containing 'PARTNER' in the document body XML.
-    Searches both Word 2010+ (wps:txbxContent) and VML (v:textbox) formats."""
+def find_all_sidebar_textboxes(doc):
+    """Find ALL text boxes/containers containing 'PARTNER' in the document.
+    Word uses mc:AlternateContent with both a modern (wps:txbx → w:txbxContent)
+    and fallback (v:textbox → w:txbxContent) copy. We must update ALL copies."""
     body = doc.element.body
-    # Word 2010+ format
-    for txbx in body.iter(f"{{{WPS_NS}}}txbxContent"):
-        full_text = "".join(t.text or "" for t in txbx.iter(f"{{{WP_NS}}}t"))
+    found = []
+    # Find ALL w:txbxContent elements (both modern wps and VML share this tag)
+    for txbx_content in body.iter(f"{{{WP_NS}}}txbxContent"):
+        full_text = "".join(t.text or "" for t in txbx_content.iter(f"{{{WP_NS}}}t"))
         if "PARTNER" in full_text:
-            return txbx
-    # VML format (used by Briefkopf templates)
-    for txbx in body.iter(f"{{{VML_NS}}}textbox"):
-        full_text = "".join(t.text or "" for t in txbx.iter(f"{{{WP_NS}}}t"))
-        if "PARTNER" in full_text:
-            # Return the w:txbxContent inside the v:textbox
-            for content in txbx.iter(f"{{{WP_NS}}}txbxContent"):
-                return content
-            return txbx
-    return None
+            # Determine parent type for logging
+            parent_tag = txbx_content.getparent().tag if txbx_content.getparent() is not None else "?"
+            fmt = "wps" if "wordprocessingShape" in parent_tag else "vml" if "textbox" in parent_tag.lower() else "unknown"
+            found.append((fmt, txbx_content))
+    return found
 
 
-def replace_textbox_content(txbx_content, new_text):
-    """Replace all paragraphs in a textbox with new_text, preserving first paragraph's formatting."""
+def replace_textbox_content(txbx_content, lines):
+    """Replace all paragraphs in a textbox with structured lines, preserving formatting.
+    Extracts bold (name) and regular (title) formatting templates from existing content."""
     paragraphs = txbx_content.findall(f"{{{WP_NS}}}p")
     if not paragraphs:
         return
 
-    # Save first paragraph's run properties as template
-    first_rpr = None
-    first_ppr = None
+    # Extract formatting templates from existing paragraphs:
+    # - name_ppr/name_rpr: from first bold paragraph (names)
+    # - title_ppr/title_rpr: from first non-bold, non-empty paragraph (titles)
+    name_ppr = name_rpr = title_ppr = title_rpr = None
     for p in paragraphs:
         ppr = p.find(f"{{{WP_NS}}}pPr")
-        if ppr is not None:
-            first_ppr = ppr
         for r in p.findall(f"{{{WP_NS}}}r"):
             rpr = r.find(f"{{{WP_NS}}}rPr")
-            if rpr is not None:
-                first_rpr = rpr
+            if rpr is None:
+                continue
+            is_bold = rpr.find(f"{{{WP_NS}}}b") is not None
+            if is_bold and name_rpr is None:
+                name_rpr = deepcopy(rpr)
+                name_ppr = deepcopy(ppr) if ppr is not None else None
+            elif not is_bold and title_rpr is None:
+                text = "".join(t.text or "" for t in p.iter(f"{{{WP_NS}}}t"))
+                if text.strip():
+                    title_rpr = deepcopy(rpr)
+                    title_ppr = deepcopy(ppr) if ppr is not None else None
+            if name_rpr and title_rpr:
                 break
-        if first_rpr is not None:
+        if name_rpr and title_rpr:
             break
+
+    # Fallback: use whatever we found
+    if title_rpr is None:
+        title_rpr = deepcopy(name_rpr) if name_rpr else None
+        title_ppr = deepcopy(name_ppr) if name_ppr else None
+    if name_rpr is None:
+        name_rpr = deepcopy(title_rpr) if title_rpr else None
+        name_ppr = deepcopy(title_ppr) if title_ppr else None
 
     # Remove all existing paragraphs
     for p in paragraphs:
         txbx_content.remove(p)
 
-    # Add new paragraphs
-    for line in new_text.split("\n"):
+    # Add new paragraphs with role-appropriate formatting
+    for role, text in lines:
         p = etree.SubElement(txbx_content, f"{{{WP_NS}}}p")
-        if first_ppr is not None:
-            p.insert(0, deepcopy(first_ppr))
+        if role == "name":
+            if name_ppr is not None:
+                p.insert(0, deepcopy(name_ppr))
+            rpr_template = name_rpr
+        else:
+            if title_ppr is not None:
+                p.insert(0, deepcopy(title_ppr))
+            rpr_template = title_rpr
+
         r = etree.SubElement(p, f"{{{WP_NS}}}r")
-        if first_rpr is not None:
-            r.insert(0, deepcopy(first_rpr))
+        if rpr_template is not None:
+            r.insert(0, deepcopy(rpr_template))
         t = etree.SubElement(r, f"{{{WP_NS}}}t")
-        t.text = line
+        t.text = text
         t.set(f"{{{XML_NS}}}space", "preserve")
 
 
 def main():
     data = load_kanzlei()
-    sidebar_text = build_sidebar_text(data)
-    print(f"Generated sidebar text ({len(sidebar_text)} chars)")
+    sidebar_lines = build_sidebar_lines(data)
+    print(f"Generated sidebar ({len(sidebar_lines)} lines, {sum(1 for r, _ in sidebar_lines if r == 'name')} names)")
 
     updated = 0
     for template_name in TEMPLATE_FILES:
@@ -150,12 +173,14 @@ def main():
             continue
 
         doc = Document(str(template_path))
-        txbx = find_sidebar_textbox(doc)
-        if txbx is None:
+        boxes = find_all_sidebar_textboxes(doc)
+        if not boxes:
             print(f"  WARN: No partner sidebar text box found in {template_name}")
             continue
 
-        replace_textbox_content(txbx, sidebar_text)
+        for fmt, txbx in boxes:
+            replace_textbox_content(txbx, sidebar_lines)
+        print(f"    ({len(boxes)} text box copies updated: {', '.join(f for f, _ in boxes)})")
         doc.save(str(template_path))
         print(f"  OK: Updated {template_name}")
         updated += 1

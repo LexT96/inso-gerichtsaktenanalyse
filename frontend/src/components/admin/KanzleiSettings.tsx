@@ -106,8 +106,10 @@ export function KanzleiSettings() {
   const loadTemplates = () => {
     apiClient.get('/kanzlei/templates')
       .then(res => {
-        const body = res.data as { templates: TemplateInfo[] };
-        setTemplates(body.templates);
+        const data = res.data;
+        // Backend returns array directly or { templates: [...] }
+        const list = Array.isArray(data) ? data : (data as { templates: TemplateInfo[] }).templates;
+        setTemplates(list ?? []);
       })
       .catch(() => {
         // Non-critical — template list may not be available yet

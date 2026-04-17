@@ -53,13 +53,22 @@ function extractDocxText(buffer: Buffer): string {
   const zip = new PizZip(buffer);
   const documentXml = zip.file('word/document.xml');
   if (!documentXml) throw new Error('word/document.xml nicht gefunden — keine gültige DOCX-Datei.');
-  return documentXml.asText();
+  const xml = documentXml.asText();
+  // Extract all <w:t> text content joined together — handles Word run-splitting
+  // where KI_Gericht_Ort might be split as <w:t>KI_</w:t><w:t>Gericht_Ort</w:t>
+  const texts: string[] = [];
+  const regex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+  let match;
+  while ((match = regex.exec(xml)) !== null) {
+    texts.push(match[1]);
+  }
+  return texts.join('');
 }
 
 function validateTemplate(buffer: Buffer, type: TemplateType): string[] {
-  const xml = extractDocxText(buffer);
+  const fullText = extractDocxText(buffer);
   const required = REQUIRED_PLACEHOLDERS[type];
-  return required.filter((placeholder) => !xml.includes(placeholder));
+  return required.filter((placeholder) => !fullText.includes(placeholder));
 }
 
 // GET / — read kanzlei.json
