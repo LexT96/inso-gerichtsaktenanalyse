@@ -1,7 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../../api/client';
 
 // ─── Types ───
+
+interface TemplateInfo {
+  type: string;
+  name: string;
+  size: number;
+  lastModified: string;
+}
+
+type TemplateUploadState = 'idle' | 'uploading' | 'success' | 'error';
+
+interface TemplateStatus {
+  state: TemplateUploadState;
+  message: string;
+}
+
+const TEMPLATE_LABELS: Record<string, string> = {
+  natuerliche_person: 'Natürliche Person',
+  juristische_person: 'Juristische Person',
+  personengesellschaft: 'Personengesellschaft',
+};
+
+const TEMPLATE_TYPES = Object.keys(TEMPLATE_LABELS);
 
 interface KanzleiMeta {
   name: string;
@@ -76,6 +98,22 @@ export function KanzleiSettings() {
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveMessage, setSaveMessage] = useState('');
 
+  // ─── Template state ───
+  const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+  const [templateStatus, setTemplateStatus] = useState<Record<string, TemplateStatus>>({});
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const loadTemplates = () => {
+    apiClient.get('/kanzlei/templates')
+      .then(res => {
+        const body = res.data as { templates: TemplateInfo[] };
+        setTemplates(body.templates);
+      })
+      .catch(() => {
+        // Non-critical — template list may not be available yet
+      });
+  };
+
   useEffect(() => {
     apiClient.get('/kanzlei')
       .then(res => { setData(res.data as KanzleiData); })
@@ -84,7 +122,72 @@ export function KanzleiSettings() {
         setLoadError(msg);
       })
       .finally(() => setLoading(false));
+    loadTemplates();
   }, []);
+
+  const handleDownload = async (type: string) => {
+    try {
+      const response = await apiClient.get(`/kanzlei/templates/${type}/download`, { responseType: 'blob' });
+      const blob = new Blob([response.data as BlobPart]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Gutachten_Muster_${type}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } }; message?: string };
+      setTemplateStatus(prev => ({
+        ...prev,
+        [type]: { state: 'error', message: axiosErr?.response?.data?.error || axiosErr?.message || 'Download fehlgeschlagen' },
+      }));
+    }
+  };
+
+  const handleUpload = async (type: string, file: File) => {
+    setTemplateStatus(prev => ({ ...prev, [type]: { state: 'uploading', message: '' } }));
+    try {
+      const formData = new FormData();
+      formData.append('template', file);
+      const res = await apiClient.put(`/kanzlei/templates/${type}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const body = res.data as { ok: boolean; message?: string; missingPlaceholders?: string[] };
+      const msg = body.message || 'Vorlage erfolgreich aktualisiert';
+      const missing = body.missingPlaceholders?.length
+        ? ` (Fehlende Platzhalter: ${body.missingPlaceholders.join(', ')})`
+        : '';
+      setTemplateStatus(prev => ({ ...prev, [type]: { state: 'success', message: `${msg}${missing}` } }));
+      loadTemplates();
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } }; message?: string };
+      setTemplateStatus(prev => ({
+        ...prev,
+        [type]: { state: 'error', message: axiosErr?.response?.data?.error || axiosErr?.message || 'Upload fehlgeschlagen' },
+      }));
+    }
+  };
+
+  const handleRollback = async (type: string) => {
+    setTemplateStatus(prev => ({ ...prev, [type]: { state: 'uploading', message: '' } }));
+    try {
+      const res = await apiClient.post(`/kanzlei/templates/${type}/rollback`);
+      const body = res.data as { ok: boolean; message?: string };
+      setTemplateStatus(prev => ({
+        ...prev,
+        [type]: { state: 'success', message: body.message || 'Vorlage zurückgesetzt' },
+      }));
+      loadTemplates();
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } }; message?: string };
+      setTemplateStatus(prev => ({
+        ...prev,
+        [type]: { state: 'error', message: axiosErr?.response?.data?.error || axiosErr?.message || 'Zurücksetzen fehlgeschlagen' },
+      }));
+    }
+  };
 
   // ─── Kanzlei meta handlers ───
 
@@ -99,11 +202,6 @@ export function KanzleiSettings() {
     if (!data) return;
     const updated = data.partner.map((p, i) => i === idx ? { ...p, [field]: value } : p);
     setData({ ...data, partner: updated });
-  }
-
-  function addPartner() {
-    if (!data) return;
-    setData({ ...data, partner: [...data.partner, { name: '', titel: '', kategorie: 'PARTNER' }] });
   }
 
   function removePartner(idx: number) {
@@ -224,64 +322,61 @@ export function KanzleiSettings() {
         </div>
       </div>
 
-      {/* ─── Partner & Anwälte ─── */}
-      <div className={cardClass}>
-        <SectionLabel>Partner &amp; Anwälte ({data.partner.length})</SectionLabel>
-        <div className="space-y-2">
-          {data.partner.map((p, idx) => (
-            <div key={idx} className="grid grid-cols-[1fr_1.5fr_180px_28px] gap-2 items-start bg-bg/50 border border-border/40 rounded p-2">
-              {/* Name */}
-              <div className="flex flex-col gap-1">
-                <span className={labelClass}>Name</span>
-                <input
-                  type="text"
-                  value={p.name}
-                  onChange={e => setPartnerField(idx, 'name', e.target.value)}
-                  placeholder="Vollständiger Name"
-                  className="bg-bg border border-border rounded-sm text-[11px] px-2 py-1 font-mono text-text focus:outline-none focus:border-accent transition-colors"
-                />
-              </div>
-              {/* Titel */}
-              <div className="flex flex-col gap-1">
-                <span className={labelClass}>Titel / Fachgebiete</span>
-                <textarea
-                  value={p.titel}
-                  onChange={e => setPartnerField(idx, 'titel', e.target.value)}
-                  placeholder="Fachanwalt für …"
-                  rows={2}
-                  className="bg-bg border border-border rounded-sm text-[11px] px-2 py-1 font-mono text-text focus:outline-none focus:border-accent transition-colors resize-y min-h-[44px]"
-                />
-              </div>
-              {/* Kategorie */}
-              <div className="flex flex-col gap-1">
-                <span className={labelClass}>Kategorie</span>
-                <select
-                  value={p.kategorie}
-                  onChange={e => setPartnerField(idx, 'kategorie', e.target.value)}
-                  className="bg-bg border border-border rounded-sm text-[11px] px-2 py-1.5 font-mono text-text focus:outline-none focus:border-accent transition-colors"
-                >
-                  {KATEGORIEN.map(k => (
-                    <option key={k} value={k}>{k}</option>
-                  ))}
-                </select>
-              </div>
-              {/* Delete */}
-              <div className="flex items-start pt-5">
-                <button
-                  onClick={() => removePartner(idx)}
-                  title="Eintrag löschen"
-                  className={`${btnDanger} px-1.5 py-1 text-[10px]`}
-                >
-                  ×
-                </button>
-              </div>
+      {/* ─── Partner & Anwälte (grouped by category) ─── */}
+      {KATEGORIEN.map(kat => {
+        const members = data.partner
+          .map((p, idx) => ({ ...p, idx }))
+          .filter(p => p.kategorie === kat);
+        return (
+          <div key={kat} className={cardClass}>
+            <SectionLabel>{kat} ({members.length})</SectionLabel>
+            <div className="space-y-2">
+              {members.map(p => (
+                <div key={p.idx} className="grid grid-cols-[1fr_1.5fr_28px] gap-2 items-start bg-bg/50 border border-border/40 rounded p-2">
+                  <div className="flex flex-col gap-1">
+                    <span className={labelClass}>Name</span>
+                    <input
+                      type="text"
+                      value={p.name}
+                      onChange={e => setPartnerField(p.idx, 'name', e.target.value)}
+                      placeholder="Vollständiger Name"
+                      className="bg-bg border border-border rounded-sm text-[11px] px-2 py-1 font-mono text-text focus:outline-none focus:border-accent transition-colors"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className={labelClass}>Titel / Fachgebiete</span>
+                    <textarea
+                      value={p.titel}
+                      onChange={e => setPartnerField(p.idx, 'titel', e.target.value)}
+                      placeholder="Fachanwalt für …"
+                      rows={2}
+                      className="bg-bg border border-border rounded-sm text-[11px] px-2 py-1 font-mono text-text focus:outline-none focus:border-accent transition-colors resize-y min-h-[44px]"
+                    />
+                  </div>
+                  <div className="flex items-start pt-5">
+                    <button
+                      onClick={() => removePartner(p.idx)}
+                      title="Eintrag löschen"
+                      className={`${btnDanger} px-1.5 py-1 text-[10px]`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <button onClick={addPartner} className={`${btnGhost} mt-3 text-[10px]`}>
-          + Hinzufügen
-        </button>
-      </div>
+            <button
+              onClick={() => {
+                if (!data) return;
+                setData({ ...data, partner: [...data.partner, { name: '', titel: '', kategorie: kat }] });
+              }}
+              className={`${btnGhost} mt-2 w-full text-center text-[10px]`}
+            >
+              + {kat === 'PARTNER' ? 'Partner' : kat === 'ANGESTELLTE RECHTSANWÄLTE' ? 'Angestellte/r' : 'Of Counsel'} hinzufügen
+            </button>
+          </div>
+        );
+      })}
 
       {/* ─── Standorte ─── */}
       <div className={cardClass}>
@@ -334,9 +429,85 @@ export function KanzleiSettings() {
             </div>
           ))}
         </div>
-        <button onClick={addStandort} className={`${btnGhost} mt-3 text-[10px]`}>
-          + Hinzufügen
+        <button onClick={addStandort} className={`${btnGhost} mt-2 w-full text-center text-[10px]`}>
+          + Standort hinzufügen
         </button>
+      </div>
+
+      {/* ─── Gutachten-Vorlagen ─── */}
+      <div className={cardClass}>
+        <SectionLabel>Gutachten-Vorlagen</SectionLabel>
+        <div className="space-y-2">
+          {TEMPLATE_TYPES.map(type => {
+            const info = templates.find(t => t.type === type);
+            const status = templateStatus[type];
+            const label = TEMPLATE_LABELS[type];
+            const isBusy = status?.state === 'uploading';
+            return (
+              <div key={type} className="bg-bg/50 border border-border/40 rounded p-3 flex flex-col gap-2">
+                {/* Header row */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-text">{label}</span>
+                    {info ? (
+                      <span className={`${labelClass} normal-case tracking-normal`}>
+                        {(info.size / 1024).toFixed(0)} KB — {new Date(info.lastModified).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </span>
+                    ) : (
+                      <span className={`${labelClass} normal-case tracking-normal text-text-dim`}>Keine Datei gefunden</span>
+                    )}
+                  </div>
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => handleDownload(type)}
+                      disabled={isBusy || !info}
+                      className={`${btnGhost} disabled:opacity-40`}
+                      title="Vorlage herunterladen"
+                    >
+                      Herunterladen
+                    </button>
+                    <button
+                      onClick={() => fileInputRefs.current[type]?.click()}
+                      disabled={isBusy}
+                      className={`${btnPrimary} disabled:opacity-40`}
+                      title="Neue Version hochladen"
+                    >
+                      {isBusy ? 'Lädt…' : 'Neue Version hochladen'}
+                    </button>
+                    <button
+                      onClick={() => handleRollback(type)}
+                      disabled={isBusy}
+                      className={`${btnDanger} disabled:opacity-40`}
+                      title="Auf vorherige Version zurücksetzen"
+                    >
+                      Zurücksetzen
+                    </button>
+                    {/* Hidden file input */}
+                    <input
+                      ref={el => { fileInputRefs.current[type] = el; }}
+                      type="file"
+                      accept=".docx"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) handleUpload(type, file);
+                        // Reset so the same file can be re-selected
+                        e.target.value = '';
+                      }}
+                    />
+                  </div>
+                </div>
+                {/* Status message */}
+                {status && status.message && (
+                  <div className={`text-[10px] font-mono ${status.state === 'error' ? 'text-ie-red' : 'text-ie-green'}`}>
+                    {status.message}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* ─── Save Bar ─── */}
