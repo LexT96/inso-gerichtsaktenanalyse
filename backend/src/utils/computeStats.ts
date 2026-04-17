@@ -1,6 +1,9 @@
 /**
  * Single source of truth for extraction stats.
  * Used by backend (save to DB) and frontend (display).
+ *
+ * NOTE: keep this file in sync with shared/utils/computeStats.ts.
+ * Backend can't import from ../shared due to tsc rootDir restriction.
  */
 
 import type { ExtractionResult } from '../types/extraction';
@@ -22,10 +25,9 @@ export interface ExtractionStats {
 
 // Fields only relevant for juristische Personen — skip for natürliche Person
 const ENTITY_ONLY_FIELDS = new Set([
-  'firma', 'rechtsform', 'handelsregisternummer',
   'satzungssitz', 'verwaltungssitz', 'stammkapital', 'geschaeftsfuehrer',
   'prokurist', 'gruendungsdatum', 'hr_eintragung_datum', 'groessenklasse_hgb',
-  'dundo_versicherung', 'steuerliche_organschaft', 'letzter_jahresabschluss',
+  'dundo_versicherung', 'steuerliche_organschaft',
 ]);
 
 // Fields only relevant for natürliche Personen — skip for entities
@@ -39,8 +41,6 @@ const OPTIONAL_FIELDS = new Set([
   'insolvenzsonderkonto', 'geschaeftszweig', 'unternehmensgegenstand',
   'internationaler_bezug', 'eigenverwaltung', 'verfahrensstadium', 'verfahrensart',
   'richter', 'zustellungsdatum_schuldner',
-  'betriebsstaette_adresse', 'steuernummer', 'steuerberater',
-  'beschaeftigt_seit', 'bankverbindung_iban', 'bankverbindung_bic',
 ]);
 
 const LABELS: Record<string, string> = {
