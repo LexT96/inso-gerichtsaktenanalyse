@@ -289,6 +289,17 @@ export function useExtraction() {
           const blob = await pdfRes.blob();
           const pdfFile = new File([blob], data.filename || `extraction-${id}.pdf`, { type: 'application/pdf' });
           setState(s => ({ ...s, pdfFile }));
+        } else if (data.filename === 'demo-test.pdf') {
+          // Demo extractions are persisted without a stored PDF — fall back to the static demo asset
+          const demoRes = await fetch(resolveDemoAssetUrl('/demo/test-pdf.pdf'));
+          if (demoRes.ok) {
+            const blob = await demoRes.blob();
+            const header = await blob.slice(0, 5).text();
+            if (header === '%PDF-') {
+              const pdfFile = new File([blob], 'demo-test.pdf', { type: 'application/pdf' });
+              setState(s => ({ ...s, pdfFile }));
+            }
+          }
         }
       } catch {
         // PDF not available — that's OK, show without viewer
