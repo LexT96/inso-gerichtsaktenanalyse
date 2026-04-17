@@ -7,7 +7,7 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 import { classifySegmentSourceType } from '../utils/documentAnalyzer';
 import { executeFieldPack } from '../utils/scalarPackExtractor';
-import { SCALAR_PACKS } from '../utils/fieldPacks';
+import { SCALAR_PACKS, ANCHOR_PACK } from '../utils/fieldPacks';
 import { computeMergeDiff } from '../services/documentMerge';
 import { computeExtractionStats } from '../utils/computeStats';
 import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
@@ -176,15 +176,17 @@ router.post('/:extractionId/documents/:docId/extract', authMiddleware, async (re
   const pageTexts = await extractTextPerPage(pdfBuffer);
   const pages = Array.from({ length: pageTexts.length }, (_, i) => i + 1);
 
-  // Find matching field packs for this source type
-  const matchingPacks = SCALAR_PACKS.filter(p => p.segmentTypes.includes(sourceType));
+  // Find matching field packs for this source type (ANCHOR_PACK + SCALAR_PACKS)
+  // Anchor fields like beschlussdatum are crucial for Beschluss supplements
+  const allPacks = [ANCHOR_PACK, ...SCALAR_PACKS];
+  const matchingPacks = allPacks.filter(p => p.segmentTypes.includes(sourceType));
 
   if (matchingPacks.length === 0) {
     // Fallback: run all packs on this document
     logger.warn('Kein passendes Feldpaket für Dokumenttyp', { sourceType });
   }
 
-  const packsToRun = matchingPacks.length > 0 ? matchingPacks : SCALAR_PACKS;
+  const packsToRun = matchingPacks.length > 0 ? matchingPacks : allPacks;
 
   // Build a minimal anchor from existing result
   const existingResult = readResultJson<ExtractionResult>(extraction.result_json)!;
