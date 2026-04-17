@@ -214,7 +214,7 @@ export function DataField({ label, field, isCurrency, fieldPath, extractionId: e
           </div>
         )}
       </div>
-      <Badge type={empty ? 'missing' : verifiziert === true ? 'found' : 'unverified'} />
+      <Badge type={empty ? 'missing' : 'found'} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/layout/Header';
 import { apiClient } from '../api/client';
+import { KanzleiSettings } from '../components/admin/KanzleiSettings';
 
 // ─── Types ───
 
@@ -85,6 +86,7 @@ export function AdminPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [userFilter, setUserFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'overview' | 'kanzlei'>('overview');
 
   // Load dashboard + users on mount
   useEffect(() => {
@@ -141,6 +143,33 @@ export function AdminPage() {
             DASHBOARD
           </button>
         </div>
+
+        {/* ─── Tab Bar ─── */}
+        <div className="flex items-center gap-1 border-b border-border/60 mb-6">
+          {(['overview', 'kanzlei'] as const).map(tab => {
+            const labels: Record<string, string> = { overview: 'ÜBERSICHT', kanzlei: 'KANZLEI' };
+            const isActive = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-3 py-2 text-[10px] font-mono border-b-2 transition-colors -mb-px cursor-pointer bg-transparent ${
+                  isActive
+                    ? 'border-accent text-accent'
+                    : 'border-transparent text-text-muted hover:text-text hover:border-border'
+                }`}
+              >
+                {labels[tab]}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ─── Kanzlei Tab ─── */}
+        {activeTab === 'kanzlei' && <KanzleiSettings />}
+
+        {/* ─── Overview Tab ─── */}
+        {activeTab === 'overview' && <>
 
         {/* ─── Stats Cards ─── */}
         {stats && (
@@ -324,6 +353,9 @@ export function AdminPage() {
             </tbody>
           </table>
         </div>
+
+        {/* End overview tab */}
+        </>}
       </div>
     </div>
   );

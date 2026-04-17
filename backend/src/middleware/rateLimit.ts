@@ -25,7 +25,7 @@ export const authRateLimit = rateLimit({
 // Rate limit for CPU-heavy endpoints (import with PBKDF2, gutachten generation)
 export const heavyOperationRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 Minuten
-  max: 30,
+  max: 100,
   message: { error: 'Zu viele Anfragen. Bitte warten.' },
   standardHeaders: true,
   legacyHeaders: false,

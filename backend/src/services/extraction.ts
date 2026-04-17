@@ -784,9 +784,10 @@ export async function processExtraction(
     // Save PDF to disk for later viewing (stored alongside DB in /data volume)
     const pdfDir = path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs');
     const fs = await import('fs');
-    if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
-    fs.writeFileSync(path.join(pdfDir, `${extractionId}.pdf`), pdfBuffer);
-    logger.info('PDF gespeichert', { extractionId, path: path.join(pdfDir, `${extractionId}.pdf`) });
+    const extractionPdfDir = path.join(pdfDir, String(extractionId));
+    if (!fs.existsSync(extractionPdfDir)) fs.mkdirSync(extractionPdfDir, { recursive: true });
+    fs.writeFileSync(path.join(extractionPdfDir, '0_gerichtsakte.pdf'), pdfBuffer);
+    logger.info('PDF gespeichert', { extractionId, path: path.join(extractionPdfDir, '0_gerichtsakte.pdf') });
 
     report('Seitentext wird extrahiert…', 8);
 
@@ -831,8 +832,8 @@ export async function processExtraction(
           if (searchablePdf !== pdfBuffer) {
             pdfBuffer = searchablePdf;
             // Re-save PDF with text layer so frontend can highlight/search
-            const pdfDir = path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs');
-            (await import('fs')).writeFileSync(path.join(pdfDir, `${extractionId}.pdf`), pdfBuffer);
+            const ocrPdfDir = path.join(path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs'), String(extractionId));
+            (await import('fs')).writeFileSync(path.join(ocrPdfDir, '0_gerichtsakte.pdf'), pdfBuffer);
             logger.info('PDF mit OCR-Textlayer gespeichert', { extractionId });
           }
         } catch (layerErr) {
@@ -1240,6 +1241,12 @@ Mögliche Felder: verfahrensdaten.aktenzeichen, verfahrensdaten.gericht, verfahr
       processingTimeMs,
       extractionId
     );
+
+    // Insert documents record for the main Gerichtsakte
+    db.prepare(`
+      INSERT OR IGNORE INTO documents (extraction_id, doc_index, source_type, original_filename, page_count)
+      VALUES (?, 0, 'gerichtsakte', ?, ?)
+    `).run(extractionId, filename, pageCount);
 
     logger.info('Extraktion abgeschlossen', {
       extractionId,

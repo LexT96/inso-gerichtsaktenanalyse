@@ -412,3 +412,40 @@ export interface FieldPackDefinition {
   prompt: string;
   requiresAnchor: boolean;
 }
+
+// ─── Document Management Types ───
+
+export interface DocumentInfo {
+  id: number;
+  extractionId: number;
+  docIndex: number;
+  sourceType: SegmentSourceType | 'gerichtsakte';
+  originalFilename: string;
+  pageCount: number;
+  pdfHash?: string;
+  uploadedAt: string;
+}
+
+export interface MergeFieldChange {
+  path: string;
+  wert: unknown;
+  quelle: string;
+  oldWert?: unknown;
+  oldQuelle?: string;
+  reason?: string;
+}
+
+export interface MergeDiff {
+  newFields: MergeFieldChange[];
+  updatedFields: MergeFieldChange[];
+  conflicts: MergeFieldChange[];
+  newForderungen: Array<{ index: number; glaeubiger: string; betrag: number | null; quelle: string }>;
+  updatedForderungen: Array<{ existingIndex: number; glaeubiger: string; oldBetrag: number | null; newBetrag: number | null; quelle: string }>;
+}
+
+export interface ApplyRequest {
+  acceptAll?: boolean;
+  accept?: string[];
+  reject?: string[];
+  forderungen?: { add?: number[]; update?: number[] };
+}

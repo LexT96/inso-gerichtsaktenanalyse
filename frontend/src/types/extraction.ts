@@ -36,6 +36,11 @@ export type {
   Ehegatte,
   Beschaeftigung,
   Pfaendungsberechnung,
+  DocumentInfo,
+  MergeFieldChange,
+  MergeDiff,
+  ApplyRequest,
+  SegmentSourceType,
 } from '@shared/types/extraction';
 
 export interface VerwalterProfile {
@@ -44,10 +49,14 @@ export interface VerwalterProfile {
   titel: string;
   geschlecht: 'maennlich' | 'weiblich';
   diktatzeichen: string;
-  sachbearbeiter_name: string;
-  sachbearbeiter_email: string;
-  sachbearbeiter_durchwahl: string;
   standort: string;
   anderkonto_iban: string;
   anderkonto_bank: string;
+}
+
+export interface SachbearbeiterProfile {
+  id: number;
+  name: string;
+  email: string;
+  durchwahl: string;
 }

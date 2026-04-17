@@ -126,7 +126,13 @@ router.get('/:id/pdf', authMiddleware, (req: Request, res: Response): void => {
   if (!row) { res.status(404).json({ error: 'Nicht gefunden' }); return; }
 
   const pdfDir = path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs');
-  const pdfPath = path.join(pdfDir, `${id}.pdf`);
+  // Try new per-extraction directory structure first, fall back to old flat structure
+  const extractionPdfDir = path.join(pdfDir, String(id));
+  let pdfPath = path.join(extractionPdfDir, '0_gerichtsakte.pdf');
+  if (!fs.existsSync(pdfPath)) {
+    // Fallback to old flat structure
+    pdfPath = path.join(pdfDir, `${id}.pdf`);
+  }
   if (!fs.existsSync(pdfPath)) {
     res.status(404).json({ error: 'PDF nicht mehr verfügbar' });
     return;

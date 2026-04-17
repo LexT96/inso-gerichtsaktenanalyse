@@ -400,12 +400,12 @@ export function AktivaTab({ aktiva, forderungen, schuldner }: AktivaTabProps) {
 
       {/* ─── Insolvenzanalyse ─── */}
       <Section title="Insolvenzanalyse" icon="◈" defaultOpen>
-        {analyse ? (
+        {analyse?.zahlungsunfaehigkeit_17 ? (
           <div className="space-y-3">
             <BewertungRow label="Zahlungsunfähigkeit § 17 InsO" bewertung={analyse.zahlungsunfaehigkeit_17} />
-            <BewertungRow label="Drohende Zahlungsunfähigkeit § 18 InsO" bewertung={analyse.drohende_zahlungsunfaehigkeit_18} />
-            <BewertungRow label="Überschuldung § 19 InsO" bewertung={analyse.ueberschuldung_19} />
-            <BewertungRow label="Massekostendeckung § 26 InsO" bewertung={analyse.massekostendeckung_26} />
+            {analyse.drohende_zahlungsunfaehigkeit_18 && <BewertungRow label="Drohende Zahlungsunfähigkeit § 18 InsO" bewertung={analyse.drohende_zahlungsunfaehigkeit_18} />}
+            {analyse.ueberschuldung_19 && <BewertungRow label="Überschuldung § 19 InsO" bewertung={analyse.ueberschuldung_19} />}
+            {analyse.massekostendeckung_26 && <BewertungRow label="Massekostendeckung § 26 InsO" bewertung={analyse.massekostendeckung_26} />}
 
             {analyse.gesamtbewertung && (
               <div className="mt-2 p-2.5 bg-bg border border-accent/30 rounded-md">

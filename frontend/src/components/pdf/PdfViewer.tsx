@@ -8,11 +8,23 @@ import { PdfContext } from '../../contexts/PdfContext';
 // Worker von CDN – Version muss mit pdfjs-dist übereinstimmen (react-pdf nutzt 5.4.296)
 pdfjs.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@5.4.296/build/pdf.worker.min.mjs';
 
+// WASM modules for JPEG2000 (scanned PDFs) — served from /wasm/ in public/
+const PDFJS_OPTIONS = {
+  wasmUrl: (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/wasm/',
+};
+
 // Only render pages near the viewport to avoid memory issues on large PDFs
 const RENDER_BUFFER = 3; // pages above/below current page to render
 
+interface DocFile {
+  file: File;
+  label: string;
+}
+
 interface PdfViewerProps {
   file: File;
+  /** Additional documents to show in dropdown */
+  documents?: DocFile[];
   children: React.ReactNode;
 }
 
@@ -26,7 +38,19 @@ const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3;
 const DEFAULT_ASPECT = 595 / 842; // A4 fallback
 
-export function PdfViewer({ file, children }: PdfViewerProps) {
+export function PdfViewer({ file, documents, children }: PdfViewerProps) {
+  // Build full document list: primary file + any additional documents
+  const allDocs = useMemo(() => {
+    const docs: DocFile[] = [{ file, label: file.name }];
+    if (documents) docs.push(...documents);
+    return docs;
+  }, [file, documents]);
+
+  // -1 = show all concatenated, 0+ = individual document
+  const [activeDocIndex, setActiveDocIndex] = useState(0);
+  const showAll = activeDocIndex === -1;
+  const activeFile = showAll ? allDocs[0].file : (allDocs[activeDocIndex]?.file ?? file);
+
   const [totalPages, setTotalPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -48,12 +72,12 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
     setTotalPages(0);
     setCurrentPage(1);
     pageRefs.current.clear();
-    const url = URL.createObjectURL(file);
+    const url = URL.createObjectURL(activeFile);
     setObjectUrl(url);
     return () => {
       URL.revokeObjectURL(url);
     };
-  }, [file]);
+  }, [activeFile]);
 
   const fileProp = useMemo(
     () => (objectUrl ? { url: objectUrl } : null),
@@ -422,7 +446,20 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
         <div className="w-[45%] min-w-[340px] flex flex-col bg-surface-high border-r border-border">
           {/* Toolbar */}
           <div className="flex items-center justify-between px-3 py-1.5 bg-surface border-b border-border text-[10px] text-text-dim">
-            <span className="truncate max-w-[140px]" title={file.name}>{file.name}</span>
+            {allDocs.length > 1 ? (
+              <select
+                value={activeDocIndex}
+                onChange={e => setActiveDocIndex(Number(e.target.value))}
+                className="truncate flex-1 min-w-0 mr-3 bg-transparent border border-border/60 rounded px-1.5 py-0.5 text-[10px] text-text cursor-pointer"
+              >
+                <option value={-1}>Alle Dokumente ({allDocs.length})</option>
+                {allDocs.map((d, i) => (
+                  <option key={i} value={i}>{d.label}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="truncate flex-1 min-w-0 mr-3" title={activeFile.name}>{activeFile.name}</span>
+            )}
             <div className="flex items-center gap-3">
               {/* Zoom controls */}
               <div className="flex items-center gap-1">
@@ -479,6 +516,17 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
               <div className="flex items-center justify-center h-full text-ie-red text-xs p-4">
                 {loadError}
               </div>
+            ) : showAll ? (
+              /* Concatenated view: reuse parent's lazy rendering infrastructure */
+              <ConcatenatedDocs
+                docs={allDocs}
+                pageWidth={pageWidth}
+                placeholderHeight={placeholderHeight}
+                visibleRange={visibleRange}
+                pageRefCallback={pageRefCallback}
+                onTotalPages={setTotalPages}
+                onFirstDocLoad={onDocLoadSuccess}
+              />
             ) : !fileProp ? (
               <div className="flex items-center justify-center h-full text-text-muted text-xs">
                 PDF wird geladen...
@@ -486,6 +534,7 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
             ) : (
               <Document
                 file={fileProp}
+                options={PDFJS_OPTIONS}
                 onLoadSuccess={onDocLoadSuccess}
                 onLoadError={(err) => setLoadError(err?.message || 'PDF konnte nicht geladen werden')}
                 loading={
@@ -536,5 +585,120 @@ export function PdfViewer({ file, children }: PdfViewerProps) {
         </div>
       </div>
     </PdfContext.Provider>
+  );
+}
+
+/**
+ * Concatenated multi-document view.
+ * Reuses the parent PdfViewer's IntersectionObserver for lazy rendering
+ * by using the same pageRefCallback and visibleRange.
+ */
+function ConcatenatedDocs({ docs, pageWidth, placeholderHeight, visibleRange, pageRefCallback, onTotalPages, onFirstDocLoad }: {
+  docs: DocFile[];
+  pageWidth: number | undefined;
+  placeholderHeight: number;
+  visibleRange: { start: number; end: number };
+  pageRefCallback: (page: number) => (el: HTMLDivElement | null) => void;
+  onTotalPages: (n: number) => void;
+  onFirstDocLoad: (pdf: { numPages: number; getPage: (n: number) => Promise<{ getViewport: (o: { scale: number }) => { width: number; height: number } }> }) => void;
+}) {
+  const [pageCounts, setPageCounts] = useState<number[]>([]);
+  const [docUrls, setDocUrls] = useState<string[]>([]);
+
+  // Create stable URLs
+  useEffect(() => {
+    const urls = docs.map(d => URL.createObjectURL(d.file));
+    setDocUrls(urls);
+    setPageCounts(new Array(docs.length).fill(0));
+    return () => urls.forEach(u => URL.revokeObjectURL(u));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docs.length]);
+
+  const docFiles = useMemo(() => docUrls.map(url => ({ url })), [docUrls]);
+
+  // Update total pages when docs load
+  useEffect(() => {
+    const total = pageCounts.reduce((s, n) => s + n, 0);
+    if (total > 0) onTotalPages(total);
+  }, [pageCounts, onTotalPages]);
+
+  const handleDocLoad = useCallback((docIdx: number, numPages: number) => {
+    setPageCounts(prev => {
+      const next = [...prev];
+      next[docIdx] = numPages;
+      return next;
+    });
+  }, []);
+
+  // Compute global page offset per document
+  const offsets = useMemo(() => {
+    const o: number[] = [0];
+    for (let i = 0; i < pageCounts.length - 1; i++) {
+      o.push(o[i] + pageCounts[i]);
+    }
+    return o;
+  }, [pageCounts]);
+
+  if (docUrls.length !== docs.length) {
+    return <div className="flex items-center justify-center h-32 text-text-muted text-xs">Dokumente werden geladen...</div>;
+  }
+
+  return (
+    <>
+      {docs.map((doc, docIdx) => (
+        <div key={docIdx}>
+          {docIdx > 0 && (
+            <div className="flex items-center gap-2 py-2 px-4 bg-accent/5 border-y border-accent/20">
+              <div className="flex-1 h-px bg-accent/20" />
+              <span className="text-[9px] text-accent font-mono whitespace-nowrap">{doc.label}</span>
+              <div className="flex-1 h-px bg-accent/20" />
+            </div>
+          )}
+          <Document
+            file={docFiles[docIdx]}
+            options={PDFJS_OPTIONS}
+            onLoadSuccess={(pdf) => {
+              handleDocLoad(docIdx, pdf.numPages);
+              if (docIdx === 0) onFirstDocLoad(pdf);
+            }}
+            loading={
+              <div className="flex items-center justify-center h-32 text-text-muted text-xs">
+                {doc.label} wird gerendert...
+              </div>
+            }
+          >
+            {pageCounts[docIdx] > 0 && Array.from({ length: pageCounts[docIdx] }, (_, i) => {
+              const globalPage = (offsets[docIdx] ?? 0) + i + 1;
+              const inRange = globalPage >= visibleRange.start && globalPage <= visibleRange.end;
+              return (
+                <div
+                  key={i}
+                  data-page={globalPage}
+                  ref={pageRefCallback(globalPage)}
+                  className="mb-1 border-b border-border/30 flex flex-col items-center"
+                  style={!inRange ? { height: `${placeholderHeight}px` } : undefined}
+                >
+                  {inRange ? (
+                    <Page
+                      pageNumber={i + 1}
+                      width={pageWidth}
+                      renderTextLayer={true}
+                      renderAnnotationLayer={false}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-text-muted text-[9px]">
+                      Seite {i + 1}
+                    </div>
+                  )}
+                  <div className="text-center text-[8px] text-text-muted py-0.5">
+                    Seite {i + 1}
+                  </div>
+                </div>
+              );
+            })}
+          </Document>
+        </div>
+      ))}
+    </>
   );
 }
