@@ -60,6 +60,7 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
   const [highlightRequest, setHighlightRequest] = useState<{ page: number; text: string; quelle?: string } | null>(null);
   const [zoom, setZoom] = useState(1.0);
   const [pageAspectRatio, setPageAspectRatio] = useState(DEFAULT_ASPECT);
+  const [pageRotations, setPageRotations] = useState<Map<number, number>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -423,6 +424,17 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
     return Math.round(pageWidth / pageAspectRatio) + 24;
   }, [pageWidth, pageAspectRatio]);
 
+  const flipPage = useCallback((page: number) => {
+    setPageRotations(prev => {
+      const next = new Map(prev);
+      const current = next.get(page) ?? 0;
+      const rotated = (current + 90) % 360;
+      if (rotated === 0) next.delete(page);
+      else next.set(page, rotated);
+      return next;
+    });
+  }, []);
+
   const zoomIn = useCallback(() => setZoom(z => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2))), []);
   const zoomOut = useCallback(() => setZoom(z => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2))), []);
   const zoomReset = useCallback(() => setZoom(1.0), []);
@@ -526,6 +538,8 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
                 pageRefCallback={pageRefCallback}
                 onTotalPages={setTotalPages}
                 onFirstDocLoad={onDocLoadSuccess}
+                pageRotations={pageRotations}
+                onFlipPage={flipPage}
               />
             ) : !fileProp ? (
               <div className="flex items-center justify-center h-full text-text-muted text-xs">
@@ -546,18 +560,20 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
                 {Array.from({ length: totalPages }, (_, i) => {
                   const pageNum = i + 1;
                   const inRange = pageNum >= visibleRange.start && pageNum <= visibleRange.end;
+                  const rotation = pageRotations.get(pageNum) ?? 0;
                   return (
                     <div
                       key={pageNum}
                       data-page={pageNum}
                       ref={pageRefCallback(pageNum)}
-                      className="mb-1 border-b border-border/30 flex flex-col items-center"
+                      className="mb-1 border-b border-border/30 flex flex-col items-center relative group"
                       style={!inRange ? { height: `${placeholderHeight}px` } : undefined}
                     >
                       {inRange ? (
                         <Page
                           pageNumber={pageNum}
                           width={pageWidth}
+                          rotate={rotation}
                           renderTextLayer={true}
                           renderAnnotationLayer={false}
                         />
@@ -565,6 +581,15 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
                         <div className="flex items-center justify-center h-full text-text-muted text-[9px]">
                           Seite {pageNum}
                         </div>
+                      )}
+                      {inRange && (
+                        <button
+                          onClick={() => flipPage(pageNum)}
+                          className="absolute top-1 right-1 z-10 px-1.5 py-0.5 bg-surface/90 backdrop-blur-sm border border-border rounded-sm text-[10px] text-text hover:border-accent opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Seite um 90° drehen"
+                        >
+                          ↻ 90°
+                        </button>
                       )}
                       <div className="text-center text-[8px] text-text-muted py-0.5">
                         Seite {pageNum}
@@ -593,7 +618,7 @@ export function PdfViewer({ file, documents, children }: PdfViewerProps) {
  * Reuses the parent PdfViewer's IntersectionObserver for lazy rendering
  * by using the same pageRefCallback and visibleRange.
  */
-function ConcatenatedDocs({ docs, pageWidth, placeholderHeight, visibleRange, pageRefCallback, onTotalPages, onFirstDocLoad }: {
+function ConcatenatedDocs({ docs, pageWidth, placeholderHeight, visibleRange, pageRefCallback, onTotalPages, onFirstDocLoad, pageRotations, onFlipPage }: {
   docs: DocFile[];
   pageWidth: number | undefined;
   placeholderHeight: number;
@@ -601,6 +626,8 @@ function ConcatenatedDocs({ docs, pageWidth, placeholderHeight, visibleRange, pa
   pageRefCallback: (page: number) => (el: HTMLDivElement | null) => void;
   onTotalPages: (n: number) => void;
   onFirstDocLoad: (pdf: { numPages: number; getPage: (n: number) => Promise<{ getViewport: (o: { scale: number }) => { width: number; height: number } }> }) => void;
+  pageRotations: Map<number, number>;
+  onFlipPage: (page: number) => void;
 }) {
   const [pageCounts, setPageCounts] = useState<number[]>([]);
   const [docUrls, setDocUrls] = useState<string[]>([]);
@@ -670,18 +697,20 @@ function ConcatenatedDocs({ docs, pageWidth, placeholderHeight, visibleRange, pa
             {pageCounts[docIdx] > 0 && Array.from({ length: pageCounts[docIdx] }, (_, i) => {
               const globalPage = (offsets[docIdx] ?? 0) + i + 1;
               const inRange = globalPage >= visibleRange.start && globalPage <= visibleRange.end;
+              const rotation = pageRotations.get(globalPage) ?? 0;
               return (
                 <div
                   key={i}
                   data-page={globalPage}
                   ref={pageRefCallback(globalPage)}
-                  className="mb-1 border-b border-border/30 flex flex-col items-center"
+                  className="mb-1 border-b border-border/30 flex flex-col items-center relative group"
                   style={!inRange ? { height: `${placeholderHeight}px` } : undefined}
                 >
                   {inRange ? (
                     <Page
                       pageNumber={i + 1}
                       width={pageWidth}
+                      rotate={rotation}
                       renderTextLayer={true}
                       renderAnnotationLayer={false}
                     />
@@ -689,6 +718,15 @@ function ConcatenatedDocs({ docs, pageWidth, placeholderHeight, visibleRange, pa
                     <div className="flex items-center justify-center h-full text-text-muted text-[9px]">
                       Seite {i + 1}
                     </div>
+                  )}
+                  {inRange && (
+                    <button
+                      onClick={() => onFlipPage(globalPage)}
+                      className="absolute top-1 right-1 z-10 px-1.5 py-0.5 bg-surface/90 backdrop-blur-sm border border-border rounded-sm text-[10px] text-text hover:border-accent opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Seite um 90° drehen"
+                    >
+                      ↻ 90°
+                    </button>
                   )}
                   <div className="text-center text-[8px] text-text-muted py-0.5">
                     Seite {i + 1}
