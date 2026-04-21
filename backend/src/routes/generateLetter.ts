@@ -5,7 +5,7 @@ import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/database';
 import { readResultJson } from '../db/resultJson';
 import { generateLetterFromTemplate, type LetterVerwalterProfile, type LetterExtras } from '../utils/letterGenerator';
-import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
+import { isLetterReady } from '../utils/letterChecklist';
 import type { ExtractionResult } from '../types/extraction';
 import { logger } from '../utils/logger';
 
@@ -93,27 +93,20 @@ router.post('/:extractionId/:typ', authMiddleware, (req: Request, res: Response)
     return;
   }
 
-  const resultRaw = readResultJson<ExtractionResult>(row.result_json);
-  if (!resultRaw) {
+  const result = readResultJson<ExtractionResult>(row.result_json);
+  if (!result) {
     res.status(500).json({ error: 'Ergebnis konnte nicht gelesen werden' });
     return;
   }
 
-  // Re-run checklist validation so the status matches what the frontend sees
-  // after user field-edits. The stored status can be stale (original LLM call);
-  // the frontend recomputes via recomputeLetterStatuses on every update, so
-  // the backend must do the same before gating generation.
-  const result = validateLettersAgainstChecklists(resultRaw);
-
-  const letter = result.standardanschreiben?.find(
-    (l) => l.typ === typ || l.typ?.toLowerCase() === typ.toLowerCase(),
-  );
-  if (!letter) {
-    res.status(404).json({ error: `Anschreiben-Typ nicht gefunden: ${typ}` });
-    return;
-  }
-  if (letter.status !== 'bereit') {
-    res.status(422).json({ error: `Anschreiben nicht bereit (Status: ${letter.status})` });
+  // Gate on live required-field check (matches frontend's recomputeLetterStatuses).
+  // The stored status from the LLM can be stale or carry advisory fehlende_daten
+  // that don't block generation.
+  if (!isLetterReady(result, typ)) {
+    res.status(422).json({
+      error: 'Anschreiben nicht bereit — Pflichtfelder fehlen. Bitte im Tab „Anschreiben" ergänzen.',
+      code: 'LETTER_NOT_READY',
+    });
     return;
   }
 
