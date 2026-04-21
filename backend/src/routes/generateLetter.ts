@@ -135,9 +135,16 @@ router.post('/:extractionId/:typ', authMiddleware, (req: Request, res: Response)
       if (typeof v === 'string' || typeof v === 'number') extras[k] = String(v);
     }
   }
+  // Default "art" is gendered per the Verwalter's Geschlecht — German legal
+  // usage requires the feminine form for female Verwalterinnen.
+  // Callers can override via extras.verwalter_art (e.g. "vorläufiger
+  // Insolvenzverwalter", "Sachverständige").
+  const defaultArt = verwalterBase.geschlecht === 'weiblich'
+    ? 'Insolvenzverwalterin'
+    : 'Insolvenzverwalter';
   const verwalterArt = typeof extras.verwalter_art === 'string' && extras.verwalter_art.trim()
     ? extras.verwalter_art.trim()
-    : 'Insolvenzverwalter';
+    : defaultArt;
   delete extras.verwalter_art;
 
   const verwalter: LetterVerwalterProfile = { ...verwalterBase, art: verwalterArt };
