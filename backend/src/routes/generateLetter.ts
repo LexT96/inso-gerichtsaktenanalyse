@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/database';
 import { readResultJson } from '../db/resultJson';
 import { generateLetterFromTemplate, type LetterVerwalterProfile, type LetterExtras } from '../utils/letterGenerator';
+import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
 import type { ExtractionResult } from '../types/extraction';
 import { logger } from '../utils/logger';
 
@@ -92,11 +93,17 @@ router.post('/:extractionId/:typ', authMiddleware, (req: Request, res: Response)
     return;
   }
 
-  const result = readResultJson<ExtractionResult>(row.result_json);
-  if (!result) {
+  const resultRaw = readResultJson<ExtractionResult>(row.result_json);
+  if (!resultRaw) {
     res.status(500).json({ error: 'Ergebnis konnte nicht gelesen werden' });
     return;
   }
+
+  // Re-run checklist validation so the status matches what the frontend sees
+  // after user field-edits. The stored status can be stale (original LLM call);
+  // the frontend recomputes via recomputeLetterStatuses on every update, so
+  // the backend must do the same before gating generation.
+  const result = validateLettersAgainstChecklists(resultRaw);
 
   const letter = result.standardanschreiben?.find(
     (l) => l.typ === typ || l.typ?.toLowerCase() === typ.toLowerCase(),
