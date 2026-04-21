@@ -120,14 +120,21 @@ router.post('/:extractionId/:typ', authMiddleware, (req: Request, res: Response)
   const verwalterId = verwalterIdBody ?? row.verwalter_id;
   const verwalterBase = loadVerwalterProfile(db, verwalterId);
   if (!verwalterBase) {
-    res.status(422).json({ error: 'Verwalter-Profil nicht gefunden. Bitte Verwalter wählen.' });
+    res.status(422).json({
+      error: 'Kein Verwalter-Profil zugewiesen. Bitte im Gutachten-Assistent einen Verwalter zuweisen.',
+      code: 'VERWALTER_REQUIRED',
+    });
     return;
   }
 
   // Assemble extras + split verwalter_art out as a profile override
-  const extras: LetterExtras = (req.body?.extras && typeof req.body.extras === 'object')
-    ? { ...req.body.extras }
-    : {};
+  // Coerce all values to strings (reject objects/arrays to prevent "[object Object]" in DOCX)
+  const extras: LetterExtras = {};
+  if (req.body?.extras && typeof req.body.extras === 'object') {
+    for (const [k, v] of Object.entries(req.body.extras as Record<string, unknown>)) {
+      if (typeof v === 'string' || typeof v === 'number') extras[k] = String(v);
+    }
+  }
   const verwalterArt = typeof extras.verwalter_art === 'string' && extras.verwalter_art.trim()
     ? extras.verwalter_art.trim()
     : 'Insolvenzverwalter';
