@@ -18,6 +18,7 @@ import verwalterRoutes from './routes/verwalter';
 import sachbearbeiterRoutes from './routes/sachbearbeiter';
 import adminRoutes from './routes/admin';
 import kanzleiRoutes from './routes/kanzlei';
+import letterTemplatesRoutes from './routes/letterTemplates';
 import bcrypt from 'bcrypt';
 
 const app = express();
@@ -43,6 +44,7 @@ app.use('/api/verwalter', verwalterRoutes);
 app.use('/api/sachbearbeiter', sachbearbeiterRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/kanzlei', kanzleiRoutes);
+app.use('/api/letter-templates', letterTemplatesRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
