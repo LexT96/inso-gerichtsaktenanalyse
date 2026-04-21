@@ -26,6 +26,7 @@
     "FELD_Schuldner_Der_Die_Groß": { "computed": "schuldner_Der_Die" },
     "FELD_Schuldner_den_die": { "computed": "schuldner_den_die" },
     "FELD_Schuldner_dem_der": { "computed": "schuldner_dem_der" },
+    "FELD_Schuldner_des_der": { "computed": "schuldner_des_der" },
     "FELD_Schuldner_Schuldnerin": { "computed": "schuldner_nominativ_substantiv" },
     "FELD_Schuldners_Schuldnerin": { "computed": "schuldner_genitiv_substantiv" },
     "FELD_Schuldner_Halters_Halterin": { "computed": "schuldner_halters_halterin" },

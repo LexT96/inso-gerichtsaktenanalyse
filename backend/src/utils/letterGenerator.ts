@@ -128,6 +128,7 @@ function computeField(
     case 'schuldner_Der_Die': return schuldnerGender(schuldnerGeschlecht, 'Der_Die');
     case 'schuldner_den_die': return schuldnerGender(schuldnerGeschlecht, 'den_die');
     case 'schuldner_dem_der': return schuldnerGender(schuldnerGeschlecht, 'dem_der');
+    case 'schuldner_des_der': return schuldnerGender(schuldnerGeschlecht, 'des_der');
     case 'schuldner_nominativ_substantiv': return schuldnerGender(schuldnerGeschlecht, 'nominativ_substantiv');
     case 'schuldner_genitiv_substantiv': return schuldnerGender(schuldnerGeschlecht, 'genitiv_substantiv');
     case 'schuldner_halters_halterin': return schuldnerGender(schuldnerGeschlecht, 'halters_halterin');

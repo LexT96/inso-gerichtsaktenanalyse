@@ -21,6 +21,7 @@ export type SchuldnerVariant =
   | 'Der_Die'
   | 'den_die'
   | 'dem_der'
+  | 'des_der'
   | 'nominativ_substantiv'
   | 'genitiv_substantiv'
   | 'halters_halterin';
@@ -32,6 +33,7 @@ export function schuldnerGender(g: GenderInput, variant: SchuldnerVariant): stri
     case 'Der_Die': return w ? 'Die' : 'Der';
     case 'den_die': return w ? 'die' : 'den';
     case 'dem_der': return w ? 'der' : 'dem';
+    case 'des_der': return w ? 'der' : 'des';
     case 'nominativ_substantiv': return w ? 'Schuldnerin' : 'Schuldner';
     case 'genitiv_substantiv': return w ? 'Schuldnerin' : 'Schuldners';
     case 'halters_halterin': return w ? 'der Halterin' : 'des Halters';
