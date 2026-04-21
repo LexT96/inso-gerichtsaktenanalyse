@@ -1,6 +1,18 @@
 import { getFieldAuthority } from '../utils/fieldAuthority';
 import { logger } from '../utils/logger';
-import type { ExtractionResult, ExtractionCandidate, MergeDiff, MergeFieldChange, SegmentSourceType } from '../types/extraction';
+import type {
+  ExtractionResult,
+  ExtractionCandidate,
+  MergeDiff,
+  MergeFieldChange,
+  SegmentSourceType,
+  Einzelforderung,
+  Aktivum,
+  AnfechtbarerVorgang,
+  Forderungen,
+  AktivaAnalyse,
+  Anfechtungsanalyse,
+} from '../types/extraction';
 
 /**
  * Navigate a dotted path in a nested object and return the leaf value.
@@ -207,6 +219,127 @@ export function computeMergeDiff(
  * Apply accepted merge changes to an ExtractionResult.
  * Returns the modified result (mutates in place).
  */
+// ─── Focused-pass array merging (auto, dedup by composite key) ───
+
+function normKey(s: unknown): string {
+  if (s === null || s === undefined) return '';
+  return String(s).toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function einzelforderungKey(e: Einzelforderung): string {
+  const glaeubiger = normKey(e.glaeubiger?.wert);
+  const betrag = typeof e.betrag?.wert === 'number' ? String(Math.round(e.betrag.wert * 100)) : '';
+  const titel = normKey(e.titel?.wert);
+  return `${glaeubiger}|${betrag}|${titel}`;
+}
+
+function aktivumKey(a: Aktivum): string {
+  const beschreibung = normKey(a.beschreibung?.wert);
+  const kategorie = normKey(a.kategorie);
+  return `${beschreibung}|${kategorie}`;
+}
+
+function vorgangKey(v: AnfechtbarerVorgang): string {
+  const empfaenger = normKey(v.empfaenger?.wert);
+  const datum = normKey(v.datum?.wert);
+  const betrag = typeof v.betrag?.wert === 'number' ? String(Math.round(v.betrag.wert * 100)) : '';
+  return `${empfaenger}|${datum}|${betrag}`;
+}
+
+/**
+ * Count how many items from a focused-pass result are new (not already in existing).
+ * Used to build diff.arraySummary without mutating the result.
+ */
+export function summarizeFocusedResults(
+  existing: ExtractionResult,
+  focused: { forderungen?: Forderungen | null; aktiva?: AktivaAnalyse | null; anfechtung?: Anfechtungsanalyse | null },
+): { newEinzelforderungen: number; newAktivaPositionen: number; newAnfechtungVorgaenge: number } {
+  const summary = { newEinzelforderungen: 0, newAktivaPositionen: 0, newAnfechtungVorgaenge: 0 };
+
+  if (focused.forderungen?.einzelforderungen) {
+    const existingKeys = new Set((existing.forderungen?.einzelforderungen ?? []).map(einzelforderungKey));
+    for (const e of focused.forderungen.einzelforderungen) {
+      if (!existingKeys.has(einzelforderungKey(e))) summary.newEinzelforderungen++;
+    }
+  }
+  if (focused.aktiva?.positionen) {
+    const existingKeys = new Set((existing.aktiva?.positionen ?? []).map(aktivumKey));
+    for (const a of focused.aktiva.positionen) {
+      if (!existingKeys.has(aktivumKey(a))) summary.newAktivaPositionen++;
+    }
+  }
+  if (focused.anfechtung?.vorgaenge) {
+    const existingKeys = new Set((existing.anfechtung?.vorgaenge ?? []).map(vorgangKey));
+    for (const v of focused.anfechtung.vorgaenge) {
+      if (!existingKeys.has(vorgangKey(v))) summary.newAnfechtungVorgaenge++;
+    }
+  }
+  return summary;
+}
+
+/**
+ * Dedup-merge focused-pass arrays into the existing result. Mutates and returns result.
+ * Append-only: existing items are preserved, new ones are added by composite-key diff.
+ */
+export function applyFocusedResults(
+  result: ExtractionResult,
+  focused: { forderungen?: Forderungen | null; aktiva?: AktivaAnalyse | null; anfechtung?: Anfechtungsanalyse | null } | undefined,
+): { added: { einzelforderungen: number; aktiva: number; vorgaenge: number } } {
+  const added = { einzelforderungen: 0, aktiva: 0, vorgaenge: 0 };
+  if (!focused) return { added };
+
+  if (focused.forderungen?.einzelforderungen) {
+    if (!result.forderungen) {
+      result.forderungen = { einzelforderungen: [] } as unknown as ExtractionResult['forderungen'];
+    }
+    if (!result.forderungen!.einzelforderungen) result.forderungen!.einzelforderungen = [];
+    const existingKeys = new Set(result.forderungen!.einzelforderungen.map(einzelforderungKey));
+    for (const e of focused.forderungen.einzelforderungen) {
+      const k = einzelforderungKey(e);
+      if (!existingKeys.has(k)) {
+        result.forderungen!.einzelforderungen.push(e);
+        existingKeys.add(k);
+        added.einzelforderungen++;
+      }
+    }
+  }
+
+  if (focused.aktiva?.positionen) {
+    if (!result.aktiva) {
+      result.aktiva = { positionen: [] } as unknown as ExtractionResult['aktiva'];
+    }
+    if (!result.aktiva!.positionen) result.aktiva!.positionen = [];
+    const existingKeys = new Set(result.aktiva!.positionen.map(aktivumKey));
+    for (const a of focused.aktiva.positionen) {
+      const k = aktivumKey(a);
+      if (!existingKeys.has(k)) {
+        result.aktiva!.positionen.push(a);
+        existingKeys.add(k);
+        added.aktiva++;
+      }
+    }
+  }
+
+  if (focused.anfechtung?.vorgaenge) {
+    if (!result.anfechtung) {
+      result.anfechtung = { vorgaenge: [], gesamtpotenzial: { wert: null, quelle: '' }, zusammenfassung: '' } as unknown as ExtractionResult['anfechtung'];
+    }
+    if (!result.anfechtung!.vorgaenge) result.anfechtung!.vorgaenge = [];
+    const existingKeys = new Set(result.anfechtung!.vorgaenge.map(vorgangKey));
+    for (const v of focused.anfechtung.vorgaenge) {
+      const k = vorgangKey(v);
+      if (!existingKeys.has(k)) {
+        result.anfechtung!.vorgaenge.push(v);
+        existingKeys.add(k);
+        added.vorgaenge++;
+      }
+    }
+  }
+
+  logger.info('Focused-pass arrays auto-merged', { added });
+  return { added };
+}
+
 export function applyMergeDiff(
   result: ExtractionResult,
   diff: MergeDiff,

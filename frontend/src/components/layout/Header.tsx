@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { ExtractionProgressBar } from '../common/ExtractionProgressBar';
+import { DocumentJobsBadge } from './DocumentJobsBadge';
 
 interface HeaderProps {
   onExport?: () => void;
@@ -44,6 +45,7 @@ export function Header({ onExport, onNewFile, onKanzlei, extractionProgress }: H
           compact
         />
       )}
+      <DocumentJobsBadge />
       {onExport && (
         <button onClick={onExport} className={navBtn}>
           Export

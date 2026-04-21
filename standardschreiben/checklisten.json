@@ -7,6 +7,7 @@
       "typ": "Bankenauskunft",
       "zweck": "Ermittlung von Bankkonten, Guthaben, Depots und Schließfächern des Schuldners",
       "empfaengerDefault": "Banken/Sparkassen des Schuldners",
+      "templateDocx": "templates/Bankenanfrage.docx",
       "entfaelltWenn": "Entfällt praktisch nie — es müssen immer unbekannte Konten ermittelt werden.",
       "zielFelder": [],
       "requiredFields": [
@@ -24,6 +25,7 @@
       "typ": "Bausparkassen-Anfrage",
       "zweck": "Ermittlung von Bausparverträgen und -guthaben des Schuldners",
       "empfaengerDefault": "Bausparkassen des Schuldners",
+      "templateDocx": "templates/Anfrage_zu_bestehendem_Vertragsverhältnis_Bausparkasse_.docx",
       "entfaelltWenn": "Entfällt praktisch nie — Bausparverträge müssen ermittelt werden.",
       "zielFelder": [],
       "requiredFields": [
@@ -41,6 +43,7 @@
       "typ": "Steuerberater-Kontakt",
       "zweck": "Zugang zu Jahresabschlüssen, BWA, Steuererklärungen über den Steuerberater/Wirtschaftsprüfer",
       "empfaengerDefault": "Steuerberater/Wirtschaftsprüfer des Schuldners",
+      "templateDocx": "templates/Muster_Kontaktaufnahme_Steuerberater.docx",
       "entfaelltWenn": "Entfällt wenn: natürliche Person ohne Gewerbe und kein Steuerberater bekannt, ODER Steuerberater bereits kontaktiert/kooperiert.",
       "zielFelder": [],
       "requiredFields": [
@@ -57,6 +60,12 @@
       "typ": "Strafakte-Akteneinsicht",
       "zweck": "Ermittlung strafrechtlich relevanter Vorgänge durch Akteneinsicht bei der Staatsanwaltschaft",
       "empfaengerDefault": "Zuständige Staatsanwaltschaft",
+      "templateDocx": "templates/Einsichtnahmegesuch_Strafakte_Anfrage_zur_Akteneinsicht_.docx",
+      "uiInputs": [
+        { "key": "strafverfahren_person", "label": "Angeklagte Person", "placeholder": "z.B. den Geschäftsführer Max Mustermann" },
+        { "key": "strafverfahren_tatvorwurf", "label": "Tatvorwurf", "placeholder": "z.B. des Betrugs / der Untreue" },
+        { "key": "strafverfahren_gegenstand", "label": "Erwartete Informationen", "placeholder": "z.B. Zahlungsströme, Pflichtverletzungen" }
+      ],
       "entfaelltWenn": "Entfällt wenn: kein strafrechtlicher Verdacht und kein laufendes Strafverfahren bekannt.",
       "zielFelder": [],
       "requiredFields": [
@@ -73,6 +82,7 @@
       "typ": "KFZ-Halteranfrage Zulassungsstelle",
       "zweck": "Ermittlung zugelassener Fahrzeuge des Schuldners im Zulassungsbezirk",
       "empfaengerDefault": "Zuständige Zulassungsstelle",
+      "templateDocx": "templates/Halteranfrage_Zulassungsstelle.docx",
       "entfaelltWenn": "Entfällt wenn: Fahrzeugbestand bereits vollständig durch GV-Mitteilung oder andere Quelle bekannt, ODER bundesweite KBA-Anfrage erfolgt.",
       "zielFelder": [],
       "requiredFields": [
@@ -90,6 +100,7 @@
       "typ": "Gewerbeauskunft",
       "zweck": "Ermittlung gewerblicher Tätigkeiten und Betriebsstätten des Schuldners",
       "empfaengerDefault": "Zuständige Gewerbebehörde",
+      "templateDocx": "templates/Gewerbeanfrage.docx",
       "entfaelltWenn": "Entfällt wenn: Gewerbe bereits vollständig bekannt und in der Akte dokumentiert, ODER natürliche Person ohne Gewerbeverdacht.",
       "zielFelder": [],
       "requiredFields": [
@@ -106,6 +117,7 @@
       "typ": "Finanzamt-Anfrage",
       "zweck": "Ermittlung von Steuerschulden, Steuer-ID und steuerlichen Verhältnissen des Schuldners",
       "empfaengerDefault": "Zuständiges Finanzamt",
+      "templateDocx": "templates/Anfrage_ans_Finanzamt.docx",
       "entfaelltWenn": "Entfällt praktisch nie — Finanzamt ist immer relevant.",
       "zielFelder": [],
       "requiredFields": [
@@ -124,6 +136,7 @@
       "typAliases": ["KFZ-Halteranfrage"],
       "zweck": "Bundesweite Ermittlung aller auf den Schuldner zugelassenen Fahrzeuge",
       "empfaengerDefault": "Kraftfahrt-Bundesamt, Flensburg",
+      "templateDocx": "templates/Halteranfrage_Kraftfahrt_Bundesamt.docx",
       "entfaelltWenn": "Entfällt selten — KBA-Anfrage deckt bundesweit ab und ergänzt die Zulassungsstellen-Anfrage.",
       "zielFelder": [],
       "requiredFields": [
@@ -141,6 +154,7 @@
       "typ": "Versicherungsanfrage",
       "zweck": "Ermittlung von Versicherungsverträgen (Lebens-, Renten-, Sach-, Haftpflichtversicherungen)",
       "empfaengerDefault": "Versicherungen des Schuldners",
+      "templateDocx": "templates/Muster_Versicherungsanfrage.docx",
       "entfaelltWenn": "Entfällt praktisch nie — Versicherungsverträge (insb. Lebens-/Rentenversicherungen) müssen ermittelt werden.",
       "zielFelder": [],
       "requiredFields": [
@@ -158,6 +172,7 @@
       "typ": "Gerichtsvollzieher-Anfrage",
       "zweck": "Ermittlung von Vollstreckungsergebnissen, Vermögensauskunft und Betriebsstätten über den zuständigen Gerichtsvollzieher",
       "empfaengerDefault": "Zuständiger Gerichtsvollzieher",
+      "templateDocx": "templates/Gerichtsvollzieheranfrage.docx",
       "entfaelltWenn": "Entfällt wenn: Mitteilung des Gerichtsvollziehers bereits vollständig in der Akte (Vermögensauskunft, Vollstreckungsergebnisse, Betriebsstätten-Info vorhanden).",
       "zielFelder": [
         "ermittlungsergebnisse.gerichtsvollzieher.vollstreckungen",

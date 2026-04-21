@@ -6,16 +6,15 @@ import { readResultJson, writeResultJson } from '../db/resultJson';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { classifySegmentSourceType } from '../utils/documentAnalyzer';
-import { executeFieldPack } from '../utils/scalarPackExtractor';
-import { SCALAR_PACKS, ANCHOR_PACK } from '../utils/fieldPacks';
-import { computeMergeDiff } from '../services/documentMerge';
+import { applyFocusedResults } from '../services/documentMerge';
 import { computeExtractionStats } from '../utils/computeStats';
 import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
 import { extractTextPerPage } from '../services/pdfProcessor';
+import { runSupplementJob, getJobState } from '../services/documentJob';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import type { ExtractionResult, ExtractionCandidate, DocumentInfo, SegmentSourceType, AnchorPacket } from '../types/extraction';
+import type { ExtractionResult, DocumentInfo, MergeDiff } from '../types/extraction';
 
 const router = Router();
 
@@ -137,9 +136,13 @@ router.post(
   }
 );
 
-// --- 2. Extract + Diff ---
+// --- 2. Extract + Diff (async job) ---
+//
+// The supplement pipeline now runs OCR + focused array passes + handwriting,
+// so it can take >60s. Returns 202 immediately and runs the job in the background;
+// clients poll GET /status or /jobs/active for progress.
 
-router.post('/:extractionId/documents/:docId/extract', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+router.post('/:extractionId/documents/:docId/extract', authMiddleware, (req: Request, res: Response): void => {
   const userId = req.user!.userId;
   const extractionId = parseInt(parseParam(req.params['extractionId']), 10);
   const docId = parseInt(parseParam(req.params['docId']), 10);
@@ -148,106 +151,97 @@ router.post('/:extractionId/documents/:docId/extract', authMiddleware, async (re
   const db = getDb();
   const isAdmin = req.user!.role === 'admin';
 
-  // Load extraction
   const extraction = db.prepare(
     isAdmin
-      ? 'SELECT id, result_json FROM extractions WHERE id = ? AND status = ?'
-      : 'SELECT id, result_json FROM extractions WHERE id = ? AND user_id = ? AND status = ?'
-  ).get(...(isAdmin ? [extractionId, 'completed'] : [extractionId, userId, 'completed'])) as { id: number; result_json: string | null } | undefined;
+      ? 'SELECT id FROM extractions WHERE id = ? AND status = ?'
+      : 'SELECT id FROM extractions WHERE id = ? AND user_id = ? AND status = ?'
+  ).get(...(isAdmin ? [extractionId, 'completed'] : [extractionId, userId, 'completed'])) as { id: number } | undefined;
+  if (!extraction) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
 
-  if (!extraction || !extraction.result_json) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
-
-  // Load document
   const doc = db.prepare('SELECT * FROM documents WHERE id = ? AND extraction_id = ?')
-    .get(docId, extractionId) as DocumentInfo | undefined;
+    .get(docId, extractionId) as DocumentInfo & { job_status: string } | undefined;
   if (!doc) { res.status(404).json({ error: 'Dokument nicht gefunden' }); return; }
 
-  // Allow source type override
-  const sourceType = (req.body?.sourceType as SegmentSourceType) || (doc as any).source_type as SegmentSourceType;
-
-  // Read PDF and extract text
-  const dir = pdfDir(extractionId);
-  const pdfFilename = `doc_${(doc as any).doc_index}.pdf`;
-  const pdfPath = path.join(dir, pdfFilename);
-  logger.info('Document extract: resolving PDF', { dir, pdfFilename, pdfPath, exists: fs.existsSync(pdfPath) });
-  if (!fs.existsSync(pdfPath)) { res.status(404).json({ error: `PDF-Datei nicht gefunden: ${pdfFilename} in ${dir}` }); return; }
-
-  const pdfBuffer = fs.readFileSync(pdfPath);
-  const pageTexts = await extractTextPerPage(pdfBuffer);
-  const pages = Array.from({ length: pageTexts.length }, (_, i) => i + 1);
-
-  // Find matching field packs for this source type (ANCHOR_PACK + SCALAR_PACKS)
-  // Anchor fields like beschlussdatum are crucial for Beschluss supplements
-  const allPacks = [ANCHOR_PACK, ...SCALAR_PACKS];
-  const matchingPacks = allPacks.filter(p => p.segmentTypes.includes(sourceType));
-
-  if (matchingPacks.length === 0) {
-    // Fallback: run all packs on this document
-    logger.warn('Kein passendes Feldpaket für Dokumenttyp', { sourceType });
+  if (doc.job_status === 'pending' || doc.job_status === 'processing') {
+    res.status(409).json({ error: 'Ergänzungs-Job läuft bereits', jobStatus: doc.job_status });
+    return;
   }
 
-  const packsToRun = matchingPacks.length > 0 ? matchingPacks : allPacks;
+  const sourceTypeOverride = typeof req.body?.sourceType === 'string' ? req.body.sourceType : undefined;
 
-  // Build a minimal anchor from existing result
-  const existingResult = readResultJson<ExtractionResult>(extraction.result_json)!;
+  // Mark pending before returning so the navbar polls pick it up immediately.
+  db.prepare(`
+    UPDATE documents
+    SET job_status = 'pending', job_progress = 0, job_message = 'In Warteschlange…',
+        job_error = NULL, job_diff_json = NULL, job_started_at = NULL, job_finished_at = NULL
+    WHERE id = ?
+  `).run(docId);
 
-  // Detect debtor type from rechtsform
-  const rechtsform = existingResult.schuldner?.rechtsform?.wert || '';
-  const juristischePersonPattern = /gmbh|ag\b|ug\b|se\b|kg\b|ohg|gbr|e\.v\.|stiftung|genossenschaft|partg/i;
-  const personengesellschaftPattern = /kg\b|ohg\b|gbr\b|partg/i;
-  let debtorType: 'natuerliche_person' | 'juristische_person' | 'personengesellschaft' = 'natuerliche_person';
-  if (personengesellschaftPattern.test(rechtsform)) {
-    debtorType = 'personengesellschaft';
-  } else if (juristischePersonPattern.test(rechtsform)) {
-    debtorType = 'juristische_person';
-  }
-
-  const anchor: AnchorPacket = {
-    aktenzeichen: (existingResult.verfahrensdaten?.aktenzeichen?.wert as string | null) ?? null,
-    gericht: (existingResult.verfahrensdaten?.gericht?.wert as string | null) ?? null,
-    beschlussdatum: (existingResult.verfahrensdaten?.beschlussdatum?.wert as string | null) ?? null,
-    antragsdatum: (existingResult.verfahrensdaten?.antragsdatum?.wert as string | null) ?? null,
-    debtor_canonical_name: ((existingResult.schuldner?.name?.wert || existingResult.schuldner?.firma?.wert) as string | null) ?? null,
-    debtor_rechtsform: (existingResult.schuldner?.rechtsform?.wert as string | null) ?? null,
-    debtor_type: debtorType,
-    applicant_canonical_name: (existingResult.antragsteller?.name?.wert as string | null) ?? null,
-    gutachter_name: (existingResult.gutachterbestellung?.gutachter_name?.wert as string | null) ?? null,
-  };
-
-  // Run field packs
-  const allCandidates: ExtractionCandidate[] = [];
-  for (const pack of packsToRun) {
-    try {
-      const candidates = await executeFieldPack(
-        pack, pageTexts, pages, [sourceType], anchor, null,
-      );
-      // Prefix quellen with document type
-      for (const c of candidates) {
-        if (c.quelle && !c.quelle.includes((doc as any).original_filename)) {
-          c.quelle = c.quelle.replace(/^Seite/i, `${sourceType.charAt(0).toUpperCase() + sourceType.slice(1)}, Seite`);
-        }
-      }
-      allCandidates.push(...candidates);
-    } catch (err) {
-      logger.error(`Feldpaket "${pack.id}" fehlgeschlagen`, {
-        error: err instanceof Error ? err.message : String(err),
-        packId: pack.id,
+  // Fire-and-forget: the worker is resilient and updates the DB row itself.
+  setImmediate(() => {
+    runSupplementJob(extractionId, docId, sourceTypeOverride).catch(err => {
+      logger.error('runSupplementJob unhandled', {
+        extractionId, docId, error: err instanceof Error ? err.message : String(err),
       });
-    }
-  }
-
-  // Compute diff
-  const diff = computeMergeDiff(existingResult, allCandidates);
-
-  logger.info('Dokument-Extraktion + Diff abgeschlossen', {
-    extractionId, docId, sourceType,
-    candidates: allCandidates.length,
-    newFields: diff.newFields.length,
-    updatedFields: diff.updatedFields.length,
-    conflicts: diff.conflicts.length,
+    });
   });
 
-  res.json(diff);
+  res.status(202).json({ docId, jobStatus: 'pending' });
+});
+
+// --- 2b. Job status for a single document ---
+
+router.get('/:extractionId/documents/:docId/status', authMiddleware, (req: Request, res: Response): void => {
+  const userId = req.user!.userId;
+  const extractionId = parseInt(parseParam(req.params['extractionId']), 10);
+  const docId = parseInt(parseParam(req.params['docId']), 10);
+  if (isNaN(extractionId) || isNaN(docId)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
+
+  const db = getDb();
+  const isAdmin = req.user!.role === 'admin';
+  const extraction = db.prepare(
+    isAdmin
+      ? 'SELECT id FROM extractions WHERE id = ?'
+      : 'SELECT id FROM extractions WHERE id = ? AND user_id = ?'
+  ).get(...(isAdmin ? [extractionId] : [extractionId, userId])) as { id: number } | undefined;
+  if (!extraction) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
+
+  const state = getJobState(docId);
+  if (!state) { res.status(404).json({ error: 'Dokument nicht gefunden' }); return; }
+
+  res.json(state);
+});
+
+// --- 2c. Active jobs for current user (navbar polling) ---
+
+router.get('/documents/jobs/active', authMiddleware, (req: Request, res: Response): void => {
+  const userId = req.user!.userId;
+  const isAdmin = req.user!.role === 'admin';
+  const db = getDb();
+
+  const rows = db.prepare(
+    isAdmin
+      ? `SELECT d.id as docId, d.extraction_id as extractionId, d.original_filename as filename,
+                d.source_type as sourceType, d.job_status as status, d.job_progress as progress,
+                d.job_message as message, d.job_error as error, d.job_started_at as startedAt,
+                d.job_finished_at as finishedAt
+         FROM documents d
+         WHERE d.job_status IN ('pending', 'processing', 'completed', 'failed')
+           AND (d.job_finished_at IS NULL OR d.job_finished_at > datetime('now', '-10 minutes'))
+         ORDER BY COALESCE(d.job_started_at, d.uploaded_at) DESC`
+      : `SELECT d.id as docId, d.extraction_id as extractionId, d.original_filename as filename,
+                d.source_type as sourceType, d.job_status as status, d.job_progress as progress,
+                d.job_message as message, d.job_error as error, d.job_started_at as startedAt,
+                d.job_finished_at as finishedAt
+         FROM documents d
+         JOIN extractions e ON e.id = d.extraction_id
+         WHERE e.user_id = ?
+           AND d.job_status IN ('pending', 'processing', 'completed', 'failed')
+           AND (d.job_finished_at IS NULL OR d.job_finished_at > datetime('now', '-10 minutes'))
+         ORDER BY COALESCE(d.job_started_at, d.uploaded_at) DESC`
+  ).all(...(isAdmin ? [] : [userId]));
+
+  res.json(rows);
 });
 
 // --- 3. Apply ---
@@ -276,22 +270,17 @@ router.post('/:extractionId/documents/:docId/apply', authMiddleware, (req: Reque
 
   const result = readResultJson<ExtractionResult>(extraction.result_json)!;
 
-  // Build accepted set
   const accepted = new Set<string>();
-  if (acceptAll) {
-    if (accept) {
-      for (const p of accept) accepted.add(p);
-    }
-  } else if (accept) {
-    for (const p of accept) accepted.add(p);
-  }
+  if (accept) for (const p of accept) accepted.add(p);
 
-  if (accepted.size === 0 && !acceptAll) {
-    res.status(400).json({ error: 'Keine Änderungen zum Anwenden ausgewählt' }); return;
-  }
-
-  // Apply changes directly from the changes array in request body
   const changes = req.body.changes as Array<{ path: string; wert: unknown; quelle: string }> | undefined;
+
+  // Load stored diff from the background job (may contain focused-pass arrays to auto-merge).
+  const jobRow = db.prepare('SELECT job_diff_json FROM documents WHERE id = ?')
+    .get(docId) as { job_diff_json: string | null } | undefined;
+  const storedDiff = jobRow?.job_diff_json ? (JSON.parse(jobRow.job_diff_json) as MergeDiff) : null;
+
+  // Scalar changes
   if (changes) {
     for (const change of changes) {
       if (!acceptAll && !accepted.has(change.path)) continue;
@@ -315,7 +304,10 @@ router.post('/:extractionId/documents/:docId/apply', authMiddleware, (req: Reque
     }
   }
 
-  // Revalidate letter statuses (e.g. Beschlussdatum now available) and recompute stats
+  // Auto-merge focused-pass array additions (Forderungen/Aktiva/Anfechtung).
+  // These are append-only by composite-key diff — no user-level conflict here.
+  const { added: arrayAdded } = applyFocusedResults(result, storedDiff?.focusedResults);
+
   const revalidated = validateLettersAgainstChecklists(result);
   const stats = computeExtractionStats(revalidated);
   db.prepare(`
@@ -323,21 +315,36 @@ router.post('/:extractionId/documents/:docId/apply', authMiddleware, (req: Reque
     WHERE id = ?
   `).run(writeResultJson(revalidated), stats.found, stats.missing, stats.lettersReady, extractionId);
 
-  // Audit log
+  // Clear job state so the navbar stops showing this supplement.
+  db.prepare(`
+    UPDATE documents
+    SET job_status = 'idle', job_progress = 0, job_message = NULL,
+        job_diff_json = NULL, job_error = NULL
+    WHERE id = ?
+  `).run(docId);
+
   db.prepare(
     'INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)'
   ).run(userId, 'document_merge', JSON.stringify({
     extractionId, docId,
     fieldsApplied: changes?.length ?? 0,
+    arrayAdded,
   }), req.ip);
 
   logger.info('Dokument-Merge angewendet', {
     extractionId, docId,
     fieldsApplied: changes?.length ?? 0,
+    arrayAdded,
     statsFound: stats.found,
   });
 
-  res.json({ result: revalidated, statsFound: stats.found, statsMissing: stats.missing, statsLettersReady: stats.lettersReady });
+  res.json({
+    result: revalidated,
+    statsFound: stats.found,
+    statsMissing: stats.missing,
+    statsLettersReady: stats.lettersReady,
+    arrayAdded,
+  });
 });
 
 // --- 4. List documents for an extraction ---

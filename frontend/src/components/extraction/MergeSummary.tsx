@@ -128,7 +128,11 @@ export function MergeSummary({ diff, onApply, onCancel, applying }: MergeSummary
     onApply(paths, changes);
   };
 
-  const totalChanges = allChanges.length + diff.newForderungen.length + diff.updatedForderungen.length;
+  const arraySummary = diff.arraySummary;
+  const arrayCount = arraySummary
+    ? arraySummary.newEinzelforderungen + arraySummary.newAktivaPositionen + arraySummary.newAnfechtungVorgaenge
+    : 0;
+  const totalChanges = allChanges.length + diff.newForderungen.length + diff.updatedForderungen.length + arrayCount;
 
   if (totalChanges === 0) {
     return (
@@ -143,6 +147,22 @@ export function MergeSummary({ diff, onApply, onCancel, applying }: MergeSummary
 
   return (
     <div className="space-y-4">
+      {arraySummary && arrayCount > 0 && (
+        <div className="p-2.5 rounded border border-emerald-800/40 bg-emerald-900/10 text-[11px] text-emerald-300 space-y-0.5">
+          <div className="text-[10px] text-emerald-400 font-semibold mb-1">
+            Werden automatisch übernommen (keine Konflikte)
+          </div>
+          {arraySummary.newEinzelforderungen > 0 && (
+            <div>+ {arraySummary.newEinzelforderungen} neue Forderung{arraySummary.newEinzelforderungen === 1 ? '' : 'en'}</div>
+          )}
+          {arraySummary.newAktivaPositionen > 0 && (
+            <div>+ {arraySummary.newAktivaPositionen} neue Aktiva-Position{arraySummary.newAktivaPositionen === 1 ? '' : 'en'}</div>
+          )}
+          {arraySummary.newAnfechtungVorgaenge > 0 && (
+            <div>+ {arraySummary.newAnfechtungVorgaenge} neue{arraySummary.newAnfechtungVorgaenge === 1 ? 'r anfechtbarer Vorgang' : ' anfechtbare Vorgänge'}</div>
+          )}
+        </div>
+      )}
       {diff.newFields.length > 0 && (
         <div>
           <h4 className="text-[10px] text-green-400 font-semibold mb-1.5">{diff.newFields.length} neue Felder</h4>
@@ -182,7 +202,13 @@ export function MergeSummary({ diff, onApply, onCancel, applying }: MergeSummary
           disabled={applying}
           className="flex-1 py-2 bg-accent text-white rounded text-[11px] font-semibold disabled:opacity-50"
         >
-          {applying ? 'Wird angewendet...' : `${accepted.size} Änderungen übernehmen`}
+          {applying
+            ? 'Wird angewendet...'
+            : accepted.size > 0
+              ? `${accepted.size} Änderung${accepted.size === 1 ? '' : 'en'} übernehmen${arrayCount > 0 ? ` (+ ${arrayCount} auto)` : ''}`
+              : arrayCount > 0
+                ? `${arrayCount} Zeile${arrayCount === 1 ? '' : 'n'} übernehmen`
+                : 'Übernehmen'}
         </button>
         <button onClick={onCancel} disabled={applying} className="px-4 py-2 text-[11px] text-text-muted hover:text-text disabled:opacity-30">
           Abbrechen

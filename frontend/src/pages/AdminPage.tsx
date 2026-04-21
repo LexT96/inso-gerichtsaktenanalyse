@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/layout/Header';
 import { apiClient } from '../api/client';
 import { KanzleiSettings } from '../components/admin/KanzleiSettings';
+import { LetterTemplatesSection } from '../components/admin/LetterTemplatesSection';
 
 // ─── Types ───
 
@@ -86,7 +87,7 @@ export function AdminPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [userFilter, setUserFilter] = useState('');
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'kanzlei'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'kanzlei' | 'briefe'>('overview');
 
   // Load dashboard + users on mount
   useEffect(() => {
@@ -146,8 +147,8 @@ export function AdminPage() {
 
         {/* ─── Tab Bar ─── */}
         <div className="flex items-center gap-1 border-b border-border/60 mb-6">
-          {(['overview', 'kanzlei'] as const).map(tab => {
-            const labels: Record<string, string> = { overview: 'ÜBERSICHT', kanzlei: 'KANZLEI' };
+          {(['overview', 'kanzlei', 'briefe'] as const).map(tab => {
+            const labels: Record<string, string> = { overview: 'ÜBERSICHT', kanzlei: 'KANZLEI', briefe: 'BRIEFE' };
             const isActive = activeTab === tab;
             return (
               <button
@@ -167,6 +168,9 @@ export function AdminPage() {
 
         {/* ─── Kanzlei Tab ─── */}
         {activeTab === 'kanzlei' && <KanzleiSettings />}
+
+        {/* ─── Briefe Tab ─── */}
+        {activeTab === 'briefe' && <LetterTemplatesSection />}
 
         {/* ─── Overview Tab ─── */}
         {activeTab === 'overview' && <>

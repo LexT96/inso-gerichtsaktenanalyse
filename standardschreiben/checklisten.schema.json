@@ -14,6 +14,19 @@
           "typ": { "type": "string" },
           "empfaengerDefault": { "type": "string" },
           "templatePdf": { "type": ["string", "null"] },
+          "templateDocx": { "type": "string" },
+          "uiInputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["key", "label"],
+              "properties": {
+                "key": { "type": "string" },
+                "label": { "type": "string" },
+                "placeholder": { "type": "string" }
+              }
+            }
+          },
           "requiredFields": {
             "type": "array",
             "items": { "type": "string" }
