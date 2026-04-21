@@ -28,10 +28,16 @@ interface ChecklistConfig {
   anschreiben: ChecklistItem[];
 }
 
-const CHECKLIST_PATH = path.resolve(process.cwd(), 'standardschreiben/checklisten.json');
+function findChecklistPath(): string {
+  for (const base of [process.cwd(), path.resolve(process.cwd(), '..')]) {
+    const candidate = path.join(base, 'standardschreiben', 'checklisten.json');
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return path.resolve(process.cwd(), 'standardschreiben', 'checklisten.json');
+}
 
 function loadChecklists(): ChecklistConfig {
-  const raw = fs.readFileSync(CHECKLIST_PATH, 'utf-8');
+  const raw = fs.readFileSync(findChecklistPath(), 'utf-8');
   return JSON.parse(raw) as ChecklistConfig;
 }
 
