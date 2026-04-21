@@ -284,8 +284,7 @@ export function DashboardPage() {
       ) : result && !file && !pdfFile ? (
         <div className="max-w-[1050px] mx-auto p-5 px-6">
           <div className="mb-3 p-2 px-3 bg-surface border border-border/60 rounded-lg text-[10px] text-text-muted flex items-center gap-2">
-            <span className="text-ie-amber">⚠</span>
-            {importedFilename ? `Import: ${importedFilename}` : 'Verlaufs-Ansicht · PDF nicht verfügbar (wurde nach Extraktion gelöscht)'}
+            {importedFilename && <><span className="text-ie-amber">⚠</span>{`Import: ${importedFilename}`}</>}
             {extractionId && (
               <>
                 <button
