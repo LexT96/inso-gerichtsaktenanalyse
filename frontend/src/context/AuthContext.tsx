@@ -1,6 +1,6 @@
 import { createContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { useMsal, useIsAuthenticated } from '@azure/msal-react';
-import { InteractionRequiredAuthError } from '@azure/msal-browser';
+import { InteractionRequiredAuthError, InteractionStatus } from '@azure/msal-browser';
 import { apiClient } from '../api/client';
 import { loginRequest } from '../auth/msalConfig';
 
@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [authMode, setAuthMode] = useState<AuthMode>(null);
-  const { instance, accounts } = useMsal();
+  const { instance, accounts, inProgress } = useMsal();
   const isEntraAuthenticated = useIsAuthenticated();
 
   // Detect auth mode from backend
@@ -55,8 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Entra ID: after MSAL reports authenticated, fetch user from backend /auth/me
   useEffect(() => {
     if (authMode !== 'hybrid') return;
+    // Wait for MSAL to finish initializing before concluding user is not authenticated
+    if (inProgress !== InteractionStatus.None) return;
     if (!isEntraAuthenticated || accounts.length === 0) {
-      setLoading(false);
+      // MSAL finished but no account — not Entra-authenticated, local auth effect handles fallback
       return;
     }
 
@@ -84,13 +86,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     })();
-  }, [authMode, isEntraAuthenticated, accounts, instance]);
+  }, [authMode, isEntraAuthenticated, accounts, instance, inProgress]);
 
   // Local auth: restore session from localStorage (works in both 'local' and 'hybrid' mode)
   useEffect(() => {
     if (authMode !== 'local' && authMode !== 'hybrid') return;
-    // In hybrid mode, Entra effect handles its own loading — only restore local session here
-    if (authMode === 'hybrid' && isEntraAuthenticated) return;
+    // In hybrid mode, don't resolve loading until MSAL finished initializing
+    if (authMode === 'hybrid' && inProgress !== InteractionStatus.None) return;
+    // In hybrid mode, if MSAL has accounts, the Entra effect handles everything
+    if (authMode === 'hybrid' && accounts.length > 0) return;
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       try {
@@ -100,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     setLoading(false);
-  }, [authMode, isEntraAuthenticated]);
+  }, [authMode, accounts, inProgress]);
 
   // Still loading while we don't know the auth mode
   useEffect(() => {

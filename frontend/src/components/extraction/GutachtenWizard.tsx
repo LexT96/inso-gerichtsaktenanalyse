@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { apiClient } from '../../api/client';
 import { useVerwalter } from '../../hooks/useVerwalter';
+import { useSachbearbeiter } from '../../hooks/useSachbearbeiter';
 import { VerwalterManager } from './VerwalterManager';
-import type { ExtractionResult, VerwalterProfile, Pruefstatus } from '../../types/extraction';
+import type { ExtractionResult, VerwalterProfile, SachbearbeiterProfile, Pruefstatus } from '../../types/extraction';
 
 interface GutachtenWizardProps {
   result: ExtractionResult;
@@ -41,7 +42,15 @@ function templateLabel(type: TemplateType): string {
   }
 }
 
-const STEP_LABELS = ['Verwalter', 'Schuldner & Verfahren', 'Fehlende Angaben', 'Generieren'];
+const STEP_LABELS = ['Verwalter', 'Sachbearbeiter', 'Schuldner & Verfahren', 'Fehlende Angaben', 'Generieren'];
+
+const STANDORT_DATA: Record<string, { adresse: string; telefon: string }> = {
+  'Trier': { adresse: 'Balduinstraße 22-24, 54290 Trier', telefon: '0651 / 170 830 - 0' },
+  'Zell/Mosel': { adresse: 'Schlossstraße 7, 56856 Zell', telefon: '06542 / 9699 - 0' },
+  'Wiesbaden': { adresse: 'Luisenstraße 7, 65185 Wiesbaden', telefon: '0611 / 950 157 - 0' },
+  'Koblenz': { adresse: 'Löhrstraße 99, 56068 Koblenz', telefon: '0261 / 134 69 - 0' },
+  'Bad Kreuznach': { adresse: 'Kurhausstraße 15, 55543 Bad Kreuznach', telefon: '0671 / 920 148 - 0' },
+};
 
 export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }: GutachtenWizardProps) {
   const [step, setStep] = useState(1);
@@ -57,8 +66,14 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
   const [anderkontoBank, setAnderkontoBank] = useState('');
   const [geschaeftsfuehrer, setGeschaeftsfuehrer] = useState('');
   const [lastGavv, setLastGavv] = useState('');
+  const [selectedSachbearbeiter, setSelectedSachbearbeiter] = useState<SachbearbeiterProfile | null>(null);
+  const [showNewSb, setShowNewSb] = useState(false);
+  const [newSbName, setNewSbName] = useState('');
+  const [newSbEmail, setNewSbEmail] = useState('');
+  const [newSbDurchwahl, setNewSbDurchwahl] = useState('');
 
   const { profiles, loading: loadingProfiles, createProfile, updateProfile, deleteProfile } = useVerwalter();
+  const { profiles: sbProfiles, loading: loadingSb, createProfile: createSb } = useSachbearbeiter();
 
   const templateType = useMemo(
     () => detectTemplateType(result.schuldner?.rechtsform?.wert as string | null),
@@ -67,7 +82,7 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
   const isJuristisch = templateType === 'juristische_person';
   const isNatuerlich = templateType === 'natuerliche_person';
 
-  // When Verwalter is selected, pre-fill anderkonto if available
+  // When Verwalter is selected, pre-fill anderkonto and Sachbearbeiter if available
   const handleSelectVerwalter = (profile: VerwalterProfile) => {
     setSelectedVerwalter(profile);
     if (profile.anderkonto_iban) setAnderkontoIban(profile.anderkonto_iban);
@@ -113,20 +128,14 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
     if (selectedVerwalter?.name) body.verwalter_name = selectedVerwalter.name;
     if (selectedVerwalter?.titel) body.verwalter_titel = selectedVerwalter.titel;
     if (selectedVerwalter?.standort) body.verwalter_standort = selectedVerwalter.standort;
-    // Kanzlei name is always the same; address depends on standort
+    // Kanzlei name is always the same; address and phone depend on standort
     body.verwalter_kanzlei = 'Prof. Dr. Dr. Thomas B. Schmidt Insolvenzverwalter Rechtsanwälte Partnerschaft mbB';
-    const STANDORT_ADRESSEN: Record<string, string> = {
-      'Zell/Mosel': 'Schlossstraße 7, 56856 Zell',
-      'Trier': 'Balduinstraße 22-24, 54290 Trier',
-      'Wiesbaden': 'Luisenstraße 7, 65185 Wiesbaden',
-      'Koblenz': 'Löhrstraße 99, 56068 Koblenz',
-      'Bad Kreuznach': 'Kurhausstraße 15, 55543 Bad Kreuznach',
-    };
-    const adresse = STANDORT_ADRESSEN[selectedVerwalter?.standort || ''] || 'Schlossstraße 7, 56856 Zell';
-    body.verwalter_adresse = adresse;
-    if (selectedVerwalter?.sachbearbeiter_name) body.sachbearbeiter_name = selectedVerwalter.sachbearbeiter_name;
-    if (selectedVerwalter?.sachbearbeiter_email) body.sachbearbeiter_email = selectedVerwalter.sachbearbeiter_email;
-    if (selectedVerwalter?.sachbearbeiter_durchwahl) body.sachbearbeiter_durchwahl = selectedVerwalter.sachbearbeiter_durchwahl;
+    const standort = STANDORT_DATA[selectedVerwalter?.standort || ''];
+    body.verwalter_adresse = standort?.adresse || 'Schlossstraße 7, 56856 Zell';
+    body.verwalter_standort_telefon = standort?.telefon || '0651 / 170 830 - 0';
+    if (selectedSachbearbeiter?.name) body.sachbearbeiter_name = selectedSachbearbeiter.name;
+    if (selectedSachbearbeiter?.email) body.sachbearbeiter_email = selectedSachbearbeiter.email;
+    if (selectedSachbearbeiter?.durchwahl) body.sachbearbeiter_durchwahl = selectedSachbearbeiter.durchwahl;
     // Anderkonto: prefer wizard input, fallback to profile
     const iban = anderkontoIban.trim() || selectedVerwalter?.anderkonto_iban || '';
     const bank = anderkontoBank.trim() || selectedVerwalter?.anderkonto_bank || '';
@@ -196,6 +205,8 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
 
   const canAdvance = (s: number): boolean => {
     if (s === 1) return selectedVerwalter !== null;
+    if (s === 2) return selectedSachbearbeiter !== null;
+    if (s === 3) return missingCount === 0; // Schuldner & Verfahren
     return true;
   };
 
@@ -256,7 +267,6 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
                     ['Diktatzeichen', selectedVerwalter.diktatzeichen],
                     ['Geschlecht', selectedVerwalter.geschlecht === 'weiblich' ? 'weiblich' : 'männlich'],
                     ['Standort', selectedVerwalter.standort],
-                    ['Sachbearbeiter', selectedVerwalter.sachbearbeiter_name],
                   ].map(([l, v]) => (
                     <div key={l} className="bg-bg border border-border/60 rounded px-3 py-2">
                       <div className="text-[9px] text-text-dim">{l}</div>
@@ -277,8 +287,90 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
             </div>
           )}
 
-          {/* Step 2: Schuldner & Verfahren */}
+          {/* Step 2: Sachbearbeiter */}
           {step === 2 && (
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] text-text-dim block mb-1">Sachbearbeiter/in auswählen *</label>
+                <select
+                  value={selectedSachbearbeiter?.id || ''}
+                  onChange={e => {
+                    const p = sbProfiles.find(p => p.id === Number(e.target.value));
+                    if (p) setSelectedSachbearbeiter(p);
+                  }}
+                  className="w-full px-2 py-2 bg-bg border border-border rounded text-[12px] text-text"
+                >
+                  <option value="">— Bitte wählen —</option>
+                  {sbProfiles.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} {p.email ? `(${p.email})` : ''}</option>
+                  ))}
+                </select>
+              </div>
+              {selectedSachbearbeiter && (
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    ['Name', selectedSachbearbeiter.name],
+                    ['E-Mail', selectedSachbearbeiter.email],
+                    ['Durchwahl', selectedSachbearbeiter.durchwahl],
+                  ].map(([l, v]) => (
+                    <div key={l} className="bg-bg border border-border/60 rounded px-3 py-2">
+                      <div className="text-[9px] text-text-dim">{l}</div>
+                      <div className="text-[12px] text-text">{v || '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {loadingSb ? (
+                <p className="text-[10px] text-text-muted">Lade Profile…</p>
+              ) : sbProfiles.length === 0 && !showNewSb ? (
+                <p className="text-[10px] text-text-muted">Noch keine Sachbearbeiter angelegt.</p>
+              ) : null}
+
+              {/* Inline create */}
+              {!showNewSb ? (
+                <button onClick={() => setShowNewSb(true)}
+                  className="text-[10px] text-accent hover:underline">
+                  + Neuen Sachbearbeiter anlegen
+                </button>
+              ) : (
+                <div className="p-3 bg-bg border border-border/60 rounded-lg space-y-2">
+                  <div className="text-[10px] text-text-dim font-semibold">Neuer Sachbearbeiter</div>
+                  <input value={newSbName} onChange={e => setNewSbName(e.target.value)}
+                    className="w-full px-2 py-1.5 bg-surface border border-border rounded text-[11px] text-text"
+                    placeholder="Name *" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={newSbEmail} onChange={e => setNewSbEmail(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-surface border border-border rounded text-[11px] text-text font-mono"
+                      placeholder="E-Mail" />
+                    <input value={newSbDurchwahl} onChange={e => setNewSbDurchwahl(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-surface border border-border rounded text-[11px] text-text font-mono"
+                      placeholder="Durchwahl" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        if (!newSbName.trim()) return;
+                        const created = await createSb({ name: newSbName.trim(), email: newSbEmail.trim(), durchwahl: newSbDurchwahl.trim() });
+                        setSelectedSachbearbeiter(created);
+                        setNewSbName(''); setNewSbEmail(''); setNewSbDurchwahl('');
+                        setShowNewSb(false);
+                      }}
+                      disabled={!newSbName.trim()}
+                      className="px-3 py-1 bg-accent text-white rounded text-[10px] font-semibold disabled:opacity-50">
+                      Speichern
+                    </button>
+                    <button onClick={() => setShowNewSb(false)}
+                      className="px-3 py-1 text-[10px] text-text-muted hover:text-text">
+                      Abbrechen
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 3: Schuldner & Verfahren */}
+          {step === 3 && (
             <div className="space-y-3">
               {missingCount > 0 && (
                 <div className="p-2 bg-accent/10 border border-accent/30 rounded text-[11px] text-accent">
@@ -286,7 +378,7 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
                 </div>
               )}
               {missingCount === 0 && (
-                <div className="p-2 bg-green-900/20 border border-green-800/40 rounded text-[11px] text-green-400">
+                <div className="p-2 bg-white border border-green-300 rounded text-[11px] text-green-700">
                   ✓ Alle Pflichtfelder vorhanden
                 </div>
               )}
@@ -320,8 +412,8 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
             </div>
           )}
 
-          {/* Step 3: Fehlende Angaben */}
-          {step === 3 && (
+          {/* Step 4: Fehlende Angaben */}
+          {step === 4 && (
             <div className="space-y-3">
               {!selectedVerwalter?.anderkonto_iban && (
                 <div>
@@ -363,8 +455,8 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
             </div>
           )}
 
-          {/* Step 4: Vorschau & Generieren */}
-          {step === 4 && (
+          {/* Step 5: Vorschau & Generieren */}
+          {step === 5 && (
             <div className="space-y-4">
               {!preparing && slots.length === 0 && (
                 <div className="text-center py-6">
@@ -417,16 +509,16 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
             className="px-4 py-1.5 text-[11px] text-text-muted hover:text-text disabled:opacity-30">
             ← Zurück
           </button>
-          {step < 4 ? (
+          {step < 5 ? (
             <button onClick={() => {
-              if (step === 3) handlePrepare(); // Start preparation when moving to step 4
-              setStep(s => Math.min(4, s + 1));
+              if (step === 4) handlePrepare(); // Start preparation when moving to step 5
+              setStep(s => Math.min(5, s + 1));
             }} disabled={!canAdvance(step)}
               className="px-4 py-1.5 bg-accent text-white rounded text-[11px] font-semibold disabled:opacity-50">
               Weiter →
             </button>
           ) : (
-            <div /> // Generate button is in the step 4 content
+            <div /> // Generate button is in the step 5 content
           )}
         </div>
       </div>

@@ -20,12 +20,17 @@ vi.mock('../../config', () => ({
   },
 }));
 
+const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
+
 vi.mock('../../services/anthropic', () => ({
   anthropic: {
     messages: {
-      create: vi.fn(),
+      create: mockCreate,
     },
   },
+  createAnthropicMessage: vi.fn(async (params: unknown) => {
+    return mockCreate(params);
+  }),
   callWithRetry: vi.fn((fn: () => Promise<unknown>) => fn()),
   extractJsonFromText: vi.fn((text: string) => {
     const first = text.indexOf('[');
@@ -159,11 +164,11 @@ function mockApiResponse(entries: Array<{
   begruendung?: string;
 }>): void {
   const text = JSON.stringify(entries);
-  vi.mocked(anthropic.messages.create).mockResolvedValueOnce({
+  mockCreate.mockResolvedValueOnce({
     content: [{ type: 'text', text }],
     stop_reason: 'end_turn',
     usage: { input_tokens: 100, output_tokens: 50 },
-  } as never);
+  });
 }
 
 // ─── Tests ───
@@ -272,7 +277,7 @@ describe('semanticVerify', () => {
 
   it('leaves verifiziert undefined on API failure (graceful degradation)', async () => {
     const result = makeResult();
-    vi.mocked(anthropic.messages.create).mockRejectedValueOnce(new Error('Network error'));
+    mockCreate.mockRejectedValueOnce(new Error('Network error'));
 
     // Should not throw — returns { result, removedPaths }
     const returned = await semanticVerify(result, ['page text']);
@@ -286,7 +291,7 @@ describe('semanticVerify', () => {
   it('handles malformed API response gracefully (no crash)', async () => {
     const result = makeResult();
     // Return non-JSON garbage
-    vi.mocked(anthropic.messages.create).mockResolvedValueOnce({
+    mockCreate.mockResolvedValueOnce({
       content: [{ type: 'text', text: 'not valid json at all !!!' }],
       stop_reason: 'end_turn',
       usage: { input_tokens: 10, output_tokens: 5 },
@@ -381,14 +386,14 @@ describe('semanticVerify', () => {
     const fields = collectFields(result);
     // First response: truncated, only returns first 4 of 8 fields
     const partial = fields.slice(0, 4).map((_, i) => ({ nr: i + 1, verifiziert: true }));
-    vi.mocked(anthropic.messages.create).mockResolvedValueOnce({
+    mockCreate.mockResolvedValueOnce({
       content: [{ type: 'text', text: JSON.stringify(partial) }],
       stop_reason: 'max_tokens',
       usage: { input_tokens: 100, output_tokens: 8192 },
     } as never);
     // Retry response: remaining 4 fields
     const remaining = [1, 2, 3, 4].map(i => ({ nr: i, verifiziert: true }));
-    vi.mocked(anthropic.messages.create).mockResolvedValueOnce({
+    mockCreate.mockResolvedValueOnce({
       content: [{ type: 'text', text: JSON.stringify(remaining) }],
       stop_reason: 'end_turn',
       usage: { input_tokens: 80, output_tokens: 40 },
@@ -402,7 +407,7 @@ describe('semanticVerify', () => {
     expect(result.schuldner.name.verifiziert).toBe(true);
     expect(result.forderungen.gesamtforderungen.verifiziert).toBe(true);
     // API should have been called twice
-    expect(anthropic.messages.create).toHaveBeenCalledTimes(2);
+    expect(mockCreate).toHaveBeenCalledTimes(2);
   });
 
   it('skips API call when no non-empty fields exist', async () => {
@@ -504,7 +509,7 @@ describe('semanticVerify', () => {
 
     const returned = await semanticVerify(empty, ['page text']);
 
-    expect(anthropic.messages.create).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
     expect(returned.result).toBe(empty);
     expect(returned.removedPaths).toEqual([]);
   });

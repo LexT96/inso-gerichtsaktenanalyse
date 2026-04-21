@@ -28,10 +28,16 @@ interface ChecklistConfig {
   anschreiben: ChecklistItem[];
 }
 
-const CHECKLIST_PATH = path.resolve(process.cwd(), 'standardschreiben/checklisten.json');
+function findChecklistPath(): string {
+  for (const base of [process.cwd(), path.resolve(process.cwd(), '..')]) {
+    const candidate = path.join(base, 'standardschreiben', 'checklisten.json');
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return path.resolve(process.cwd(), 'standardschreiben', 'checklisten.json');
+}
 
 function loadChecklists(): ChecklistConfig {
-  const raw = fs.readFileSync(CHECKLIST_PATH, 'utf-8');
+  const raw = fs.readFileSync(findChecklistPath(), 'utf-8');
   return JSON.parse(raw) as ChecklistConfig;
 }
 
@@ -232,4 +238,28 @@ export function validateLettersAgainstChecklists(result: ExtractionResult): Extr
   });
 
   return { ...result, standardanschreiben: validated };
+}
+
+/**
+ * Pure required-field check for a single letter type. Matches the frontend's
+ * `recomputeLetterStatuses` semantics: ignores LLM-added narrative `fehlende_daten`
+ * and only checks whether all requiredFields + at least one requiredFieldsOr group
+ * are filled. Use this when gating actions (like DOCX generation) that must stay
+ * in sync with what the UI shows as "bereit".
+ */
+export function isLetterReady(result: ExtractionResult, typ: string): boolean {
+  let checklists: ChecklistConfig;
+  try {
+    checklists = loadChecklists();
+  } catch {
+    return false;
+  }
+  const normalized = normalizeTyp(typ);
+  const item = checklists.anschreiben.find(
+    (c) => c.typ === typ
+      || normalizeTyp(c.typ) === normalized
+      || c.typAliases?.includes(typ),
+  );
+  if (!item) return false;
+  return isChecklistSatisfied(result, item);
 }

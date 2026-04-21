@@ -14,12 +14,14 @@ const RISIKO_STYLES: Record<AnfechtungsRisiko, string> = {
 };
 
 /** Extract short paragraph reference like "§130" from full Grundlage string */
-function shortGrundlage(grundlage: string): string {
+function shortGrundlage(grundlage: string | null | undefined): string {
+  if (!grundlage) return '';
   const match = grundlage.match(/(§\d+)/);
   return match ? match[1] : grundlage;
 }
 
-function parsePageNumber(quelle: string): number | null {
+function parsePageNumber(quelle: string | null | undefined): number | null {
+  if (!quelle) return null;
   const match = quelle.match(/(?:Seiten?\s+|S\.?\s*|page\s+|p\.?\s*)(\d+)/i);
   return match ? parseInt(match[1], 10) : null;
 }

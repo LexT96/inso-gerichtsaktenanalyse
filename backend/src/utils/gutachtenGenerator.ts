@@ -14,6 +14,32 @@ function findTemplatesDir(): string {
 }
 const TEMPLATES_DIR = findTemplatesDir();
 const MAPPING_PATH = path.join(TEMPLATES_DIR, 'gutachten-mapping.json');
+const KANZLEI_PATH = path.join(TEMPLATES_DIR, 'kanzlei.json');
+
+// Lazy-loaded court address lookup from kanzlei.json
+let _kanzleiData: Record<string, unknown> | null = null;
+function getKanzleiData(): Record<string, unknown> {
+  if (!_kanzleiData) {
+    _kanzleiData = JSON.parse(fs.readFileSync(KANZLEI_PATH, 'utf-8')) as Record<string, unknown>;
+  }
+  return _kanzleiData;
+}
+
+/** Expose path and cache reset for the kanzlei admin API */
+export { KANZLEI_PATH };
+export function invalidateKanzleiCache(): void { _kanzleiData = null; }
+
+function lookupGerichtAddress(gerichtName: string): { adresse: string; plz_ort: string } | null {
+  const data = getKanzleiData();
+  const gerichte = data.insolvenzgerichte as Record<string, { name: string; adresse: string; plz_ort: string }> | undefined;
+  if (!gerichte) return null;
+  // Match by city name extracted from gericht (e.g., "Amtsgericht Wittlich" → "Wittlich")
+  const lower = gerichtName.toLowerCase();
+  for (const [city, info] of Object.entries(gerichte)) {
+    if (lower.includes(city.toLowerCase())) return info;
+  }
+  return null;
+}
 
 // --- Types ---
 
@@ -35,6 +61,7 @@ export interface GutachtenUserInputs {
   sachbearbeiter_name?: string;
   sachbearbeiter_email?: string;
   sachbearbeiter_durchwahl?: string;
+  verwalter_standort_telefon?: string;
 }
 
 export type TemplateType = 'natuerliche_person' | 'juristische_person' | 'personengesellschaft';
@@ -522,6 +549,40 @@ function computeGutachtenField(
       return total > 0 ? formatEUR(total) : '';
     }
 
+    // --- Briefkopf ---
+    case 'mein_zeichen': {
+      const gericht = getByPath(result, 'verfahrensdaten.gericht.wert');
+      const az = getByPath(result, 'verfahrensdaten.aktenzeichen.wert');
+      if (gericht && az) return `${gericht}, Az. ${az}`;
+      if (az) return az;
+      return '';
+    }
+
+    case 'ihr_zeichen':
+      return getByPath(result, 'verfahrensdaten.aktenzeichen.wert');
+
+    case 'briefkopf_datum': {
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      return `${day}.${month}.${now.getFullYear()}`;
+    }
+
+    case 'briefkopf_ort':
+      return inputs.verwalter_standort || 'Trier';
+
+    case 'gericht_adresse': {
+      const gericht = getByPath(result, 'verfahrensdaten.gericht.wert');
+      const court = lookupGerichtAddress(gericht);
+      return court?.adresse || '';
+    }
+
+    case 'gericht_plz_ort': {
+      const gericht2 = getByPath(result, 'verfahrensdaten.gericht.wert');
+      const court2 = lookupGerichtAddress(gericht2);
+      return court2?.plz_ort || '';
+    }
+
     // --- Verwalter gender variants ---
     case 'verwalter_der_die_gross':
       return weiblichVerwalter ? 'Die' : 'Der';
@@ -571,7 +632,12 @@ export function buildReplacements(
       replacements[feld] = computeGutachtenField(def.computed, result, userInputs);
     } else if (def.input) {
       const inputKey = def.input as keyof GutachtenUserInputs;
-      replacements[feld] = (userInputs[inputKey] as string) ?? '';
+      let val = (userInputs[inputKey] as string) ?? '';
+      // Split comma-separated titles into line breaks for DOCX rendering
+      if (inputKey === 'verwalter_titel' && val.includes(',')) {
+        val = val.split(',').map(s => s.trim()).join('\n');
+      }
+      replacements[feld] = val;
     }
   }
 
@@ -666,7 +732,7 @@ function tblCell(text: string, opts?: { bold?: boolean; rightAlign?: boolean; wi
   const tcPr: string[] = [];
   if (opts?.width) tcPr.push(`<w:tcW w:w="${opts.width}" w:type="pct"/>`);
   if (opts?.shading) tcPr.push(`<w:shd w:val="clear" w:color="auto" w:fill="${opts.shading}"/>`);
-  const rPr: string[] = ['<w:sz w:val="18"/><w:szCs w:val="18"/>'];
+  const rPr: string[] = ['<w:rFonts w:ascii="Avenir LT Std 35 Light" w:hAnsi="Avenir LT Std 35 Light"/><w:sz w:val="18"/><w:szCs w:val="18"/>'];
   if (opts?.bold) rPr.push('<w:b/><w:bCs/>');
   const pPr = opts?.rightAlign ? '<w:pPr><w:jc w:val="right"/></w:pPr>' : '';
   return `<w:tc>${tcPr.length ? `<w:tcPr>${tcPr.join('')}</w:tcPr>` : ''}<w:p>${pPr}<w:r><w:rPr>${rPr.join('')}</w:rPr><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p></w:tc>`;
@@ -1003,8 +1069,9 @@ function injectDynamicTables(xml: string, result: ExtractionResult): string {
 // #61: "Entfernen wenn keine selbstständige Tätigkeit" → Adapt örtl. Zuständigkeit
 
 function isVorlaeufigverwalter(result: ExtractionResult): boolean {
-  const befugnisse = result.gutachterbestellung?.befugnisse ?? [];
-  return befugnisse.some(b =>
+  const raw = result.gutachterbestellung?.befugnisse;
+  const befugnisse = Array.isArray(raw) ? raw : [];
+  return befugnisse.some((b: unknown) => typeof b === 'string' &&
     /vorl.{0,5}ufig.*insolvenzverwalter|vorl.{0,5}ufig.*verwalter/i.test(b)
   );
 }
@@ -1223,7 +1290,13 @@ function trackInsert(text: string, rprXml?: string): string {
   // 3. escapeXml re-escapes properly for Word XML
   let cleaned = unescapeXmlEntities(text);
   cleaned = cleaned.replace(/\[(?!TODO:|SLOT_|\[)([^\]]*)\]/g, '$1');
-  return `<w:ins w:id="${id}" w:author="${escapeXml(TRACK_CHANGES_AUTHOR)}" w:date="${TRACK_CHANGES_DATE}"><w:r>${rpr}<w:t xml:space="preserve">${escapeXml(cleaned)}</w:t></w:r></w:ins>`;
+  // Support line breaks (\n) in replacement values → <w:br/> in Word XML
+  const lines = cleaned.split('\n');
+  const runs = lines.map((line, i) => {
+    const br = i < lines.length - 1 ? '<w:br/>' : '';
+    return `<w:r>${rpr}<w:t xml:space="preserve">${escapeXml(line)}</w:t>${br}</w:r>`;
+  }).join('');
+  return `<w:ins w:id="${id}" w:author="${escapeXml(TRACK_CHANGES_AUTHOR)}" w:date="${TRACK_CHANGES_DATE}">${runs}</w:ins>`;
 }
 
 /** Build a <w:del> tracked deletion run */
@@ -1234,16 +1307,25 @@ function trackDelete(text: string, rprXml?: string): string {
 }
 
 /**
- * Replace KI_* fields with tracked changes.
- * For each paragraph containing KI_* placeholders:
- * - The original text (with placeholders) is wrapped in <w:del>
- * - The replaced text (with values) is wrapped in <w:ins>
+ * Replace KI_* fields. Two strategies:
+ * - Paragraphs with tabs or complex structure -> in-place (preserves formatting)
+ * - Simple paragraphs -> tracked changes (visible markers for review)
  */
 function replaceFieldsInXml(xml: string, replacements: Record<string, string>): string {
   const sortedKeys = Object.keys(replacements).sort((a, b) => b.length - a.length);
 
+  function doReplace(fullText: string): string {
+    let replaced = fullText;
+    for (const key of sortedKeys) {
+      const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped + '(?:_\\d+)?', 'g');
+      replaced = replaced.replace(regex, replacements[key] ?? '');
+    }
+    replaced = replaced.replace(/KI_[\w\u00C0-\u024F]+/g, '');
+    return replaced;
+  }
+
   return xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, (paragraph) => {
-    // Collect text from all <w:t> elements
     const tRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
     const texts: string[] = [];
     let match;
@@ -1255,28 +1337,35 @@ function replaceFieldsInXml(xml: string, replacements: Record<string, string>): 
     const fullText = texts.join('');
     if (!fullText.includes('KI_')) return paragraph;
 
-    // Compute replacement
-    let replaced = fullText;
-    for (const key of sortedKeys) {
-      const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(escaped + '(?:_\\d+)?', 'g');
-      replaced = replaced.replace(regex, replacements[key] ?? '');
-    }
-    replaced = replaced.replace(/KI_[\w\u00C0-\u024F]+/g, '');
-
-    if (replaced.trim() === '' && fullText.trim() === '') return paragraph;
+    const replaced = doReplace(fullText);
     if (replaced === fullText) return paragraph;
 
-    // Extract rPr from first run for formatting consistency
+    // Paragraphs with tabs -> in-place replacement (preserve tabs + formatting)
+    if (paragraph.includes('<w:tab/>') || paragraph.includes('<w:tab ')) {
+      let result = paragraph;
+      let firstDone = false;
+      const tRegex2 = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+      let m;
+      while ((m = tRegex2.exec(paragraph)) !== null) {
+        if (!firstDone) {
+          result = result.replace(
+            m[0],
+            () => `<w:t xml:space="preserve">${escapeXml(unescapeXmlEntities(replaced))}</w:t>`
+          );
+          firstDone = true;
+        } else {
+          result = result.replace(m[0], () => '<w:t></w:t>');
+        }
+      }
+      return result;
+    }
+
+    // Simple paragraphs -> tracked changes for review visibility
     const rprMatch = paragraph.match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);
     const rprXml = rprMatch ? rprMatch[1] : '';
 
-    // Replace ALL <w:r> elements with tracked change (del + ins at paragraph level)
-    // Remove all existing runs, then insert del+ins as siblings inside <w:p>
     let result = paragraph;
-    // Remove all <w:r>...</w:r> elements
     result = result.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, '');
-    // Insert tracked change before closing </w:p>
     result = result.replace(
       /<\/w:p>/,
       () => trackDelete(fullText, rprXml) + trackInsert(replaced, rprXml) + '</w:p>'

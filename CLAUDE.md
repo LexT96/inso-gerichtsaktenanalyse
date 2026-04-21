@@ -103,6 +103,25 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 - **Two endpoints**: `POST /:id/prepare` (JSON with slots) → `POST /:id/generate` (DOCX download)
 - **Template rebuild script**: `scripts/rebuild-templates.py` — Python script using python-docx to update templates from real Gutachten examples.
 
+### Kanzlei Settings (`src/routes/kanzlei.ts`)
+- `kanzlei.json` in `gutachtenvorlagen/` — firm data (partners, standorte, insolvenzgerichte), used by computed KI_* fields
+- `GET/PUT /api/kanzlei` — read/write kanzlei.json. `invalidateKanzleiCache()` after write.
+- Template upload: `PUT /api/kanzlei/templates/:type` — validates required KI_* placeholders via PizZip text extraction (joins `<w:t>` to handle Word run-splitting). Creates `.backup.docx` before overwrite.
+- Sidebar (partner listing) is static in templates — edited by TBS in Word, not programmatically
+
+### DOCX Generation Gotchas
+- **Word run-splitting**: Word splits placeholder text across `<w:r>` elements (e.g., `KI_` + `Gericht_Ort`). Always join all `<w:t>` content before searching for placeholders.
+- **mc:AlternateContent**: Text boxes have TWO copies in DOCX XML — `wps:txbxContent` (modern) inside `mc:Choice` AND `w:txbxContent` inside `v:textbox` (VML fallback). Must update both or they desync.
+- **Tracked changes vs tabs**: `replaceFieldsInXml` uses tracked changes for simple paragraphs but in-place replacement for paragraphs with `<w:tab/>` (preserves tabs + per-run bold formatting).
+- **verwalter_titel line breaks**: Comma-separated titles split into `\n`, rendered as `<w:br/>` in DOCX via `trackInsert`.
+
+### Forderungen: Gesicherte vs Ungesicherte (InsO §§47-51)
+- Computed deterministically in post-processing from `einzelforderungen[].sicherheit.absonderungsberechtigt`
+- Absonderung (true): Grundschuld §49, Sicherungsübereignung §51 Nr.1, Pfandrecht §50, Globalzession §51 Nr.1
+- No Absonderung (false): Bürgschaft (personal, no estate lien), einfacher Eigentumsvorbehalt (§47 = Aussonderung)
+- Partial security: `min(betrag, geschaetzter_wert)` caps the gesicherte portion
+- `getNum`/`safeWert` in frontend: check for comma before applying German format parsing (prevents "566765.38" → 56M bug)
+
 ### Frontend (React 18 + Vite + Tailwind CSS, port 3005)
 - **Design**: Geist Mono + DM Sans fonts, maroon accent (#A52A2A), shadows + rounded corners
 - **Pages**: Login (TBS branded) → Dashboard (upload + results + PDF viewer) → History
@@ -112,6 +131,8 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 - **Entity-aware display**: GmbH shows firma/rechtsform/HRB + Gesellschafter table + steuerliche Angaben + sonstige Angaben; natürliche Person shows name/geburtsdatum/familienstand + telefon/email + steuerliche & sonstige Angaben (collapsed sections)
 - **Calculations** (frontend-only, verified): InsVV § 2 Abs. 1 (7 brackets), GKG KV Nr. 2310 (1.5 Gebühren), Quotenberechnung with § 171 Kostenbeiträge
 - **Cross-Validation**: Sum consistency, familienstand↔ehegatte, betriebsstätte↔privatanschrift, anfechtungspotenzial ratio
+- **Demo flow** (`frontend/public/demo/`): `loadDemo()` fetches `test-pdf.pdf` + `mock-result.json` and renders them in the split view. The result is also persisted via `POST /api/extract/demo` (result-only, no PDF file stored under `/data/pdfs/`) so Gutachten generation has an `extractionId`. Button gated by `import.meta.env.DEV || VITE_ENABLE_DEMO_FLOW === '1'`. `mock-result.json` MUST conform to the current `ExtractionResult` schema — a type mismatch (e.g. string instead of `SourcedValue[]`) crashes the whole tab tree and makes the PDF panel disappear.
+- **Demo history deep-link**: Because `/api/extract/demo` does not store the source PDF, `loadFromHistory` falls back to fetching `/demo/test-pdf.pdf` when `data.filename === 'demo-test.pdf'` and `/api/history/:id/pdf` returns 404. Without this fallback, `/dashboard?id=N` for a demo extraction shows the results but no PDF viewer on the left.
 
 ### Shared Types (`shared/types/extraction.ts`)
 - Canonical type definitions for `ExtractionResult`, `SourcedValue<T>`, `Einzelforderung`, `Aktivum` (+ liquidationswert/fortfuehrungswert/absonderung/aussonderung/freie_masse), `AnfechtbarerVorgang`, `Insolvenzanalyse`, `Ehegatte`, `Beschaeftigung`, `Pfaendungsberechnung`, `Gesellschafter`
@@ -127,8 +148,24 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 - `gutachten-mapping.json` — field mappings: `path` (ExtractionResult lookup), `computed` (gender/address derivation, InsVV fees, gesellschafter formatting), `input` (user-provided)
 
 ### Standardschreiben (`standardschreiben/`)
-- `checklisten.json` — defines required fields per letter type, aliases, default recipients
-- DOCX templates for the 10 standard letter types
+- `checklisten.json` — defines required fields per letter type, aliases, default recipients, and `templateDocx` pointing to the DOCX vorlage. Strafakte also has `uiInputs` declaring per-generation freitext-fields (person, tatvorwurf, gegenstand).
+- `templates/*.docx` — 10 DOCX vorlagen with `FELD_*` placeholders (no curly braces, analog zu `KI_*` bei Gutachten). Generated from the original muster-PDFs via `scripts/convert-letter-pdfs.py` (Claude Vision pipeline).
+- `platzhalter-mapping.json` — maps every `FELD_*` to a source: `path` (ExtractionResult lookup), `computed` (gender variants, verfahren_art, antwort_frist, etc.), `verwalter` (verwalter_profiles column), `static` (constant), `input` (per-generation user input).
+
+### Letter Generation (`src/routes/generateLetter.ts` + `src/utils/letterGenerator.ts`)
+- `POST /api/generate-letter/:extractionId/:typ` — body: `{ verwalterId?: number, extras?: Record<string,string> }`. Returns DOCX or 4xx.
+- `letterGenerator.generateLetterFromTemplate(buffer, result, verwalter, extras)` — loads mapping, walks `<w:p>` paragraphs via inlined `processDocxParagraphs` (run-splitting safe), longest-first token replacement, final FELD_* wipe.
+- Gender helpers (`src/utils/genderHelpers.ts`) handle schuldner/verwalter forms including Nominativ (der/die), Akkusativ (den/die), Dativ (dem/der), Genitiv (Schuldners/Schuldnerin), and the Halters/Halterin phrase. Masculine default; explicit `'maennlich'`/`'männlich'` + feminine recognized.
+- `extras.verwalter_art` overrides the `Insolvenzverwalter` default (because `verwalter_profiles` has no `art` column).
+- Missing `verwalter_id` → 422 with `code: 'VERWALTER_REQUIRED'` (frontend surfaces tip to use Gutachten-Assistent).
+- Strafakte-Akteneinsicht requires `extras.strafverfahren_{person,tatvorwurf,gegenstand}` — enforced via `uiInputs` checklist; 422 with `missing: [...]` if empty.
+
+### Letter Templates Admin (`src/routes/letterTemplates.ts`)
+- `GET /api/letter-templates` — list all 10 templates with size, lastModified, hasBackup.
+- `GET /:typ/download` — stream current DOCX.
+- `PUT /:typ` — multipart upload (field: `template`, 10 MB max). Validates uploaded DOCX contains every `FELD_*` present in the current template; 422 with `missing` array otherwise. Creates `.backup.docx` before overwrite.
+- `POST /:typ/rollback` — restore from `.backup.docx` and delete the backup.
+- AdminPage "BRIEFE" tab (`LetterTemplatesSection`) drives all four actions.
 
 ## Key Patterns
 

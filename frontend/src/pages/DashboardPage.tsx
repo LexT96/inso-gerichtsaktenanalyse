@@ -18,6 +18,10 @@ import { AnschreibenTab } from '../components/extraction/tabs/AnschreibenTab';
 import { AktivaTab } from '../components/extraction/tabs/AktivaTab';
 import { AnfechtungTab } from '../components/extraction/tabs/AnfechtungTab';
 import { GutachtenTab } from '../components/extraction/tabs/GutachtenTab';
+import { AddDocumentWizard } from '../components/extraction/AddDocumentWizard';
+import { ReviewMergeModal } from '../components/extraction/ReviewMergeModal';
+import { KanzleiSettings } from '../components/admin/KanzleiSettings';
+import { apiClient } from '../api/client';
 import { useExtraction } from '../hooks/useExtraction';
 import { ExtractionProvider } from '../contexts/ExtractionContext';
 import { HistoryPanel } from '../components/dashboard/HistoryPanel';
@@ -38,10 +42,16 @@ export function DashboardPage() {
   const { loading, progress, progressPercent, result, error, extractionId, pdfFile, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField, resumeIfProcessing } = useExtraction();
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showAddDoc, setShowAddDoc] = useState(false);
+  const [showKanzlei, setShowKanzlei] = useState(false);
   const [importedFilename, setImportedFilename] = useState<string | null>(null);
-  const [searchParams] = useSearchParams();
+  const [extraDocs, setExtraDocs] = useState<Array<{ file: File; label: string }>>([]);
+  const [docRefreshKey, setDocRefreshKey] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const historyId = searchParams.get('id');
+  const mergeDocId = searchParams.get('mergeDoc');
+  const mergeDocIdNum = mergeDocId ? parseInt(mergeDocId, 10) : null;
 
   const handleHistorySelect = useCallback((id: number) => {
     navigate(`/dashboard?id=${id}`);
@@ -81,6 +91,30 @@ export function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyId]);
 
+  // Load supplementary documents for the PDF viewer
+  useEffect(() => {
+    if (!extractionId) { setExtraDocs([]); return; }
+    (async () => {
+      try {
+        const { data: docs } = await apiClient.get(`/extractions/${extractionId}/documents`);
+        const supplementDocs = (docs as Array<{ id: number; doc_index: number; source_type: string; original_filename: string }>)
+          .filter(d => d.doc_index > 0);
+        if (supplementDocs.length === 0) { setExtraDocs([]); return; }
+        const loaded: Array<{ file: File; label: string }> = [];
+        for (const doc of supplementDocs) {
+          try {
+            const res = await apiClient.get(`/extractions/${extractionId}/documents/${doc.id}/pdf`, { responseType: 'blob' });
+            loaded.push({
+              file: new File([res.data], doc.original_filename, { type: 'application/pdf' }),
+              label: `${doc.source_type} — ${doc.original_filename}`,
+            });
+          } catch { /* skip */ }
+        }
+        setExtraDocs(loaded);
+      } catch { setExtraDocs([]); }
+    })();
+  }, [extractionId, docRefreshKey]);
+
   const stats = useMemo(() => result ? computeStats(result) : { found: 0, missing: 0, total: 0 }, [result]);
 
   const letters = result?.standardanschreiben || [];
@@ -116,18 +150,50 @@ export function DashboardPage() {
 
   const anschreibenBadge = missingInfo.length > 0 ? missingInfo.length : bereit > 0 ? bereit : undefined;
 
+  const groups = useMemo(() => [
+    { id: 'akte', label: 'Akte' },
+    { id: 'finanzen', label: 'Finanzen' },
+    { id: 'analyse', label: 'Analyse' },
+    { id: 'ausgabe', label: 'Ausgabe' },
+  ], []);
+
   const tabs = useMemo(() => [
     { id: 'overview', label: 'Übersicht', icon: '◎', group: 'akte' },
+    { id: 'beteiligte', label: 'Beteiligte', icon: '●', group: 'akte' },
     { id: 'quellen', label: 'Quellen', icon: '□', group: 'akte' },
-    { id: 'beteiligte', label: 'Beteiligte', icon: '●', group: 'parteien' },
-    { id: 'forderungen', label: 'Forderungen', icon: '€', group: 'parteien' },
-    { id: 'aktiva', label: 'Aktiva', icon: '▣', group: 'parteien' },
-    { id: 'anfechtung', label: 'Anfechtung', icon: '⚡', group: 'analyse' },
+    { id: 'forderungen', label: 'Forderungen', icon: '€', group: 'finanzen' },
+    { id: 'aktiva', label: 'Aktiva', icon: '▣', group: 'finanzen' },
+    { id: 'anfechtung', label: 'Anfechtung', icon: '⚡', group: 'finanzen' },
     { id: 'ermittlung', label: 'Ermittlung', icon: '◐', group: 'analyse' },
     { id: 'pruefliste', label: 'Prüfliste', icon: '✓', badge: unconfirmedCount, group: 'analyse' },
     { id: 'briefe', label: 'Anschreiben', icon: '✉', badge: anschreibenBadge, group: 'ausgabe' },
     { id: 'gutachten', label: 'Gutachten', icon: '◇', group: 'ausgabe' },
   ], [anschreibenBadge, unconfirmedCount]);
+
+  // Compute group progress from extraction stats
+  const groupProgress = useMemo(() => {
+    if (!result) return {} as Record<string, 'complete' | 'partial' | 'empty'>;
+    const hasVal = (field: unknown): boolean => {
+      if (!field || typeof field !== 'object') return false;
+      const f = field as { wert?: unknown };
+      return f.wert !== null && f.wert !== undefined && String(f.wert).trim() !== '';
+    };
+    const v = result.verfahrensdaten;
+    const s = result.schuldner;
+    const akteFields = [v?.aktenzeichen, v?.gericht, s?.name, s?.firma].filter(hasVal).length;
+    const forderungenCount = result.forderungen?.einzelforderungen?.length || 0;
+    const aktivaCount = result.aktiva?.positionen?.length || 0;
+    const ermittlungFields = [
+      result.ermittlungsergebnisse?.grundbuch?.ergebnis,
+      result.ermittlungsergebnisse?.gerichtsvollzieher?.vollstreckungen,
+    ].filter(hasVal).length;
+    return {
+      akte: akteFields >= 3 ? 'complete' as const : akteFields > 0 ? 'partial' as const : 'empty' as const,
+      finanzen: (forderungenCount > 0 && aktivaCount > 0) ? 'complete' as const : (forderungenCount > 0 || aktivaCount > 0) ? 'partial' as const : 'empty' as const,
+      analyse: ermittlungFields > 0 ? 'partial' as const : 'empty' as const,
+      ausgabe: bereit > 0 ? 'partial' as const : 'empty' as const,
+    };
+  }, [result, bereit]);
 
   // ─── Results content (used in both layouts) ───
   const resultsContent = result && (
@@ -135,10 +201,11 @@ export function DashboardPage() {
     <div className="animate-fade-up-fast">
       <TabNavigation
         tabs={tabs}
+        groups={groups}
         activeTab={tab}
         onTabChange={setTab}
-        onNewFile={handleNewFile}
-        onExport={extractionId ? () => setShowExport(true) : undefined}
+        onAddDocument={extractionId ? () => setShowAddDoc(true) : undefined}
+        groupProgress={groupProgress}
       />
 
       {tab === 'overview' && (
@@ -171,7 +238,7 @@ export function DashboardPage() {
         <PrueflisteTab result={result} onUpdateField={updateField} />
       )}
       {tab === 'briefe' && (
-        <AnschreibenTab result={result} letters={letters} missingInfo={missingInfo} onUpdateField={updateField} />
+        <AnschreibenTab result={result} letters={letters} missingInfo={missingInfo} onUpdateField={updateField} extractionId={extractionId} />
       )}
       {tab === 'gutachten' && (
         <GutachtenTab result={result} extractionId={extractionId} onUpdateField={updateField} />
@@ -191,7 +258,12 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-bg text-text font-mono">
-      <Header />
+      <Header
+        onExport={extractionId ? () => setShowExport(true) : undefined}
+        onNewFile={result ? handleNewFile : undefined}
+        onKanzlei={() => setShowKanzlei(true)}
+        extractionProgress={loading && progress ? { message: progress, percent: progressPercent } : null}
+      />
 
       {/* Subtle grid background on upload view */}
       {!result && (
@@ -206,7 +278,7 @@ export function DashboardPage() {
 
       {/* Split layout when results are available + file exists */}
       {result && (file || pdfFile) ? (
-        <PdfViewer file={(file || pdfFile)!}>
+        <PdfViewer file={(file || pdfFile)!} documents={extraDocs.length > 0 ? extraDocs : undefined}>
           {resultsContent}
         </PdfViewer>
       ) : result && !file && !pdfFile ? (
@@ -215,12 +287,20 @@ export function DashboardPage() {
             <span className="text-ie-amber">⚠</span>
             {importedFilename ? `Import: ${importedFilename}` : 'Verlaufs-Ansicht · PDF nicht verfügbar (wurde nach Extraktion gelöscht)'}
             {extractionId && (
-              <button
-                onClick={() => setShowExport(true)}
-                className="px-2 py-0.5 border border-border rounded-md hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
-              >
-                EXPORTIEREN
-              </button>
+              <>
+                <button
+                  onClick={() => setShowExport(true)}
+                  className="px-2 py-0.5 border border-border rounded-md hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
+                >
+                  EXPORTIEREN
+                </button>
+                <button
+                  onClick={() => setShowAddDoc(true)}
+                  className="px-2 py-0.5 border border-border rounded-md hover:border-accent hover:text-accent transition-colors font-mono text-[10px]"
+                >
+                  + DOKUMENT
+                </button>
+              </>
             )}
             <button
               onClick={handleNewFile}
@@ -306,6 +386,49 @@ export function DashboardPage() {
           }}
           onClose={() => setShowImport(false)}
         />
+      )}
+
+      {showAddDoc && extractionId && (
+        <AddDocumentWizard
+          extractionId={extractionId}
+          onClose={() => setShowAddDoc(false)}
+          onMerged={() => {
+            if (extractionId) loadFromHistory(extractionId);
+            setDocRefreshKey(k => k + 1);
+            setShowAddDoc(false);
+          }}
+        />
+      )}
+
+      {mergeDocIdNum && (extractionId || historyId) && (
+        <ReviewMergeModal
+          extractionId={extractionId ?? parseInt(historyId!, 10)}
+          docId={mergeDocIdNum}
+          onClose={() => {
+            const next = new URLSearchParams(searchParams);
+            next.delete('mergeDoc');
+            setSearchParams(next, { replace: true });
+          }}
+          onMerged={() => {
+            const effId = extractionId ?? (historyId ? parseInt(historyId, 10) : null);
+            if (effId) loadFromHistory(effId);
+            setDocRefreshKey(k => k + 1);
+          }}
+        />
+      )}
+
+      {showKanzlei && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-lg shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between p-3 border-b border-border">
+              <span className="text-[12px] font-semibold text-text font-sans">Kanzleidaten bearbeiten</span>
+              <button onClick={() => setShowKanzlei(false)} className="text-text-muted hover:text-text text-lg leading-none">&times;</button>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              <KanzleiSettings />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

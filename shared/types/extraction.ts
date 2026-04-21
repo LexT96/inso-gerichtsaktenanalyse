@@ -358,3 +358,109 @@ export interface ExtractionRecord {
   processingTimeMs: number | null;
   createdAt: string;
 }
+
+// ─── Anchor + Field Pack Pipeline Types ───
+
+/** Compact identity packet produced by anchor pass, flows into all subsequent calls */
+export interface AnchorPacket {
+  aktenzeichen: string | null;
+  gericht: string | null;
+  beschlussdatum: string | null;
+  antragsdatum: string | null;
+  debtor_canonical_name: string | null;
+  debtor_rechtsform: string | null;
+  debtor_type: 'natuerliche_person' | 'juristische_person' | 'personengesellschaft';
+  applicant_canonical_name: string | null;
+  gutachter_name: string | null;
+}
+
+/** Source type for authority-based field resolution */
+export type SegmentSourceType =
+  | 'beschluss'
+  | 'insolvenzantrag'
+  | 'pzu'
+  | 'handelsregister'
+  | 'meldeauskunft'
+  | 'fragebogen'
+  | 'grundbuch'
+  | 'gerichtsvollzieher'
+  | 'vollstreckungsportal'
+  | 'forderungstabelle'
+  | 'vermoegensverzeichnis'
+  | 'gutachterbestellung'
+  | 'sonstiges';
+
+/** A single candidate value for a field, with provenance metadata */
+export interface ExtractionCandidate {
+  fieldPath: string;
+  wert: unknown;
+  quelle: string;
+  page: number | null;
+  segmentType: SegmentSourceType;
+  packId: string;
+  confidence?: number;
+}
+
+/** Definition of a field pack */
+export interface FieldPackDefinition {
+  id: string;
+  name: string;
+  fields: string[];
+  segmentTypes: SegmentSourceType[];
+  fallbackPages?: 'first_8' | 'all';
+  maxPages: number;
+  prompt: string;
+  requiresAnchor: boolean;
+}
+
+// ─── Document Management Types ───
+
+export interface DocumentInfo {
+  id: number;
+  extractionId: number;
+  docIndex: number;
+  sourceType: SegmentSourceType | 'gerichtsakte';
+  originalFilename: string;
+  pageCount: number;
+  pdfHash?: string;
+  uploadedAt: string;
+}
+
+export interface MergeFieldChange {
+  path: string;
+  wert: unknown;
+  quelle: string;
+  oldWert?: unknown;
+  oldQuelle?: string;
+  reason?: string;
+}
+
+export interface MergeDiff {
+  newFields: MergeFieldChange[];
+  updatedFields: MergeFieldChange[];
+  conflicts: MergeFieldChange[];
+  newForderungen: Array<{ index: number; glaeubiger: string; betrag: number | null; quelle: string }>;
+  updatedForderungen: Array<{ existingIndex: number; glaeubiger: string; oldBetrag: number | null; newBetrag: number | null; quelle: string }>;
+  /**
+   * Full focused-pass results returned by the supplement job. Auto-merged
+   * into the existing arrays on apply (dedup by composite keys).
+   */
+  focusedResults?: {
+    forderungen?: Forderungen | null;
+    aktiva?: AktivaAnalyse | null;
+    anfechtung?: Anfechtungsanalyse | null;
+  };
+  /** Counts for the UI summary. */
+  arraySummary?: {
+    newEinzelforderungen: number;
+    newAktivaPositionen: number;
+    newAnfechtungVorgaenge: number;
+  };
+}
+
+export interface ApplyRequest {
+  acceptAll?: boolean;
+  accept?: string[];
+  reject?: string[];
+  forderungen?: { add?: number[]; update?: number[] };
+}

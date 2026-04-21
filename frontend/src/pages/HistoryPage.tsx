@@ -101,7 +101,7 @@ export function HistoryPage() {
                       {item.filename}
                     </div>
                     <div className="text-[10px] text-text-muted mt-0.5">
-                      {new Date(item.createdAt).toLocaleString('de-DE')} · {(item.fileSize / 1024 / 1024).toFixed(2)} MB
+                      {new Date(item.createdAt.endsWith('Z') ? item.createdAt : item.createdAt + 'Z').toLocaleString('de-DE')} · {(item.fileSize / 1024 / 1024).toFixed(2)} MB
                     </div>
                   </div>
                   {active && (

@@ -105,7 +105,17 @@
     "KI_Verwalter_zum_": { "computed": "verwalter_zum" },
     "KI_Verwalter_zum_zur": { "computed": "verwalter_zum_zur" },
     "KI_ANDERKONTO_IBAN": { "input": "anderkonto_iban" },
-    "KI_Anderkonto_Bank": { "input": "anderkonto_bank" }
+    "KI_Anderkonto_Bank": { "input": "anderkonto_bank" },
+    "KI_Sachbearbeiter_Name": { "input": "sachbearbeiter_name" },
+    "KI_Sachbearbeiter_Durchwahl": { "input": "sachbearbeiter_durchwahl" },
+    "KI_Sachbearbeiter_Email": { "input": "sachbearbeiter_email" },
+    "KI_Standort_Telefon": { "input": "verwalter_standort_telefon" },
+    "KI_Mein_Zeichen": { "computed": "mein_zeichen" },
+    "KI_Ihr_Zeichen": { "computed": "ihr_zeichen" },
+    "KI_Briefkopf_Datum": { "computed": "briefkopf_datum" },
+    "KI_Briefkopf_Ort": { "computed": "briefkopf_ort" },
+    "KI_Gericht_Adresse": { "computed": "gericht_adresse" },
+    "KI_Gericht_PLZ_Ort": { "computed": "gericht_plz_ort" }
   },
   "templates": {
     "natuerliche_person": "Gutachten Muster nat\u00fcrliche Person.docx",

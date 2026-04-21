@@ -10,9 +10,6 @@ const ALLOWED_FIELDS = [
   'titel',
   'geschlecht',
   'diktatzeichen',
-  'sachbearbeiter_name',
-  'sachbearbeiter_email',
-  'sachbearbeiter_durchwahl',
   'standort',
   'anderkonto_iban',
   'anderkonto_bank',
@@ -24,9 +21,6 @@ type VerwalterProfile = {
   titel: string;
   geschlecht: string;
   diktatzeichen: string;
-  sachbearbeiter_name: string;
-  sachbearbeiter_email: string;
-  sachbearbeiter_durchwahl: string;
   standort: string;
   anderkonto_iban: string;
   anderkonto_bank: string;
@@ -60,18 +54,14 @@ router.post('/', authMiddleware, (req: Request, res: Response): void => {
   const db = getDb();
   const result = db.prepare(
     `INSERT INTO verwalter_profiles
-      (name, titel, geschlecht, diktatzeichen, sachbearbeiter_name,
-       sachbearbeiter_email, sachbearbeiter_durchwahl, standort,
+      (name, titel, geschlecht, diktatzeichen, standort,
        anderkonto_iban, anderkonto_bank)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(
     body.name.trim(),
     body.titel?.trim() ?? '',
     body.geschlecht ?? 'maennlich',
     body.diktatzeichen?.trim() ?? '',
-    body.sachbearbeiter_name?.trim() ?? '',
-    body.sachbearbeiter_email?.trim() ?? '',
-    body.sachbearbeiter_durchwahl?.trim() ?? '',
     body.standort?.trim() ?? '',
     body.anderkonto_iban?.trim() ?? '',
     body.anderkonto_bank?.trim() ?? '',

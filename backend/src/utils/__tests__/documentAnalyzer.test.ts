@@ -135,3 +135,68 @@ describe('findOrphanPages', () => {
     expect(orphans[0].pages).toEqual([1, 2, 3, 4, 5]);
   });
 });
+
+import { classifySegmentSourceType, routeSegmentsToFieldPacks } from '../documentAnalyzer';
+
+describe('classifySegmentSourceType', () => {
+  it('classifies Beschluss', () => {
+    expect(classifySegmentSourceType({ type: 'Beschluss', pages: [1], description: 'Eröffnung' })).toBe('beschluss');
+  });
+  it('classifies PZU', () => {
+    expect(classifySegmentSourceType({ type: 'Zustellungsvermerk', pages: [5], description: 'PZU' })).toBe('pzu');
+  });
+  it('classifies HR-Auszug', () => {
+    expect(classifySegmentSourceType({ type: 'Handelsregisterauszug', pages: [15, 16], description: 'HRB 12345' })).toBe('handelsregister');
+  });
+  it('classifies Meldeauskunft', () => {
+    expect(classifySegmentSourceType({ type: 'Meldeauskunft', pages: [20], description: '' })).toBe('meldeauskunft');
+  });
+  it('defaults to sonstiges', () => {
+    expect(classifySegmentSourceType({ type: 'Schreiben', pages: [30], description: 'Diverse' })).toBe('sonstiges');
+  });
+});
+
+describe('routeSegmentsToFieldPacks', () => {
+  const segments = [
+    { type: 'Beschluss', pages: [1, 2, 3], description: 'Eröffnungsbeschluss' },
+    { type: 'Insolvenzantrag', pages: [4, 5, 6, 7, 8], description: 'Eigenantrag' },
+    { type: 'Handelsregisterauszug', pages: [15, 16], description: 'HRB 12345' },
+    { type: 'Meldeauskunft', pages: [20], description: 'Einwohnermeldeamt' },
+    { type: 'Grundbuchauszug', pages: [25, 26, 27], description: 'Grundbuchamt' },
+  ];
+
+  it('routes beschluss+antrag pages to anchor pack', () => {
+    const routing = routeSegmentsToFieldPacks(segments, 30, [
+      { id: 'anchor', name: 'Anchor', fields: [], segmentTypes: ['beschluss', 'insolvenzantrag'], fallbackPages: 'first_8', maxPages: 12, prompt: '', requiresAnchor: false },
+    ]);
+    expect(routing['anchor'].pages).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it('routes grundbuch to ermittlung pack', () => {
+    const routing = routeSegmentsToFieldPacks(segments, 30, [
+      { id: 'ermittlung', name: 'Ermittlung', fields: [], segmentTypes: ['grundbuch', 'gerichtsvollzieher', 'vollstreckungsportal'], fallbackPages: undefined, maxPages: 12, prompt: '', requiresAnchor: false },
+    ]);
+    expect(routing['ermittlung'].pages).toEqual([25, 26, 27]);
+  });
+
+  it('uses fallback when no segments match', () => {
+    const routing = routeSegmentsToFieldPacks(segments, 30, [
+      { id: 'missing', name: 'Missing', fields: [], segmentTypes: ['vollstreckungsportal'], fallbackPages: 'first_8', maxPages: 12, prompt: '', requiresAnchor: false },
+    ]);
+    expect(routing['missing'].pages).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it('caps at maxPages', () => {
+    const routing = routeSegmentsToFieldPacks(segments, 30, [
+      { id: 'capped', name: 'Capped', fields: [], segmentTypes: ['beschluss', 'insolvenzantrag'], maxPages: 5, prompt: '', requiresAnchor: false },
+    ]);
+    expect(routing['capped'].pages.length).toBeLessThanOrEqual(5);
+  });
+
+  it('returns empty pages when no match and no fallback', () => {
+    const routing = routeSegmentsToFieldPacks(segments, 30, [
+      { id: 'nope', name: 'Nope', fields: [], segmentTypes: ['vollstreckungsportal'], maxPages: 12, prompt: '', requiresAnchor: false },
+    ]);
+    expect(routing['nope'].pages).toEqual([]);
+  });
+});

@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { logger } from '../utils/logger';
 import { encryptDbField } from '../utils/crypto';
+import { config } from '../config';
 
 let db: Database.Database;
 
@@ -24,6 +25,7 @@ export function initDatabase(dbPath: string): Database.Database {
   db.pragma('foreign_keys = ON');
 
   runMigrations(db);
+  backfillDocuments(db);
   logger.info('Datenbank initialisiert', { path: dbPath });
   return db;
 }
@@ -68,6 +70,48 @@ function runMigrations(database: Database.Database): void {
     database.exec(sql);
     database.prepare('INSERT INTO _migrations (name) VALUES (?)').run(file);
     logger.info(`Migration ausgeführt: ${file}`);
+  }
+}
+
+/**
+ * Backfill: create document records for existing extractions that have no documents entry.
+ * Also migrates PDFs from flat structure (data/pdfs/{id}.pdf) to per-extraction directories
+ * (data/pdfs/{id}/0_gerichtsakte.pdf).
+ */
+function backfillDocuments(database: Database.Database): void {
+  // Check if documents table exists (migration may not have run yet on first boot)
+  const tableExists = database.prepare(
+    "SELECT count(*) as c FROM sqlite_master WHERE type='table' AND name='documents'"
+  ).get() as { c: number };
+  if (tableExists.c === 0) return;
+
+  const existingWithoutDocs = database.prepare(`
+    SELECT e.id, e.filename FROM extractions e
+    WHERE NOT EXISTS (SELECT 1 FROM documents d WHERE d.extraction_id = e.id)
+    AND e.status = 'completed'
+  `).all() as Array<{ id: number; filename: string }>;
+
+  if (existingWithoutDocs.length === 0) return;
+
+  const insert = database.prepare(`
+    INSERT INTO documents (extraction_id, doc_index, source_type, original_filename, page_count)
+    VALUES (?, 0, 'gerichtsakte', ?, 0)
+  `);
+  for (const row of existingWithoutDocs) {
+    insert.run(row.id, row.filename);
+  }
+  logger.info('Dokumente-Backfill abgeschlossen', { count: existingWithoutDocs.length });
+
+  // Migrate PDF files: data/pdfs/{id}.pdf -> data/pdfs/{id}/0_gerichtsakte.pdf
+  const pdfDir = path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs');
+  for (const row of existingWithoutDocs) {
+    const oldPath = path.join(pdfDir, `${row.id}.pdf`);
+    const newDir = path.join(pdfDir, String(row.id));
+    const newPath = path.join(newDir, '0_gerichtsakte.pdf');
+    if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
+      fs.mkdirSync(newDir, { recursive: true });
+      fs.renameSync(oldPath, newPath);
+    }
   }
 }
 

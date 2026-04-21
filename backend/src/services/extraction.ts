@@ -11,8 +11,13 @@ import { getDb } from '../db/database';
 import { writeResultJson } from '../db/resultJson';
 import { logger } from '../utils/logger';
 import { validateLettersAgainstChecklists } from '../utils/letterChecklist';
-import { analyzeDocumentStructure, classifySegmentsForExtraction } from '../utils/documentAnalyzer';
-import type { DocumentAnalysis } from '../utils/documentAnalyzer';
+import { analyzeDocumentStructure, classifySegmentsForExtraction, routeSegmentsToFieldPacks } from '../utils/documentAnalyzer';
+import type { DocumentAnalysis, DocumentSegment } from '../utils/documentAnalyzer';
+import { extractAnchor } from '../utils/anchorExtractor';
+import { executeFieldPack } from '../utils/scalarPackExtractor';
+import { ANCHOR_PACK, getPacksForDebtorType } from '../utils/fieldPacks';
+import { buildResultFromCandidates } from '../utils/extractionReducer';
+import type { ExtractionCandidate, AnchorPacket } from '../types/extraction';
 import { extractForderungen } from '../utils/forderungenExtractor';
 import { semanticVerify } from '../utils/semanticVerifier';
 import { extractAktiva } from '../utils/aktivaExtractor';
@@ -23,14 +28,19 @@ import type { ExtractionResult } from '../types/extraction';
 
 const isRateLimitedProvider = (): boolean => isRateLimited(detectProvider());
 
-const LARGE_PDF_THRESHOLD = 500; // pages — above this, use chunked fallback
-// Opus is slower and may timeout on large native PDF calls — use lower threshold
-const OPUS_PDF_THRESHOLD = 80; // pages — Opus timed out on 182 pages (3h single call)
-// For rate-limited providers, force chunked mode for any PDF
+// PDFs above this threshold use the field pack pipeline (smaller API calls, rate-limit safe).
+// Below: monolithic extractComprehensive() for best quality.
+//
+// As of 2026-04-16: Langdock increased per-model TPM to 200K.
+// 87-page PDF (150K+ tokens) completes successfully via monolithic pipeline.
+// Field packs only needed as fallback for extremely large PDFs.
+const LANGDOCK_THRESHOLD = 500;
+const DIRECT_THRESHOLD = 500; // direct Anthropic — no rate limit concern
+const OPUS_THRESHOLD = 80;    // Opus slower, lower threshold
 const effectiveThreshold = (): number => {
-  if (isRateLimitedProvider()) return 0;
-  if (config.EXTRACTION_MODEL.includes('opus')) return OPUS_PDF_THRESHOLD;
-  return LARGE_PDF_THRESHOLD;
+  if (isRateLimitedProvider()) return LANGDOCK_THRESHOLD;
+  if (config.EXTRACTION_MODEL.includes('opus')) return OPUS_THRESHOLD;
+  return DIRECT_THRESHOLD;
 };
 
 import type { ExtractionStats } from '../utils/computeStats';
@@ -225,6 +235,193 @@ function detectFragebogenPages(pageTexts: string[]): number[] {
     }
   }
   return pages;
+}
+
+// PZU front-side header markers
+const PZU_FRONT_PATTERN = /zustellungsurkunde|postzustellungsurkunde/i;
+// PZU back-side fingerprints (Section 9-13: Ersatzzustellung, "Tag der Zustellung")
+const PZU_BACK_PATTERN = /übergeben versucht|den tag der zustellung|niederlegungsstelle|13\.1\s*datum|zustellstützpunkt/i;
+
+/**
+ * Find groups of consecutive pages that together form a Postzustellungsurkunde.
+ *
+ * A PZU is typically a 2-page form (front + back). The actual delivery date
+ * lives in Feld 1.6 (front, direct delivery) or Feld 13.1 (back, Ersatzzustellung) —
+ * both are six handwritten digit boxes. Box-digit handwriting is unreliable in
+ * page-level OCR, so we group front+back into a mini-PDF and re-read with vision.
+ *
+ * Detection: any page matching the front-header pattern, plus the next page
+ * (likely back side); plus orphan back-side matches with the previous page.
+ */
+export function detectPzuPageGroups(pageTexts: string[]): number[][] {
+  const pzuPages = new Set<number>();
+  for (let i = 0; i < pageTexts.length; i++) {
+    if (PZU_FRONT_PATTERN.test(pageTexts[i])) {
+      pzuPages.add(i);
+      if (i + 1 < pageTexts.length) pzuPages.add(i + 1);
+    } else if (PZU_BACK_PATTERN.test(pageTexts[i])) {
+      pzuPages.add(i);
+      if (i > 0) pzuPages.add(i - 1);
+    }
+  }
+
+  const sorted = [...pzuPages].sort((a, b) => a - b);
+  const groups: number[][] = [];
+  let cur: number[] = [];
+  for (const p of sorted) {
+    if (cur.length === 0 || p === cur[cur.length - 1] + 1) {
+      cur.push(p);
+    } else {
+      groups.push(cur);
+      cur = [p];
+    }
+  }
+  if (cur.length) groups.push(cur);
+  return groups;
+}
+
+const PZU_DATE_PROMPT = `Du bist ein Spezialist für die Lesung deutscher Postzustellungsurkunden (PZU, "Zustellungsurkunde"). Eine PZU umfasst zwei Seiten (Vorderseite + Rückseite). Deine einzige Aufgabe: das echte Zustellungsdatum extrahieren.
+
+Wahl des Feldes nach Zustellungsart:
+1. Bei Ersatzzustellung — Feld 9 "zu übergeben versucht" ODER Feld 10 "Geschäftsraum" ODER Feld 11 "Niederlegungsstelle" ist auf der Rückseite angekreuzt — steht das Datum in Feld 13.1 "Datum" auf der Rückseite. Sechs handgeschriebene Ziffern in einzelnen Kästchen, Format TT MM JJ.
+2. Bei direkter Übergabe an den Adressaten persönlich (kein Feld in 9-11 angekreuzt) steht das Datum in Feld 1.6 "Datum" auf der Vorderseite. Gleiches Kästchen-Format.
+
+NIEMALS verwenden:
+- Eingangs-/Ausgangsstempel des Gerichts ("18. Aug. 2025" oder ähnlich)
+- Feld 1.5 (Datum des zugestellten Schriftstücks)
+- Beschluss-/Antragsdatum
+- Datumsangaben außerhalb der Felder 1.6 / 13.1
+
+Lies die handgeschriebenen Ziffern besonders sorgfältig — "1 4" ≠ "0 4", "1 8" ≠ "0 8". Beispiel: Kästchen "1 4 0 8 2 5" = 14.08.2025. Wenn die Kästchen leer oder unleserlich sind: wert=null.
+
+Antworte AUSSCHLIESSLICH mit JSON (keine Erklärung, keine Backticks):
+{"zustellungsdatum_schuldner": {"wert": "TT.MM.JJJJ" oder null, "quelle": "Seite X, PZU Feld 13.1" oder "Seite X, PZU Feld 1.6"}}`;
+
+/**
+ * Re-extract the Zustellungsdatum from each detected PZU page group using
+ * vision-based handwriting OCR (native PDF mode where supported).
+ *
+ * Overrides result.verfahrensdaten.zustellungsdatum_schuldner — base
+ * extraction routinely picks the wrong date (gericht stamp, Schriftstück-Datum,
+ * misread digits) because handwriting boxes survive OCR poorly.
+ */
+export async function extractPzuZustellungsdatum(
+  result: ExtractionResult,
+  pdfBuffer: Buffer | null,
+  pageTexts: string[]
+): Promise<ExtractionResult> {
+  const groups = detectPzuPageGroups(pageTexts);
+  if (groups.length === 0) {
+    logger.info('No PZU pages detected, skipping Zustellungsdatum re-extraction');
+    return result;
+  }
+
+  const useNativePdf = pdfBuffer && supportsNativePdf(detectProvider());
+  logger.info('PZU page groups detected for Zustellungsdatum re-extraction', {
+    groups: groups.map(g => g.map(p => p + 1)),
+    mode: useNativePdf ? 'native-pdf' : 'text',
+  });
+
+  const candidates: Array<{ wert: string; quelle: string; pageHint: number }> = [];
+
+  for (const group of groups) {
+    const firstPage = group[0];
+    const pageMapping = group.map((p, i) => `PDF-Seite ${i + 1} = Originalseite ${p + 1}`).join(', ');
+    const promptSuffix = `\n\nSeitenzuordnung: ${pageMapping}\nVerwende in "quelle" die Originalseitennummer.`;
+
+    let response;
+    try {
+      if (useNativePdf) {
+        const miniPdf = await extractPdfPages(pdfBuffer!, group);
+        const base64 = miniPdf.toString('base64');
+        response = await callWithRetry(() => createAnthropicMessage({
+          model: config.EXTRACTION_MODEL,
+          max_tokens: 1024,
+          temperature: 0,
+          messages: [{
+            role: 'user' as const,
+            content: [
+              { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+              { type: 'text' as const, text: `${PZU_DATE_PROMPT}${promptSuffix}` },
+            ],
+          }],
+        }));
+      } else {
+        const formTextBlock = group
+          .map(p => `=== SEITE ${p + 1} ===\n${pageTexts[p] ?? ''}`)
+          .join('\n\n');
+        response = await callWithRetry(() => createAnthropicMessage({
+          model: config.EXTRACTION_MODEL,
+          max_tokens: 1024,
+          temperature: 0,
+          messages: [{
+            role: 'user' as const,
+            content: `${PZU_DATE_PROMPT}${promptSuffix}\n\n--- PZU (OCR-Text) ---\n\n${formTextBlock}`,
+          }],
+        }));
+      }
+    } catch (err) {
+      logger.warn('PZU Zustellungsdatum re-extraction call failed', {
+        group: group.map(p => p + 1),
+        error: err instanceof Error ? err.message : String(err),
+      });
+      continue;
+    }
+
+    const text = response.content
+      .filter((c) => c.type === 'text')
+      .map((c) => (c as { text: string }).text)
+      .join('');
+
+    let parsed: { zustellungsdatum_schuldner?: { wert: unknown; quelle: unknown } };
+    try {
+      parsed = JSON.parse(extractJsonFromText(text));
+    } catch (err) {
+      logger.warn('PZU Zustellungsdatum: JSON parse failed', {
+        group: group.map(p => p + 1),
+        error: err instanceof Error ? err.message : String(err),
+        sample: text.slice(0, 200),
+      });
+      continue;
+    }
+
+    const entry = parsed.zustellungsdatum_schuldner;
+    if (!entry || entry.wert == null || entry.wert === '') continue;
+    if (typeof entry.wert !== 'string') continue;
+    const wert = entry.wert.trim();
+    if (!/^\d{2}\.\d{2}\.\d{4}$/.test(wert)) {
+      logger.warn('PZU Zustellungsdatum: ignored non-date value', { group: group.map(p => p + 1), wert });
+      continue;
+    }
+    const quelle = typeof entry.quelle === 'string' && entry.quelle.trim()
+      ? entry.quelle.trim()
+      : `Seite ${firstPage + 1}, PZU (Handschrift-Extraktion)`;
+    candidates.push({ wert, quelle, pageHint: firstPage + 1 });
+  }
+
+  if (candidates.length === 0) {
+    logger.info('PZU Zustellungsdatum re-extraction yielded no candidates');
+    return result;
+  }
+
+  // First candidate wins (PZUs are typically processed in court-file order).
+  // If multiple PZUs were sent (rare), the earliest one is the original delivery.
+  const winner = candidates[0];
+  const previous = result.verfahrensdaten?.zustellungsdatum_schuldner;
+  result.verfahrensdaten = result.verfahrensdaten ?? ({} as ExtractionResult['verfahrensdaten']);
+  result.verfahrensdaten.zustellungsdatum_schuldner = {
+    wert: winner.wert,
+    quelle: `${winner.quelle} (Handschrift-Extraktion)`,
+    verifiziert: true,
+  };
+  logger.info('PZU Zustellungsdatum überschrieben', {
+    previous: previous?.wert ?? null,
+    new: winner.wert,
+    quelle: winner.quelle,
+    candidatesFound: candidates.length,
+  });
+
+  return result;
 }
 
 async function extractPdfPages(pdfBuffer: Buffer, pageIndices: number[]): Promise<Buffer> {
@@ -621,6 +818,113 @@ function isJuristischePersonResult(result: ExtractionResult): boolean {
 
 export type ProgressCallback = (message: string, percent: number) => void;
 
+// ─── Anchor → Candidates helper ───
+
+/**
+ * Convert an AnchorPacket into ExtractionCandidate[] so they can be fed
+ * into the same reducer pipeline as scalar pack results.
+ *
+ * - Natürliche Person: splits debtor_canonical_name on comma into name + vorname
+ * - Juristische Person / Personengesellschaft: maps to firma + rechtsform
+ */
+function anchorToCandidates(anchor: AnchorPacket): ExtractionCandidate[] {
+  const candidates: ExtractionCandidate[] = [];
+  const packId = 'anchor_core';
+  const segmentType = 'beschluss' as const;
+
+  function add(fieldPath: string, wert: unknown, quelle: string) {
+    if (wert === null || wert === undefined || wert === '') return;
+    candidates.push({ fieldPath, wert, quelle, page: 1, segmentType, packId });
+  }
+
+  // Verfahrensdaten
+  add('verfahrensdaten.aktenzeichen', anchor.aktenzeichen, 'Seite 1, Beschluss (Anker-Pass)');
+  add('verfahrensdaten.gericht', anchor.gericht, 'Seite 1, Beschluss (Anker-Pass)');
+  add('verfahrensdaten.beschlussdatum', anchor.beschlussdatum, 'Seite 1, Beschluss (Anker-Pass)');
+  add('verfahrensdaten.antragsdatum', anchor.antragsdatum, 'Seite 1, Beschluss (Anker-Pass)');
+
+  // Schuldner identity — depends on debtor type
+  if (anchor.debtor_type === 'natuerliche_person') {
+    if (anchor.debtor_canonical_name) {
+      // Format: "Nachname, Vorname" → split
+      const commaIdx = anchor.debtor_canonical_name.indexOf(',');
+      if (commaIdx > 0) {
+        const name = anchor.debtor_canonical_name.slice(0, commaIdx).trim();
+        const vorname = anchor.debtor_canonical_name.slice(commaIdx + 1).trim();
+        add('schuldner.name', name, 'Seite 1, Beschluss (Anker-Pass)');
+        add('schuldner.vorname', vorname, 'Seite 1, Beschluss (Anker-Pass)');
+      } else {
+        // No comma — use as full name
+        add('schuldner.name', anchor.debtor_canonical_name, 'Seite 1, Beschluss (Anker-Pass)');
+      }
+    }
+  } else {
+    // Juristische Person / Personengesellschaft → firma + rechtsform
+    add('schuldner.firma', anchor.debtor_canonical_name, 'Seite 1, Beschluss (Anker-Pass)');
+    add('schuldner.rechtsform', anchor.debtor_rechtsform, 'Seite 1, Beschluss (Anker-Pass)');
+  }
+
+  // Antragsteller
+  add('antragsteller.name', anchor.applicant_canonical_name, 'Seite 1, Beschluss (Anker-Pass)');
+
+  // Gutachter
+  add('gutachterbestellung.gutachter_name', anchor.gutachter_name, 'Seite 1, Beschluss (Anker-Pass)');
+
+  return candidates;
+}
+
+// ─── Field Pack extraction pipeline ───
+
+/**
+ * Anchor + Field Pack extraction — replaces monolithic extractComprehensive().
+ * Makes 1 anchor call + 4-5 scalar pack calls (each 10-25K tokens) instead of
+ * one massive 150K+ token call.
+ */
+async function extractWithFieldPacks(
+  pageTexts: string[],
+  segments: DocumentSegment[],
+  documentMap: string,
+  ocrResult: OcrResult | null,
+  report: (msg: string, pct: number) => void,
+): Promise<ExtractionResult> {
+  const totalPages = pageTexts.length;
+
+  // 1. Route segments for anchor pack
+  const anchorRouting = routeSegmentsToFieldPacks(segments, totalPages, [ANCHOR_PACK]);
+  const anchorPages = anchorRouting[ANCHOR_PACK.id]?.pages ??
+    Array.from({ length: Math.min(8, totalPages) }, (_, i) => i + 1);
+
+  // 2. Anchor pass
+  report('Kernidentifikatoren werden extrahiert… (Anker-Pass)', 32);
+  const anchor = await extractAnchor(pageTexts, anchorPages);
+
+  // 3. Get packs for this debtor type
+  const scalarPacks = getPacksForDebtorType(anchor.debtor_type);
+  const scalarRouting = routeSegmentsToFieldPacks(segments, totalPages, scalarPacks);
+
+  // 4. Execute scalar packs sequentially
+  const allCandidates: ExtractionCandidate[] = [];
+
+  // Add anchor results as candidates
+  allCandidates.push(...anchorToCandidates(anchor));
+
+  for (let i = 0; i < scalarPacks.length; i++) {
+    const pack = scalarPacks[i];
+    const packRoute = scalarRouting[pack.id] ?? { pages: [], segmentTypes: [] };
+    const pct = 35 + Math.round((i / scalarPacks.length) * 15);
+    report(`${pack.name}… (Pack ${i + 1}/${scalarPacks.length})`, pct);
+
+    const candidates = await executeFieldPack(
+      pack, pageTexts, packRoute.pages, packRoute.segmentTypes, anchor, ocrResult,
+    );
+    allCandidates.push(...candidates);
+  }
+
+  // 5. Reduce to ExtractionResult
+  logger.info('Kandidaten-Zusammenführung', { totalCandidates: allCandidates.length, packs: scalarPacks.length + 1 });
+  return buildResultFromCandidates(allCandidates);
+}
+
 export async function processExtraction(
   pdfBuffer: Buffer,
   filename: string,
@@ -667,9 +971,10 @@ export async function processExtraction(
     // Save PDF to disk for later viewing (stored alongside DB in /data volume)
     const pdfDir = path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs');
     const fs = await import('fs');
-    if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
-    fs.writeFileSync(path.join(pdfDir, `${extractionId}.pdf`), pdfBuffer);
-    logger.info('PDF gespeichert', { extractionId, path: path.join(pdfDir, `${extractionId}.pdf`) });
+    const extractionPdfDir = path.join(pdfDir, String(extractionId));
+    if (!fs.existsSync(extractionPdfDir)) fs.mkdirSync(extractionPdfDir, { recursive: true });
+    fs.writeFileSync(path.join(extractionPdfDir, '0_gerichtsakte.pdf'), pdfBuffer);
+    logger.info('PDF gespeichert', { extractionId, path: path.join(extractionPdfDir, '0_gerichtsakte.pdf') });
 
     report('Seitentext wird extrahiert…', 8);
 
@@ -714,8 +1019,8 @@ export async function processExtraction(
           if (searchablePdf !== pdfBuffer) {
             pdfBuffer = searchablePdf;
             // Re-save PDF with text layer so frontend can highlight/search
-            const pdfDir = path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs');
-            (await import('fs')).writeFileSync(path.join(pdfDir, `${extractionId}.pdf`), pdfBuffer);
+            const ocrPdfDir = path.join(path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs'), String(extractionId));
+            (await import('fs')).writeFileSync(path.join(ocrPdfDir, '0_gerichtsakte.pdf'), pdfBuffer);
             logger.info('PDF mit OCR-Textlayer gespeichert', { extractionId });
           }
         } catch (layerErr) {
@@ -792,7 +1097,7 @@ export async function processExtraction(
         logger.warn('Anfechtungsanalyse fehlgeschlagen', { error: anfechtungResult.reason instanceof Error ? anfechtungResult.reason.message : String(anfechtungResult.reason) });
       }
     } else if (pageCount <= effectiveThreshold()) {
-      // Multi-pass extraction: base (Sonnet) + focused passes (Haiku) in parallel
+      // Normal PDFs (≤50 pages): monolithic extraction (best quality)
       report(`Basisanalyse (${pageCount} S.)… (Stufe 2a/3)`, 35);
       result = await extractComprehensive(pdfBuffer, pageTexts, documentMap);
 
@@ -851,9 +1156,9 @@ export async function processExtraction(
       const chunkInfo = segments.length > 0
         ? `dokumentbasiertes Chunking (${segments.length} Segmente)`
         : 'seitenbasiertes Chunking';
-      logger.info(`Großes PDF (${pageCount} S.) — verwende ${chunkInfo}`);
-      report(`Großes PDF (${pageCount} S.) — Parallele Extraktion… (Stufe 2/3)`, 35);
-      result = await extractFromPageTexts(pageTexts, documentMap, segments);
+      logger.info(`Großes PDF (${pageCount} S.) — verwende Anker + Feldpakete (${chunkInfo})`);
+      report(`Großes PDF (${pageCount} S.) — Anker + Feldpakete… (Stufe 2/3)`, 35);
+      result = await extractWithFieldPacks(pageTexts, segments, documentMap, ocrResult, report);
 
       // For chunked extraction, run aktiva + anfechtung + forderungen separately
       // On rate-limited providers, serialize with delay
@@ -1024,6 +1329,11 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
       } catch (err) {
         logger.warn('Handwriting extraction failed, continuing', { error: err instanceof Error ? err.message : String(err) });
       }
+      try {
+        result = await extractPzuZustellungsdatum(result, pdfBuffer, pageTexts);
+      } catch (err) {
+        logger.warn('PZU Zustellungsdatum re-extraction failed, continuing', { error: err instanceof Error ? err.message : String(err) });
+      }
     }
 
     // Stage 4: Enrichment Review — catch inference errors that pure extraction misses
@@ -1123,6 +1433,12 @@ Mögliche Felder: verfahrensdaten.aktenzeichen, verfahrensdaten.gericht, verfahr
       processingTimeMs,
       extractionId
     );
+
+    // Insert documents record for the main Gerichtsakte
+    db.prepare(`
+      INSERT OR IGNORE INTO documents (extraction_id, doc_index, source_type, original_filename, page_count)
+      VALUES (?, 0, 'gerichtsakte', ?, ?)
+    `).run(extractionId, filename, pageCount);
 
     logger.info('Extraktion abgeschlossen', {
       extractionId,
