@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { apiClient } from '../../api/client';
 import { useVerwalter } from '../../hooks/useVerwalter';
 import { useSachbearbeiter } from '../../hooks/useSachbearbeiter';
 import { VerwalterManager } from './VerwalterManager';
+import { findMatchingVerwalter } from '../../utils/matchVerwalter';
 import type { ExtractionResult, VerwalterProfile, SachbearbeiterProfile, Pruefstatus } from '../../types/extraction';
 
 interface GutachtenWizardProps {
@@ -88,6 +89,18 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
     if (profile.anderkonto_iban) setAnderkontoIban(profile.anderkonto_iban);
     if (profile.anderkonto_bank) setAnderkontoBank(profile.anderkonto_bank);
   };
+
+  // Auto-match Verwalter from extracted gutachter_name — runs once profiles are loaded.
+  const extractedGutachterName = result?.gutachterbestellung?.gutachter_name?.wert ?? null;
+  const [autoSelectedVerwalter, setAutoSelectedVerwalter] = useState(false);
+  useEffect(() => {
+    if (autoSelectedVerwalter || loadingProfiles) return;
+    if (selectedVerwalter !== null) return;
+    const match = findMatchingVerwalter(profiles, extractedGutachterName);
+    if (match) handleSelectVerwalter(match);
+    setAutoSelectedVerwalter(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profiles, loadingProfiles, extractedGutachterName]);
 
   // Key fields to check in Step 2
   const schuldnerFields = useMemo(() => {
@@ -262,18 +275,25 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
                 </select>
               </div>
               {selectedVerwalter && (
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    ['Diktatzeichen', selectedVerwalter.diktatzeichen],
-                    ['Geschlecht', selectedVerwalter.geschlecht === 'weiblich' ? 'weiblich' : 'männlich'],
-                    ['Standort', selectedVerwalter.standort],
-                  ].map(([l, v]) => (
-                    <div key={l} className="bg-bg border border-border/60 rounded px-3 py-2">
-                      <div className="text-[9px] text-text-dim">{l}</div>
-                      <div className="text-[12px] text-text">{v || '—'}</div>
+                <>
+                  {findMatchingVerwalter(profiles, extractedGutachterName)?.id === selectedVerwalter.id && (
+                    <div className="text-[10px] text-ie-green">
+                      ✓ Anhand des Bestellungsbeschlusses vorausgewählt
                     </div>
-                  ))}
-                </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      ['Diktatzeichen', selectedVerwalter.diktatzeichen],
+                      ['Geschlecht', selectedVerwalter.geschlecht === 'weiblich' ? 'weiblich' : 'männlich'],
+                      ['Standort', selectedVerwalter.standort],
+                    ].map(([l, v]) => (
+                      <div key={l} className="bg-bg border border-border/60 rounded px-3 py-2">
+                        <div className="text-[9px] text-text-dim">{l}</div>
+                        <div className="text-[12px] text-text">{v || '—'}</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
               {loadingProfiles ? (
                 <p className="text-[10px] text-text-muted">Lade Profile…</p>
