@@ -3,7 +3,10 @@ import fs from 'fs';
 import path from 'path';
 import { schuldnerGender, verwalterGender, type GenderInput } from './genderHelpers';
 
-// --- Inlined XML helpers (mirrors gutachtenGenerator — avoids transitive config import) ---
+// Inlined XML helpers (mirrors gutachtenGenerator.ts) — avoids transitive
+// config.ts import chain that process.exit(1)s during tests without env vars.
+// TODO: extract into `backend/src/utils/docxXml.ts` so this + gutachtenGenerator
+// share a single source of truth. (Not in scope for Task 4.)
 
 function escapeXml(str: string): string {
   const unescaped = str
@@ -106,7 +109,11 @@ function getByPath(obj: unknown, dotPath: string): string {
       return '';
     }
   }
-  return current == null ? '' : String(current);
+  if (current == null) return '';
+  // Defensive: if the path landed on an object (e.g. mapping forgot ".wert"),
+  // return empty string instead of "[object Object]".
+  if (typeof current === 'object') return '';
+  return String(current);
 }
 
 function computeField(
@@ -160,7 +167,10 @@ function computeField(
     }
 
     case 'antwort_frist': {
-      // heute + 14 Werktage, Format: TT.MM.JJJJ
+      // Approximates 14 Werktage by skipping Sat/Sun only — does NOT account for
+      // German public holidays (Feiertage). Treat output as a default that the
+      // verwalter reviews and adjusts in Word before sending.
+      // TODO: replace with a proper Werktag calculator (Bundesland-aware calendar).
       const d = new Date();
       let added = 0;
       while (added < 14) {

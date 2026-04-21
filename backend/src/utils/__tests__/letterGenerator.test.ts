@@ -80,11 +80,13 @@ describe('generateLetterFromTemplate', () => {
 
   it('handles Word run-splitting (placeholder split across two runs)', () => {
     const zip = new PizZip(template);
-    let xml = zip.file('word/document.xml')!.asText();
+    const before = zip.file('word/document.xml')!.asText();
+    let xml = before;
     xml = xml.replace(
       'Az FELD_Akte_Aktenzeichen vom FELD_Akte_LastGAVV. FELD_Schuldner_Artikel FELD_Schuldner_Schuldnerin wohnt.',
       'Az FELD_</w:t></w:r><w:r><w:t xml:space="preserve">Akte_Aktenzeichen vom FELD_Akte_LastGAVV. FELD_Schuldner_Artikel FELD_Schuldner_Schuldnerin wohnt.',
     );
+    expect(xml).not.toBe(before); // fixture must contain the target paragraph literally
     zip.file('word/document.xml', xml);
     const split = zip.generate({ type: 'nodebuffer' }) as Buffer;
     const out = generateLetterFromTemplate(split, baseResult, baseVerwalter, {});
@@ -95,8 +97,10 @@ describe('generateLetterFromTemplate', () => {
 
   it('replaces user-input placeholders (Strafakte)', () => {
     const zip = new PizZip(template);
-    let xml = zip.file('word/document.xml')!.asText();
+    const before = zip.file('word/document.xml')!.asText();
+    let xml = before;
     xml = xml.replace('als FELD_Verwalter_Art', 'wegen FELD_Strafverfahren_Tatvorwurf');
+    expect(xml).not.toBe(before); // fixture must contain 'als FELD_Verwalter_Art' literally
     zip.file('word/document.xml', xml);
     const custom = zip.generate({ type: 'nodebuffer' }) as Buffer;
     const out = generateLetterFromTemplate(custom, baseResult, baseVerwalter, {
