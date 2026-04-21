@@ -237,6 +237,193 @@ function detectFragebogenPages(pageTexts: string[]): number[] {
   return pages;
 }
 
+// PZU front-side header markers
+const PZU_FRONT_PATTERN = /zustellungsurkunde|postzustellungsurkunde/i;
+// PZU back-side fingerprints (Section 9-13: Ersatzzustellung, "Tag der Zustellung")
+const PZU_BACK_PATTERN = /übergeben versucht|den tag der zustellung|niederlegungsstelle|13\.1\s*datum|zustellstützpunkt/i;
+
+/**
+ * Find groups of consecutive pages that together form a Postzustellungsurkunde.
+ *
+ * A PZU is typically a 2-page form (front + back). The actual delivery date
+ * lives in Feld 1.6 (front, direct delivery) or Feld 13.1 (back, Ersatzzustellung) —
+ * both are six handwritten digit boxes. Box-digit handwriting is unreliable in
+ * page-level OCR, so we group front+back into a mini-PDF and re-read with vision.
+ *
+ * Detection: any page matching the front-header pattern, plus the next page
+ * (likely back side); plus orphan back-side matches with the previous page.
+ */
+export function detectPzuPageGroups(pageTexts: string[]): number[][] {
+  const pzuPages = new Set<number>();
+  for (let i = 0; i < pageTexts.length; i++) {
+    if (PZU_FRONT_PATTERN.test(pageTexts[i])) {
+      pzuPages.add(i);
+      if (i + 1 < pageTexts.length) pzuPages.add(i + 1);
+    } else if (PZU_BACK_PATTERN.test(pageTexts[i])) {
+      pzuPages.add(i);
+      if (i > 0) pzuPages.add(i - 1);
+    }
+  }
+
+  const sorted = [...pzuPages].sort((a, b) => a - b);
+  const groups: number[][] = [];
+  let cur: number[] = [];
+  for (const p of sorted) {
+    if (cur.length === 0 || p === cur[cur.length - 1] + 1) {
+      cur.push(p);
+    } else {
+      groups.push(cur);
+      cur = [p];
+    }
+  }
+  if (cur.length) groups.push(cur);
+  return groups;
+}
+
+const PZU_DATE_PROMPT = `Du bist ein Spezialist für die Lesung deutscher Postzustellungsurkunden (PZU, "Zustellungsurkunde"). Eine PZU umfasst zwei Seiten (Vorderseite + Rückseite). Deine einzige Aufgabe: das echte Zustellungsdatum extrahieren.
+
+Wahl des Feldes nach Zustellungsart:
+1. Bei Ersatzzustellung — Feld 9 "zu übergeben versucht" ODER Feld 10 "Geschäftsraum" ODER Feld 11 "Niederlegungsstelle" ist auf der Rückseite angekreuzt — steht das Datum in Feld 13.1 "Datum" auf der Rückseite. Sechs handgeschriebene Ziffern in einzelnen Kästchen, Format TT MM JJ.
+2. Bei direkter Übergabe an den Adressaten persönlich (kein Feld in 9-11 angekreuzt) steht das Datum in Feld 1.6 "Datum" auf der Vorderseite. Gleiches Kästchen-Format.
+
+NIEMALS verwenden:
+- Eingangs-/Ausgangsstempel des Gerichts ("18. Aug. 2025" oder ähnlich)
+- Feld 1.5 (Datum des zugestellten Schriftstücks)
+- Beschluss-/Antragsdatum
+- Datumsangaben außerhalb der Felder 1.6 / 13.1
+
+Lies die handgeschriebenen Ziffern besonders sorgfältig — "1 4" ≠ "0 4", "1 8" ≠ "0 8". Beispiel: Kästchen "1 4 0 8 2 5" = 14.08.2025. Wenn die Kästchen leer oder unleserlich sind: wert=null.
+
+Antworte AUSSCHLIESSLICH mit JSON (keine Erklärung, keine Backticks):
+{"zustellungsdatum_schuldner": {"wert": "TT.MM.JJJJ" oder null, "quelle": "Seite X, PZU Feld 13.1" oder "Seite X, PZU Feld 1.6"}}`;
+
+/**
+ * Re-extract the Zustellungsdatum from each detected PZU page group using
+ * vision-based handwriting OCR (native PDF mode where supported).
+ *
+ * Overrides result.verfahrensdaten.zustellungsdatum_schuldner — base
+ * extraction routinely picks the wrong date (gericht stamp, Schriftstück-Datum,
+ * misread digits) because handwriting boxes survive OCR poorly.
+ */
+export async function extractPzuZustellungsdatum(
+  result: ExtractionResult,
+  pdfBuffer: Buffer | null,
+  pageTexts: string[]
+): Promise<ExtractionResult> {
+  const groups = detectPzuPageGroups(pageTexts);
+  if (groups.length === 0) {
+    logger.info('No PZU pages detected, skipping Zustellungsdatum re-extraction');
+    return result;
+  }
+
+  const useNativePdf = pdfBuffer && supportsNativePdf(detectProvider());
+  logger.info('PZU page groups detected for Zustellungsdatum re-extraction', {
+    groups: groups.map(g => g.map(p => p + 1)),
+    mode: useNativePdf ? 'native-pdf' : 'text',
+  });
+
+  const candidates: Array<{ wert: string; quelle: string; pageHint: number }> = [];
+
+  for (const group of groups) {
+    const firstPage = group[0];
+    const pageMapping = group.map((p, i) => `PDF-Seite ${i + 1} = Originalseite ${p + 1}`).join(', ');
+    const promptSuffix = `\n\nSeitenzuordnung: ${pageMapping}\nVerwende in "quelle" die Originalseitennummer.`;
+
+    let response;
+    try {
+      if (useNativePdf) {
+        const miniPdf = await extractPdfPages(pdfBuffer!, group);
+        const base64 = miniPdf.toString('base64');
+        response = await callWithRetry(() => createAnthropicMessage({
+          model: config.EXTRACTION_MODEL,
+          max_tokens: 1024,
+          temperature: 0,
+          messages: [{
+            role: 'user' as const,
+            content: [
+              { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+              { type: 'text' as const, text: `${PZU_DATE_PROMPT}${promptSuffix}` },
+            ],
+          }],
+        }));
+      } else {
+        const formTextBlock = group
+          .map(p => `=== SEITE ${p + 1} ===\n${pageTexts[p] ?? ''}`)
+          .join('\n\n');
+        response = await callWithRetry(() => createAnthropicMessage({
+          model: config.EXTRACTION_MODEL,
+          max_tokens: 1024,
+          temperature: 0,
+          messages: [{
+            role: 'user' as const,
+            content: `${PZU_DATE_PROMPT}${promptSuffix}\n\n--- PZU (OCR-Text) ---\n\n${formTextBlock}`,
+          }],
+        }));
+      }
+    } catch (err) {
+      logger.warn('PZU Zustellungsdatum re-extraction call failed', {
+        group: group.map(p => p + 1),
+        error: err instanceof Error ? err.message : String(err),
+      });
+      continue;
+    }
+
+    const text = response.content
+      .filter((c) => c.type === 'text')
+      .map((c) => (c as { text: string }).text)
+      .join('');
+
+    let parsed: { zustellungsdatum_schuldner?: { wert: unknown; quelle: unknown } };
+    try {
+      parsed = JSON.parse(extractJsonFromText(text));
+    } catch (err) {
+      logger.warn('PZU Zustellungsdatum: JSON parse failed', {
+        group: group.map(p => p + 1),
+        error: err instanceof Error ? err.message : String(err),
+        sample: text.slice(0, 200),
+      });
+      continue;
+    }
+
+    const entry = parsed.zustellungsdatum_schuldner;
+    if (!entry || entry.wert == null || entry.wert === '') continue;
+    if (typeof entry.wert !== 'string') continue;
+    const wert = entry.wert.trim();
+    if (!/^\d{2}\.\d{2}\.\d{4}$/.test(wert)) {
+      logger.warn('PZU Zustellungsdatum: ignored non-date value', { group: group.map(p => p + 1), wert });
+      continue;
+    }
+    const quelle = typeof entry.quelle === 'string' && entry.quelle.trim()
+      ? entry.quelle.trim()
+      : `Seite ${firstPage + 1}, PZU (Handschrift-Extraktion)`;
+    candidates.push({ wert, quelle, pageHint: firstPage + 1 });
+  }
+
+  if (candidates.length === 0) {
+    logger.info('PZU Zustellungsdatum re-extraction yielded no candidates');
+    return result;
+  }
+
+  // First candidate wins (PZUs are typically processed in court-file order).
+  // If multiple PZUs were sent (rare), the earliest one is the original delivery.
+  const winner = candidates[0];
+  const previous = result.verfahrensdaten?.zustellungsdatum_schuldner;
+  result.verfahrensdaten = result.verfahrensdaten ?? ({} as ExtractionResult['verfahrensdaten']);
+  result.verfahrensdaten.zustellungsdatum_schuldner = {
+    wert: winner.wert,
+    quelle: `${winner.quelle} (Handschrift-Extraktion)`,
+    verifiziert: true,
+  };
+  logger.info('PZU Zustellungsdatum überschrieben', {
+    previous: previous?.wert ?? null,
+    new: winner.wert,
+    quelle: winner.quelle,
+    candidatesFound: candidates.length,
+  });
+
+  return result;
+}
+
 async function extractPdfPages(pdfBuffer: Buffer, pageIndices: number[]): Promise<Buffer> {
   const srcDoc = await PDFDocument.load(pdfBuffer);
   const newDoc = await PDFDocument.create();
@@ -1141,6 +1328,11 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
         result = await extractHandwrittenFormFields(result, pdfBuffer, pageTexts);
       } catch (err) {
         logger.warn('Handwriting extraction failed, continuing', { error: err instanceof Error ? err.message : String(err) });
+      }
+      try {
+        result = await extractPzuZustellungsdatum(result, pdfBuffer, pageTexts);
+      } catch (err) {
+        logger.warn('PZU Zustellungsdatum re-extraction failed, continuing', { error: err instanceof Error ? err.message : String(err) });
       }
     }
 

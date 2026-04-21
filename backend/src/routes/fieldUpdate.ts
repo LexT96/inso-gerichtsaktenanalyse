@@ -43,9 +43,12 @@ router.patch('/:id/fields', authMiddleware, (req: Request, res: Response): void 
     return;
   }
 
+  const isAdmin = req.user!.role === 'admin';
   const row = db.prepare(
-    'SELECT result_json FROM extractions WHERE id = ? AND user_id = ?'
-  ).get(id, userId) as { result_json: string | null } | undefined;
+    isAdmin
+      ? 'SELECT result_json FROM extractions WHERE id = ?'
+      : 'SELECT result_json FROM extractions WHERE id = ? AND user_id = ?'
+  ).get(...(isAdmin ? [id] : [id, userId])) as { result_json: string | null } | undefined;
 
   if (!row) {
     res.status(404).json({ error: 'Extraktion nicht gefunden' });
@@ -87,8 +90,13 @@ router.patch('/:id/fields', authMiddleware, (req: Request, res: Response): void 
   // Recompute stats so history dashboard stays in sync with the live view
   const stats = computeExtractionStats(result as unknown as ExtractionResult);
   db.prepare(
-    'UPDATE extractions SET result_json = ?, stats_found = ?, stats_missing = ?, stats_letters_ready = ? WHERE id = ? AND user_id = ?'
-  ).run(writeResultJson(result), stats.found, stats.missing, stats.lettersReady, id, userId);
+    isAdmin
+      ? 'UPDATE extractions SET result_json = ?, stats_found = ?, stats_missing = ?, stats_letters_ready = ? WHERE id = ?'
+      : 'UPDATE extractions SET result_json = ?, stats_found = ?, stats_missing = ?, stats_letters_ready = ? WHERE id = ? AND user_id = ?'
+  ).run(...(isAdmin
+    ? [writeResultJson(result), stats.found, stats.missing, stats.lettersReady, id]
+    : [writeResultJson(result), stats.found, stats.missing, stats.lettersReady, id, userId]
+  ));
 
   // Audit log
   db.prepare(
