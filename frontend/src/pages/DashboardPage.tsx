@@ -12,9 +12,8 @@ import { OverviewTab } from '../components/extraction/tabs/OverviewTab';
 import { QuellenTab } from '../components/extraction/tabs/QuellenTab';
 import { BeteiligteTab } from '../components/extraction/tabs/BeteiligteTab';
 import { ForderungenTab } from '../components/extraction/tabs/ForderungenTab';
-import { ErmittlungTab } from '../components/extraction/tabs/ErmittlungTab';
+import { ErmittlungBriefeTab } from '../components/extraction/tabs/ErmittlungBriefeTab';
 import { PrueflisteTab } from '../components/extraction/tabs/PrueflisteTab';
-import { AnschreibenTab } from '../components/extraction/tabs/AnschreibenTab';
 import { AktivaTab } from '../components/extraction/tabs/AktivaTab';
 import { AnfechtungTab } from '../components/extraction/tabs/AnfechtungTab';
 import { GutachtenTab } from '../components/extraction/tabs/GutachtenTab';
@@ -153,7 +152,6 @@ export function DashboardPage() {
   const groups = useMemo(() => [
     { id: 'akte', label: 'Akte' },
     { id: 'finanzen', label: 'Finanzen' },
-    { id: 'analyse', label: 'Analyse' },
     { id: 'ausgabe', label: 'Ausgabe' },
   ], []);
 
@@ -164,9 +162,8 @@ export function DashboardPage() {
     { id: 'forderungen', label: 'Forderungen', icon: '€', group: 'finanzen' },
     { id: 'aktiva', label: 'Aktiva', icon: '▣', group: 'finanzen' },
     { id: 'anfechtung', label: 'Anfechtung', icon: '⚡', group: 'finanzen' },
-    { id: 'ermittlung', label: 'Ermittlung', icon: '◐', group: 'analyse' },
-    { id: 'pruefliste', label: 'Prüfliste', icon: '✓', badge: unconfirmedCount, group: 'analyse' },
-    { id: 'briefe', label: 'Anschreiben', icon: '✉', badge: anschreibenBadge, group: 'ausgabe' },
+    { id: 'pruefliste', label: 'Prüfliste', icon: '✓', badge: unconfirmedCount, group: 'ausgabe' },
+    { id: 'ermittlung-briefe', label: 'Ermittlung & Briefe', icon: '✉', badge: anschreibenBadge, group: 'ausgabe' },
     { id: 'gutachten', label: 'Gutachten', icon: '◇', group: 'ausgabe' },
   ], [anschreibenBadge, unconfirmedCount]);
 
@@ -183,14 +180,9 @@ export function DashboardPage() {
     const akteFields = [v?.aktenzeichen, v?.gericht, s?.name, s?.firma].filter(hasVal).length;
     const forderungenCount = result.forderungen?.einzelforderungen?.length || 0;
     const aktivaCount = result.aktiva?.positionen?.length || 0;
-    const ermittlungFields = [
-      result.ermittlungsergebnisse?.grundbuch?.ergebnis,
-      result.ermittlungsergebnisse?.gerichtsvollzieher?.vollstreckungen,
-    ].filter(hasVal).length;
     return {
       akte: akteFields >= 3 ? 'complete' as const : akteFields > 0 ? 'partial' as const : 'empty' as const,
       finanzen: (forderungenCount > 0 && aktivaCount > 0) ? 'complete' as const : (forderungenCount > 0 || aktivaCount > 0) ? 'partial' as const : 'empty' as const,
-      analyse: ermittlungFields > 0 ? 'partial' as const : 'empty' as const,
       ausgabe: bereit > 0 ? 'partial' as const : 'empty' as const,
     };
   }, [result, bereit]);
@@ -218,7 +210,13 @@ export function DashboardPage() {
         />
       )}
       {tab === 'quellen' && <QuellenTab result={result} />}
-      {tab === 'beteiligte' && <BeteiligteTab schuldner={result.schuldner} antragsteller={result.antragsteller} />}
+      {tab === 'beteiligte' && (
+        <BeteiligteTab
+          schuldner={result.schuldner}
+          antragsteller={result.antragsteller}
+          gutachterbestellung={result.gutachterbestellung}
+        />
+      )}
       {tab === 'forderungen' && <ForderungenTab forderungen={result.forderungen} />}
       {tab === 'aktiva' && (
         <AktivaTab aktiva={result.aktiva} forderungen={result.forderungen} schuldner={result.schuldner} />
@@ -226,19 +224,17 @@ export function DashboardPage() {
       {tab === 'anfechtung' && (
         <AnfechtungTab anfechtung={result.anfechtung} verfahrensdaten={result.verfahrensdaten} />
       )}
-      {tab === 'ermittlung' && (
-        <ErmittlungTab
-          ermittlungsergebnisse={result.ermittlungsergebnisse}
-          gutachterbestellung={result.gutachterbestellung}
-          letters={letters}
-          missingInfo={missingInfo}
-        />
-      )}
       {tab === 'pruefliste' && (
         <PrueflisteTab result={result} onUpdateField={updateField} />
       )}
-      {tab === 'briefe' && (
-        <AnschreibenTab result={result} letters={letters} missingInfo={missingInfo} onUpdateField={updateField} extractionId={extractionId} />
+      {tab === 'ermittlung-briefe' && (
+        <ErmittlungBriefeTab
+          result={result}
+          ermittlungsergebnisse={result.ermittlungsergebnisse}
+          letters={letters}
+          missingInfo={missingInfo}
+          extractionId={extractionId}
+        />
       )}
       {tab === 'gutachten' && (
         <GutachtenTab result={result} extractionId={extractionId} onUpdateField={updateField} />

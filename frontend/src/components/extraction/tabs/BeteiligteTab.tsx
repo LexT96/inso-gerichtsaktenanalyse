@@ -1,6 +1,6 @@
 import { DataField } from '../DataField';
 import { Section } from '../Section';
-import type { Schuldner, Antragsteller, Gueterstand } from '../../../types/extraction';
+import type { Schuldner, Antragsteller, Gueterstand, Gutachterbestellung } from '../../../types/extraction';
 
 const EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 
@@ -29,9 +29,10 @@ function isJuristischePersonOderGesellschaft(s: Schuldner): boolean {
 interface BeteiligteTabProps {
   schuldner: Schuldner;
   antragsteller: Antragsteller;
+  gutachterbestellung: Gutachterbestellung;
 }
 
-export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabProps) {
+export function BeteiligteTab({ schuldner: s, antragsteller: a, gutachterbestellung: g }: BeteiligteTabProps) {
   const isEntity = isJuristischePersonOderGesellschaft(s);
 
   return (
@@ -253,6 +254,28 @@ export function BeteiligteTab({ schuldner: s, antragsteller: a }: BeteiligteTabP
               </span>
             </div>
           </div>
+        </Section>
+      )}
+
+      {/* ─── Gutachter / Vorläufiger Insolvenzverwalter ─── */}
+      {(g?.gutachter_name?.wert || g?.gutachter_kanzlei?.wert || g?.abgabefrist?.wert) && (
+        <Section title="Gutachter / Vorläufiger Insolvenzverwalter" icon="◊">
+          <DataField label="Name" field={g?.gutachter_name} fieldPath="gutachterbestellung.gutachter_name" />
+          <DataField label="Kanzlei" field={g?.gutachter_kanzlei} fieldPath="gutachterbestellung.gutachter_kanzlei" />
+          <DataField label="Adresse" field={g?.gutachter_adresse} fieldPath="gutachterbestellung.gutachter_adresse" />
+          <DataField label="Telefon" field={g?.gutachter_telefon} fieldPath="gutachterbestellung.gutachter_telefon" />
+          <DataField label="E-Mail" field={g?.gutachter_email} fieldPath="gutachterbestellung.gutachter_email" />
+          <DataField label="Abgabefrist" field={g?.abgabefrist} fieldPath="gutachterbestellung.abgabefrist" />
+          {g?.befugnisse?.length > 0 && (
+            <div className="mt-2">
+              <span className="text-[11px] text-text-dim">Befugnisse:</span>
+              <ul className="mt-1 ml-4 list-disc">
+                {g.befugnisse.map((b, i) => (
+                  <li key={i} className="text-xs text-text py-0.5">{b}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Section>
       )}
 
