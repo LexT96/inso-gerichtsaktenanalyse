@@ -1,164 +1,67 @@
 {
   "kanzlei": {
-    "name": "Prof. Dr. Dr. Thomas B. Schmidt Insolvenzverwalter Rechtsanwälte Partnerschaft mbB",
-    "kurz": "TBS Insolvenzverwalter",
-    "website": "www.tbs-insolvenzverwalter.de",
-    "partnerschaftsregister": "Amtsgericht Koblenz – PR 20203"
+    "name": "KlareProzesse Demo-Kanzlei PartG mbB",
+    "kurz": "KlareProzesse Demo",
+    "website": "www.klareprozesse.de",
+    "partnerschaftsregister": "Amtsgericht München – PR 00000"
   },
   "standorte": {
-    "Trier": {
-      "adresse": "Balduinstraße 22-24, 54290 Trier",
-      "telefon": "0651 / 170 830 - 0"
+    "München": {
+      "adresse": "Maximilianstraße 1, 80539 München",
+      "telefon": "089 / 123 456 - 0"
     },
-    "Zell/Mosel": {
-      "adresse": "Schlossstraße 7, 56856 Zell",
-      "telefon": "06542 / 9699 - 0"
-    },
-    "Wiesbaden": {
-      "adresse": "Luisenstraße 7, 65185 Wiesbaden",
-      "telefon": "0611 / 950 157 - 0"
-    },
-    "Koblenz": {
-      "adresse": "Löhrstraße 99, 56068 Koblenz",
-      "telefon": "0261 / 134 69 - 0"
-    },
-    "Bad Kreuznach": {
-      "adresse": "Kurhausstraße 15, 55543 Bad Kreuznach",
-      "telefon": "0671 / 920 148 - 0"
-    },
-    "Frankfurt am Main": {
-      "adresse": "",
-      "telefon": ""
-    },
-    "Idar-Oberstein": {
-      "adresse": "",
-      "telefon": ""
-    },
-    "Langgöns": {
-      "adresse": "",
-      "telefon": ""
-    },
-    "Limburg/Lahn": {
-      "adresse": "",
-      "telefon": ""
-    },
-    "Mainz": {
-      "adresse": "",
-      "telefon": ""
+    "Berlin": {
+      "adresse": "Friedrichstraße 100, 10117 Berlin",
+      "telefon": "030 / 987 654 - 0"
     }
   },
   "insolvenzgerichte": {
-    "Wittlich": {
-      "name": "Amtsgericht Wittlich",
-      "adresse": "Kurfürstenstraße 63",
-      "plz_ort": "54516 Wittlich"
+    "München": {
+      "name": "Amtsgericht München",
+      "adresse": "Infanteriestraße 5",
+      "plz_ort": "80097 München"
     },
-    "Trier": {
-      "name": "Amtsgericht Trier",
-      "adresse": "Justizstraße 2-6",
-      "plz_ort": "54290 Trier"
-    },
-    "Koblenz": {
-      "name": "Amtsgericht Koblenz",
-      "adresse": "Karmeliterstraße 14",
-      "plz_ort": "56068 Koblenz"
-    },
-    "Bad Kreuznach": {
-      "name": "Amtsgericht Bad Kreuznach",
-      "adresse": "Mühlenstraße 34",
-      "plz_ort": "55543 Bad Kreuznach"
-    },
-    "Mainz": {
-      "name": "Amtsgericht Mainz",
-      "adresse": "Diether-von-Isenburg-Straße 1",
-      "plz_ort": "55116 Mainz"
-    },
-    "Wiesbaden": {
-      "name": "Amtsgericht Wiesbaden",
-      "adresse": "Mainzer Straße 124",
-      "plz_ort": "65189 Wiesbaden"
-    },
-    "Idar-Oberstein": {
-      "name": "Amtsgericht Idar-Oberstein",
-      "adresse": "Georg-Maus-Straße 2",
-      "plz_ort": "55743 Idar-Oberstein"
+    "Berlin-Charlottenburg": {
+      "name": "Amtsgericht Charlottenburg",
+      "adresse": "Amtsgerichtsplatz 1",
+      "plz_ort": "14057 Berlin"
     },
     "Frankfurt am Main": {
       "name": "Amtsgericht Frankfurt am Main",
       "adresse": "Gerichtsstraße 2",
       "plz_ort": "60313 Frankfurt am Main"
     },
-    "Limburg": {
-      "name": "Amtsgericht Limburg a. d. Lahn",
-      "adresse": "Schiede 20",
-      "plz_ort": "65549 Limburg a. d. Lahn"
+    "Hamburg": {
+      "name": "Amtsgericht Hamburg",
+      "adresse": "Caffamacherreihe 20",
+      "plz_ort": "20355 Hamburg"
     },
-    "Montabaur": {
-      "name": "Amtsgericht Montabaur",
-      "adresse": "Peter-Altmeier-Platz 3",
-      "plz_ort": "56410 Montabaur"
+    "Köln": {
+      "name": "Amtsgericht Köln",
+      "adresse": "Luxemburger Straße 101",
+      "plz_ort": "50939 Köln"
     },
-    "Gießen": {
-      "name": "Amtsgericht Gießen",
-      "adresse": "Gutfleischstraße 1",
-      "plz_ort": "35390 Gießen"
-    },
-    "Cuxhaven": {
-      "name": "Amtsgericht Cuxhaven",
-      "adresse": "Deichstraße 12",
-      "plz_ort": "27472 Cuxhaven"
+    "Stuttgart": {
+      "name": "Amtsgericht Stuttgart",
+      "adresse": "Hauffstraße 5",
+      "plz_ort": "70190 Stuttgart"
     }
   },
   "partner": [
     {
-      "name": "Ingo Grünewald",
-      "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht\nFachanwalt für Handels- und Gesellschaftsrecht",
-      "kategorie": "PARTNER"
-    },
-    {
-      "name": "Dr. Alexander Thomas Lamberty LL.M.",
+      "name": "Max Mustermann",
       "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht",
       "kategorie": "PARTNER"
     },
     {
-      "name": "Fatma Kreft",
-      "titel": "Fachanwältin für Insolvenz- und Sanierungsrecht\nFachanwältin für Steuerrecht",
-      "kategorie": "PARTNER"
-    },
-    {
-      "name": "Dr. Arne Löser",
-      "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht\nFachanwalt für Handels- und Gesellschaftsrecht",
-      "kategorie": "PARTNER"
-    },
-    {
-      "name": "Eva Meyer",
+      "name": "Maria Musterfrau",
       "titel": "Fachanwältin für Insolvenz- und Sanierungsrecht",
-      "kategorie": "ANGESTELLTE RECHTSANWÄLTE"
-    },
-    {
-      "name": "Bettina Dax",
-      "titel": "Rechtsanwältin",
-      "kategorie": "ANGESTELLTE RECHTSANWÄLTE"
-    },
-    {
-      "name": "Cornelia Kriege",
-      "titel": "Rechtsanwältin",
-      "kategorie": "ANGESTELLTE RECHTSANWÄLTE"
-    },
-    {
-      "name": "Lars Wacker",
-      "titel": "Rechtsanwalt",
-      "kategorie": "ANGESTELLTE RECHTSANWÄLTE"
-    },
-    {
-      "name": "Justizrat Prof. Dr. Dr. Thomas B. Schmidt M.A.",
-      "titel": "Fachanwalt für Insolvenz- und Sanierungsrecht",
-      "kategorie": "OF COUNSEL"
+      "kategorie": "PARTNER"
     },
     {
       "name": "Thorsten Lex",
-      "titel": "Fachanwalt für Business",
-      "kategorie": "PARTNER"
+      "titel": "Geschäftsführer KlareProzesse",
+      "kategorie": "OF COUNSEL"
     }
   ]
 }
