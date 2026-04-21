@@ -1,0 +1,50 @@
+{
+  "_version": "2.0",
+  "_beschreibung": "FELD_* → Quelle. Quellentypen: path=ExtractionResult, computed=Helper-Funktion, verwalter=verwalter_profiles, static=Konstante, input=User-Eingabe",
+  "felder": {
+    "FELD_Akte_Aktenzeichen": { "path": "verfahrensdaten.aktenzeichen.wert" },
+    "FELD_Akte_Gericht": { "path": "verfahrensdaten.gericht.wert" },
+    "FELD_Akte_LastGAVV": { "path": "verfahrensdaten.beschlussdatum.wert" },
+    "FELD_Akte_LastGAW": { "path": "verfahrensdaten.beschlussdatum.wert" },
+    "FELD_Akte_EroeffDat": { "computed": "eroeffnungsdatum_oder_beschluss" },
+    "FELD_Akte_Bezeichnung": { "computed": "akte_bezeichnung" },
+    "FELD_Akte_VerfahrenArt": { "computed": "verfahren_art" },
+    "FELD_Gericht_Ort": { "computed": "gericht_ort" },
+
+    "FELD_Schuldner_Name": { "path": "schuldner.name.wert" },
+    "FELD_Schuldner_Vorname": { "path": "schuldner.vorname.wert" },
+    "FELD_Schuldner_Vollname": { "computed": "schuldner_vollname" },
+    "FELD_Schuldner_Adr": { "path": "schuldner.aktuelle_adresse.wert" },
+    "FELD_Schuldner_Adresse": { "path": "schuldner.aktuelle_adresse.wert" },
+    "FELD_Schuldner_Geburtsdatum": { "path": "schuldner.geburtsdatum.wert" },
+    "FELD_Schuldner_Firma": { "path": "schuldner.firma.wert" },
+    "FELD_Schuldner_Betriebsstaette": { "path": "schuldner.betriebsstaette_adresse.wert" },
+    "FELD_Schuldner_HRB": { "path": "schuldner.handelsregisternummer.wert" },
+
+    "FELD_Schuldner_Artikel": { "computed": "schuldner_der_die" },
+    "FELD_Schuldner_der_die": { "computed": "schuldner_der_die" },
+    "FELD_Schuldner_Der_Die_Groß": { "computed": "schuldner_Der_Die" },
+    "FELD_Schuldner_den_die": { "computed": "schuldner_den_die" },
+    "FELD_Schuldner_dem_der": { "computed": "schuldner_dem_der" },
+    "FELD_Schuldner_des_der": { "computed": "schuldner_des_der" },
+    "FELD_Schuldner_Schuldnerin": { "computed": "schuldner_nominativ_substantiv" },
+    "FELD_Schuldners_Schuldnerin": { "computed": "schuldner_genitiv_substantiv" },
+    "FELD_Schuldner_Halters_Halterin": { "computed": "schuldner_halters_halterin" },
+
+    "FELD_Verwalter_Name": { "verwalter": "name" },
+    "FELD_Verwalter_Unterzeichner": { "verwalter": "name" },
+    "FELD_Verwalter_Art": { "verwalter": "art" },
+    "FELD_Verwalter_Diktatzeichen": { "verwalter": "diktatzeichen" },
+    "FELD_Verwalter_der_die": { "computed": "verwalter_der_die" },
+    "FELD_Verwalter_Der_Die_Groß": { "computed": "verwalter_Der_Die" },
+    "FELD_Verwalter_zum_zur": { "computed": "verwalter_zum_zur" },
+
+    "FELD_Bet_AnredeHoeflichOV": { "static": "Sehr geehrte Damen und Herren," },
+    "FELD_Bet_GrussBriefende": { "static": "Mit freundlichen Grüßen" },
+    "FELD_ANSCHREIBEN_DAT_2": { "computed": "antwort_frist" },
+
+    "FELD_Strafverfahren_Person": { "input": "strafverfahren_person" },
+    "FELD_Strafverfahren_Tatvorwurf": { "input": "strafverfahren_tatvorwurf" },
+    "FELD_Strafverfahren_Gegenstand": { "input": "strafverfahren_gegenstand" }
+  }
+}

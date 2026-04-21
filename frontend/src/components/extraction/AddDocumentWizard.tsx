@@ -1,12 +1,11 @@
 import { useState, useCallback } from 'react';
 import { apiClient } from '../../api/client';
-import { MergeSummary } from './MergeSummary';
-import type { MergeDiff } from '../../types/extraction';
+import { notifyDocumentJobStarted } from '../../hooks/useDocumentJobs';
 
 interface AddDocumentWizardProps {
   extractionId: number;
   onClose: () => void;
-  onMerged: () => void; // callback to refresh extraction data
+  onMerged: () => void; // callback after the extraction is refreshed (kept for API compat)
 }
 
 const SOURCE_TYPE_LABELS: Record<string, string> = {
@@ -25,24 +24,19 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
   sonstiges: 'Sonstiges Dokument',
 };
 
-const STEP_LABELS = ['Upload', 'Klassifizierung', 'Extraktion', 'Änderungen prüfen'];
+const STEP_LABELS = ['Upload', 'Klassifizierung'];
 
-export function AddDocumentWizard({ extractionId, onClose, onMerged }: AddDocumentWizardProps) {
+export function AddDocumentWizard({ extractionId, onClose, onMerged: _onMerged }: AddDocumentWizardProps) {
   const [step, setStep] = useState(1);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [extracting, setExtracting] = useState(false);
-  const [applying, setApplying] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
 
-  // Upload result
   const [docId, setDocId] = useState<number | null>(null);
   const [sourceType, setSourceType] = useState('sonstiges');
   const [pageCount, setPageCount] = useState(0);
   const [warning, setWarning] = useState<string | null>(null);
-
-  // Diff result
-  const [diff, setDiff] = useState<MergeDiff | null>(null);
 
   const handleUpload = useCallback(async () => {
     if (!file) return;
@@ -67,43 +61,30 @@ export function AddDocumentWizard({ extractionId, onClose, onMerged }: AddDocume
     }
   }, [file, extractionId]);
 
-  const handleExtract = useCallback(async () => {
+  /**
+   * Start the background job and close the wizard. The navbar badge takes over
+   * surfacing progress; when the job completes the user reopens it by clicking
+   * the badge entry.
+   */
+  const handleStartBackgroundExtract = useCallback(async () => {
     if (!docId) return;
-    setExtracting(true);
+    setStarting(true);
     setError('');
     try {
-      const { data } = await apiClient.post(
+      await apiClient.post(
         `/extractions/${extractionId}/documents/${docId}/extract`,
         { sourceType }
       );
-      setDiff(data as MergeDiff);
-      setStep(4);
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { error?: string } } };
-      setError(axiosErr?.response?.data?.error || 'Extraktion fehlgeschlagen');
-    } finally {
-      setExtracting(false);
-    }
-  }, [docId, extractionId, sourceType]);
-
-  const handleApply = useCallback(async (acceptedPaths: string[], changes: Array<{ path: string; wert: unknown; quelle: string }>) => {
-    if (!docId) return;
-    setApplying(true);
-    setError('');
-    try {
-      await apiClient.post(`/extractions/${extractionId}/documents/${docId}/apply`, {
-        accept: acceptedPaths,
-        changes,
-      });
-      onMerged();
+      // Kick the navbar hook to refresh immediately so the badge shows within
+      // milliseconds instead of waiting for the next polling tick.
+      notifyDocumentJobStarted();
       onClose();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
-      setError(axiosErr?.response?.data?.error || 'Merge fehlgeschlagen');
-    } finally {
-      setApplying(false);
+      setError(axiosErr?.response?.data?.error || 'Analyse konnte nicht gestartet werden');
+      setStarting(false);
     }
-  }, [docId, extractionId, onMerged, onClose]);
+  }, [docId, extractionId, sourceType, onClose]);
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
@@ -192,23 +173,10 @@ export function AddDocumentWizard({ extractionId, onClose, onMerged }: AddDocume
             </div>
           )}
 
-          {/* Step 3: Extracting */}
-          {step === 3 && (
-            <div className="text-center py-8">
-              <div className="animate-spin w-6 h-6 border-2 border-accent border-t-transparent rounded-full mx-auto mb-3" />
-              <p className="text-[11px] text-text-muted">Dokument wird analysiert...</p>
-            </div>
-          )}
-
-          {/* Step 4: Merge Summary */}
-          {step === 4 && diff && (
-            <MergeSummary diff={diff} onApply={handleApply} onCancel={onClose} applying={applying} />
-          )}
         </div>
 
         {/* Footer */}
-        {step < 3 && (
-          <div className="flex justify-between p-3 border-t border-border">
+        <div className="flex justify-between p-3 border-t border-border">
             <button onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1}
               className="px-4 py-1.5 text-[11px] text-text-muted hover:text-text disabled:opacity-30">
               Zurück
@@ -220,13 +188,12 @@ export function AddDocumentWizard({ extractionId, onClose, onMerged }: AddDocume
               </button>
             )}
             {step === 2 && (
-              <button onClick={() => { setStep(3); handleExtract(); }} disabled={extracting}
+              <button onClick={handleStartBackgroundExtract} disabled={starting}
                 className="px-4 py-1.5 bg-accent text-white rounded text-[11px] font-semibold disabled:opacity-50">
-                Analysieren
+                {starting ? 'Wird gestartet…' : 'Im Hintergrund analysieren'}
               </button>
             )}
           </div>
-        )}
       </div>
     </div>
   );

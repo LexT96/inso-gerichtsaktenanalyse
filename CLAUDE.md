@@ -148,8 +148,24 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 - `gutachten-mapping.json` — field mappings: `path` (ExtractionResult lookup), `computed` (gender/address derivation, InsVV fees, gesellschafter formatting), `input` (user-provided)
 
 ### Standardschreiben (`standardschreiben/`)
-- `checklisten.json` — defines required fields per letter type, aliases, default recipients
-- DOCX templates for the 10 standard letter types
+- `checklisten.json` — defines required fields per letter type, aliases, default recipients, and `templateDocx` pointing to the DOCX vorlage. Strafakte also has `uiInputs` declaring per-generation freitext-fields (person, tatvorwurf, gegenstand).
+- `templates/*.docx` — 10 DOCX vorlagen with `FELD_*` placeholders (no curly braces, analog zu `KI_*` bei Gutachten). Generated from the original muster-PDFs via `scripts/convert-letter-pdfs.py` (Claude Vision pipeline).
+- `platzhalter-mapping.json` — maps every `FELD_*` to a source: `path` (ExtractionResult lookup), `computed` (gender variants, verfahren_art, antwort_frist, etc.), `verwalter` (verwalter_profiles column), `static` (constant), `input` (per-generation user input).
+
+### Letter Generation (`src/routes/generateLetter.ts` + `src/utils/letterGenerator.ts`)
+- `POST /api/generate-letter/:extractionId/:typ` — body: `{ verwalterId?: number, extras?: Record<string,string> }`. Returns DOCX or 4xx.
+- `letterGenerator.generateLetterFromTemplate(buffer, result, verwalter, extras)` — loads mapping, walks `<w:p>` paragraphs via inlined `processDocxParagraphs` (run-splitting safe), longest-first token replacement, final FELD_* wipe.
+- Gender helpers (`src/utils/genderHelpers.ts`) handle schuldner/verwalter forms including Nominativ (der/die), Akkusativ (den/die), Dativ (dem/der), Genitiv (Schuldners/Schuldnerin), and the Halters/Halterin phrase. Masculine default; explicit `'maennlich'`/`'männlich'` + feminine recognized.
+- `extras.verwalter_art` overrides the `Insolvenzverwalter` default (because `verwalter_profiles` has no `art` column).
+- Missing `verwalter_id` → 422 with `code: 'VERWALTER_REQUIRED'` (frontend surfaces tip to use Gutachten-Assistent).
+- Strafakte-Akteneinsicht requires `extras.strafverfahren_{person,tatvorwurf,gegenstand}` — enforced via `uiInputs` checklist; 422 with `missing: [...]` if empty.
+
+### Letter Templates Admin (`src/routes/letterTemplates.ts`)
+- `GET /api/letter-templates` — list all 10 templates with size, lastModified, hasBackup.
+- `GET /:typ/download` — stream current DOCX.
+- `PUT /:typ` — multipart upload (field: `template`, 10 MB max). Validates uploaded DOCX contains every `FELD_*` present in the current template; 422 with `missing` array otherwise. Creates `.backup.docx` before overwrite.
+- `POST /:typ/rollback` — restore from `.backup.docx` and delete the backup.
+- AdminPage "BRIEFE" tab (`LetterTemplatesSection`) drives all four actions.
 
 ## Key Patterns
 

@@ -19,6 +19,7 @@ import { AktivaTab } from '../components/extraction/tabs/AktivaTab';
 import { AnfechtungTab } from '../components/extraction/tabs/AnfechtungTab';
 import { GutachtenTab } from '../components/extraction/tabs/GutachtenTab';
 import { AddDocumentWizard } from '../components/extraction/AddDocumentWizard';
+import { ReviewMergeModal } from '../components/extraction/ReviewMergeModal';
 import { KanzleiSettings } from '../components/admin/KanzleiSettings';
 import { apiClient } from '../api/client';
 import { useExtraction } from '../hooks/useExtraction';
@@ -46,9 +47,11 @@ export function DashboardPage() {
   const [importedFilename, setImportedFilename] = useState<string | null>(null);
   const [extraDocs, setExtraDocs] = useState<Array<{ file: File; label: string }>>([]);
   const [docRefreshKey, setDocRefreshKey] = useState(0);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const historyId = searchParams.get('id');
+  const mergeDocId = searchParams.get('mergeDoc');
+  const mergeDocIdNum = mergeDocId ? parseInt(mergeDocId, 10) : null;
 
   const handleHistorySelect = useCallback((id: number) => {
     navigate(`/dashboard?id=${id}`);
@@ -235,7 +238,7 @@ export function DashboardPage() {
         <PrueflisteTab result={result} onUpdateField={updateField} />
       )}
       {tab === 'briefe' && (
-        <AnschreibenTab result={result} letters={letters} missingInfo={missingInfo} onUpdateField={updateField} />
+        <AnschreibenTab result={result} letters={letters} missingInfo={missingInfo} onUpdateField={updateField} extractionId={extractionId} />
       )}
       {tab === 'gutachten' && (
         <GutachtenTab result={result} extractionId={extractionId} onUpdateField={updateField} />
@@ -393,6 +396,23 @@ export function DashboardPage() {
             if (extractionId) loadFromHistory(extractionId);
             setDocRefreshKey(k => k + 1);
             setShowAddDoc(false);
+          }}
+        />
+      )}
+
+      {mergeDocIdNum && (extractionId || historyId) && (
+        <ReviewMergeModal
+          extractionId={extractionId ?? parseInt(historyId!, 10)}
+          docId={mergeDocIdNum}
+          onClose={() => {
+            const next = new URLSearchParams(searchParams);
+            next.delete('mergeDoc');
+            setSearchParams(next, { replace: true });
+          }}
+          onMerged={() => {
+            const effId = extractionId ?? (historyId ? parseInt(historyId, 10) : null);
+            if (effId) loadFromHistory(effId);
+            setDocRefreshKey(k => k + 1);
           }}
         />
       )}

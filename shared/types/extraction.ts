@@ -441,6 +441,21 @@ export interface MergeDiff {
   conflicts: MergeFieldChange[];
   newForderungen: Array<{ index: number; glaeubiger: string; betrag: number | null; quelle: string }>;
   updatedForderungen: Array<{ existingIndex: number; glaeubiger: string; oldBetrag: number | null; newBetrag: number | null; quelle: string }>;
+  /**
+   * Full focused-pass results returned by the supplement job. Auto-merged
+   * into the existing arrays on apply (dedup by composite keys).
+   */
+  focusedResults?: {
+    forderungen?: Forderungen | null;
+    aktiva?: AktivaAnalyse | null;
+    anfechtung?: Anfechtungsanalyse | null;
+  };
+  /** Counts for the UI summary. */
+  arraySummary?: {
+    newEinzelforderungen: number;
+    newAktivaPositionen: number;
+    newAnfechtungVorgaenge: number;
+  };
 }
 
 export interface ApplyRequest {
