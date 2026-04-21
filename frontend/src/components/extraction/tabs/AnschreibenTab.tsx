@@ -2,9 +2,17 @@ import { useState } from 'react';
 import { Badge } from '../Badge';
 import { Section } from '../Section';
 import { FieldChecklist } from '../FieldChecklist';
+import { apiClient } from '../../../api/client';
+import { StrafakteInputsModal } from '../StrafakteInputsModal';
 import type { ExtractionResult, Standardanschreiben, FehlendInfo, Pruefstatus } from '../../../types/extraction';
 
-function LetterCard({ letter }: { letter: Standardanschreiben }) {
+interface LetterCardProps {
+  letter: Standardanschreiben;
+  extractionId: number | null;
+  onGenerate: (typ: string) => void;
+}
+
+function LetterCard({ letter, extractionId, onGenerate }: LetterCardProps) {
   const [expanded, setExpanded] = useState(false);
   const st = letter.status || 'fehlt';
 
@@ -14,15 +22,25 @@ function LetterCard({ letter }: { letter: Standardanschreiben }) {
 
   return (
     <div
-      className={`border rounded-lg shadow-card p-2.5 px-3.5 mb-2 cursor-pointer hover:shadow-card-hover transition-shadow ${bgClass}`}
-      onClick={() => setExpanded(!expanded)}
+      className={`border rounded-lg shadow-card p-2.5 px-3.5 mb-2 hover:shadow-card-hover transition-shadow ${bgClass}`}
     >
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center cursor-pointer" onClick={() => setExpanded(!expanded)}>
         <div>
           <div className="text-xs font-semibold text-text font-sans">{letter.typ}</div>
           <div className="text-[10px] text-text-dim mt-0.5">An: {letter.empfaenger?.trim() || '—'}</div>
         </div>
-        <Badge type={st} />
+        <div className="flex items-center gap-2">
+          {st === 'bereit' && extractionId != null && (
+            <button
+              type="button"
+              className="text-[10px] px-2 py-1 rounded bg-ie-green text-white hover:bg-ie-green/90 font-medium"
+              onClick={(e) => { e.stopPropagation(); onGenerate(letter.typ); }}
+            >
+              DOCX erzeugen
+            </button>
+          )}
+          <Badge type={st} />
+        </div>
       </div>
       {expanded && (
         <div className="mt-2 pt-2 border-t border-border">
@@ -74,12 +92,55 @@ interface AnschreibenTabProps {
   letters: Standardanschreiben[];
   missingInfo: FehlendInfo[];
   onUpdateField: (fieldPath: string, wert: string | null, pruefstatus: Pruefstatus) => void;
+  extractionId: number | null;
 }
 
-export function AnschreibenTab({ result, letters, missingInfo, onUpdateField }: AnschreibenTabProps) {
+export function AnschreibenTab({ result, letters, missingInfo, onUpdateField, extractionId }: AnschreibenTabProps) {
   const bereit = letters.filter(l => l.status === 'bereit');
   const fehlt = letters.filter(l => l.status === 'fehlt');
   const entfaellt = letters.filter(l => l.status === 'entfaellt');
+
+  const [strafaktePending, setStrafaktePending] = useState<string | null>(null);
+
+  async function handleGenerate(typ: string, extras: Record<string, string> = {}) {
+    if (!extractionId) return;
+    if (typ.toLowerCase().includes('strafakte') && Object.keys(extras).length === 0) {
+      setStrafaktePending(typ);
+      return;
+    }
+    try {
+      const response = await apiClient.post(
+        `/generate-letter/${extractionId}/${encodeURIComponent(typ)}`,
+        { extras },
+        { responseType: 'blob' },
+      );
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${typ.replace(/[^\w-]/g, '_')}_${extractionId}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const axErr = err as { response?: { data?: Blob; status?: number } };
+      let msg = 'Generierung fehlgeschlagen';
+      if (axErr?.response?.data instanceof Blob) {
+        try {
+          const text = await axErr.response.data.text();
+          const parsed = JSON.parse(text);
+          msg = parsed.error ?? msg;
+          if (parsed.code === 'VERWALTER_REQUIRED') {
+            msg += ' Tipp: Nutze den Gutachten-Assistenten, um einen Verwalter zuzuweisen.';
+          }
+        } catch { /* swallow parse errors */ }
+      }
+      alert(msg);
+    }
+  }
 
   return (
     <>
@@ -98,17 +159,17 @@ export function AnschreibenTab({ result, letters, missingInfo, onUpdateField }: 
 
       {bereit.length > 0 && (
         <Section title="Alle Daten vorhanden" icon="✓" count={bereit.length}>
-          {bereit.map((l, i) => <LetterCard key={i} letter={l} />)}
+          {bereit.map((l, i) => <LetterCard key={i} letter={l} extractionId={extractionId} onGenerate={(t) => handleGenerate(t)} />)}
         </Section>
       )}
       {fehlt.length > 0 && (
         <Section title="Daten unvollständig" icon="△" count={fehlt.length}>
-          {fehlt.map((l, i) => <LetterCard key={i} letter={l} />)}
+          {fehlt.map((l, i) => <LetterCard key={i} letter={l} extractionId={extractionId} onGenerate={(t) => handleGenerate(t)} />)}
         </Section>
       )}
       {entfaellt.length > 0 && (
         <Section title="Nicht erforderlich" icon="○" count={entfaellt.length} defaultOpen={false}>
-          {entfaellt.map((l, i) => <LetterCard key={i} letter={l} />)}
+          {entfaellt.map((l, i) => <LetterCard key={i} letter={l} extractionId={extractionId} onGenerate={(t) => handleGenerate(t)} />)}
         </Section>
       )}
       {letters.length === 0 && (
@@ -135,6 +196,18 @@ export function AnschreibenTab({ result, letters, missingInfo, onUpdateField }: 
             );
           })}
         </Section>
+      )}
+
+      {strafaktePending && (
+        <StrafakteInputsModal
+          typ={strafaktePending}
+          onCancel={() => setStrafaktePending(null)}
+          onSubmit={(extrasObj: Record<string, string>) => {
+            const capturedTyp = strafaktePending;
+            setStrafaktePending(null);
+            if (capturedTyp) handleGenerate(capturedTyp, extrasObj);
+          }}
+        />
       )}
     </>
   );

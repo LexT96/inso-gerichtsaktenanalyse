@@ -235,7 +235,7 @@ export function DashboardPage() {
         <PrueflisteTab result={result} onUpdateField={updateField} />
       )}
       {tab === 'briefe' && (
-        <AnschreibenTab result={result} letters={letters} missingInfo={missingInfo} onUpdateField={updateField} />
+        <AnschreibenTab result={result} letters={letters} missingInfo={missingInfo} onUpdateField={updateField} extractionId={extractionId} />
       )}
       {tab === 'gutachten' && (
         <GutachtenTab result={result} extractionId={extractionId} onUpdateField={updateField} />
