@@ -152,12 +152,17 @@ export function AnschreibenTab({ result, letters, missingInfo, onUpdateField, ex
 
   const extractedGutachterName = result?.gutachterbestellung?.gutachter_name?.wert ?? null;
 
-  // Auto-select matching profile once profiles + extraction are available
+  // Auto-select matching profile once profiles + extraction are available.
+  // Fallback to the single profile if only one exists in the DB (no ambiguity).
   useEffect(() => {
     if (autoSelectedOnce || loadingProfiles) return;
     if (selectedVerwalterId !== null) return;
     const match = findMatchingVerwalter(profiles, extractedGutachterName);
-    if (match) setSelectedVerwalterId(match.id);
+    if (match) {
+      setSelectedVerwalterId(match.id);
+    } else if (profiles.length === 1) {
+      setSelectedVerwalterId(profiles[0].id);
+    }
     setAutoSelectedOnce(true);
   }, [profiles, loadingProfiles, extractedGutachterName, selectedVerwalterId, autoSelectedOnce]);
 
