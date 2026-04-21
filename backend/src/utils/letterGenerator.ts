@@ -25,36 +25,71 @@ function unescapeXmlEntities(s: string): string {
     .replace(/&apos;/g, "'").replace(/&quot;/g, '"');
 }
 
+// Flatten a paragraph-XML fragment (or any XML chunk containing <w:t> elements)
+// into its first <w:t> after running transformFn on the concatenated text.
+// Other <w:t>s are emptied. Structural elements (<w:tab/>, <w:br/>) live
+// outside <w:t> and are not touched by the regex below — callers that need
+// to preserve tab positions should split on <w:tab/> BEFORE calling this.
+function flattenAndReplace(
+  chunk: string,
+  shouldProcess: (fullText: string) => boolean,
+  transformFn: (fullText: string) => string,
+): string {
+  const textParts: { full: string; text: string }[] = [];
+  const tRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+  let match;
+  while ((match = tRegex.exec(chunk)) !== null) {
+    textParts.push({ full: match[0], text: match[1] });
+  }
+  if (textParts.length === 0) return chunk;
+  const fullText = textParts.map(p => p.text).join('');
+  if (!shouldProcess(fullText)) return chunk;
+  const replaced = transformFn(fullText);
+  let result = chunk;
+  let firstDone = false;
+  for (const part of textParts) {
+    if (!firstDone) {
+      result = result.replace(
+        part.full,
+        () => `<w:t xml:space="preserve">${escapeXml(unescapeXmlEntities(replaced))}</w:t>`,
+      );
+      firstDone = true;
+    } else {
+      result = result.replace(part.full, () => '<w:t></w:t>');
+    }
+  }
+  return result;
+}
+
 function processDocxParagraphs(
   xml: string,
   shouldProcess: (fullText: string) => boolean,
   transformFn: (fullText: string) => string,
 ): string {
   return xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, (paragraph) => {
-    const textParts: { full: string; text: string }[] = [];
-    const tRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
-    let match;
-    while ((match = tRegex.exec(paragraph)) !== null) {
-      textParts.push({ full: match[0], text: match[1] });
-    }
-    if (textParts.length === 0) return paragraph;
-    const fullText = textParts.map(p => p.text).join('');
-    if (!shouldProcess(fullText)) return paragraph;
-    const replaced = transformFn(fullText);
-    let result = paragraph;
-    let firstDone = false;
-    for (const part of textParts) {
-      if (!firstDone) {
-        result = result.replace(
-          part.full,
-          () => `<w:t xml:space="preserve">${escapeXml(unescapeXmlEntities(replaced))}</w:t>`,
-        );
-        firstDone = true;
-      } else {
-        result = result.replace(part.full, () => '<w:t></w:t>');
+    // If the paragraph contains tabs/line-breaks, process each tab-separated
+    // segment independently so the structural elements keep their positions.
+    const SPLIT_RE = /<w:tab\s*\/>|<w:br\s*\/>/g;
+    if (SPLIT_RE.test(paragraph)) {
+      SPLIT_RE.lastIndex = 0;
+      const pieces: string[] = [];
+      const separators: string[] = [];
+      let last = 0;
+      let m: RegExpExecArray | null;
+      while ((m = SPLIT_RE.exec(paragraph)) !== null) {
+        pieces.push(paragraph.slice(last, m.index));
+        separators.push(m[0]);
+        last = m.index + m[0].length;
       }
+      pieces.push(paragraph.slice(last));
+      const processed = pieces.map((piece) => flattenAndReplace(piece, shouldProcess, transformFn));
+      let out = processed[0];
+      for (let i = 0; i < separators.length; i++) {
+        out += separators[i] + processed[i + 1];
+      }
+      return out;
     }
-    return result;
+    return flattenAndReplace(paragraph, shouldProcess, transformFn);
   });
 }
 import type { ExtractionResult } from '../types/extraction';
