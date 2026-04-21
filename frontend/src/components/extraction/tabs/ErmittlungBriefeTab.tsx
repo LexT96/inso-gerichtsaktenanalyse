@@ -3,13 +3,13 @@ import { Section } from '../Section';
 import { apiClient } from '../../../api/client';
 import { StrafakteInputsModal } from '../StrafakteInputsModal';
 import { useVerwalter } from '../../../hooks/useVerwalter';
+import { findMatchingVerwalter, normalizeVerwalterName } from '../../../utils/matchVerwalter';
 import type {
   ExtractionResult,
   Ermittlungsergebnisse,
   Standardanschreiben,
   FehlendInfo,
   AnschreibenStatus,
-  VerwalterProfile,
 } from '../../../types/extraction';
 
 // ─── Investigation line definitions ───
@@ -133,43 +133,6 @@ function detailQuelle(line: ErmittlungLine, e: Ermittlungsergebnisse): string {
     case 'meldeauskunft': return e?.meldeauskunft?.meldestatus?.quelle || '';
     default: return '';
   }
-}
-
-// ─── Verwalter auto-match helpers (from AnschreibenTab) ───
-
-function normalizeName(raw: string): string {
-  let s = raw.toLowerCase().trim();
-  s = s.replace(/[.,;]/g, ' ');
-  const titles = [
-    'professor', 'prof ', 'prof.', 'prof',
-    'rechtsanwältin', 'rechtsanwalt',
-    'rain ', 'rain.', 'rain', 'ra ', 'ra.', 'ra',
-    'dr ', 'dr.', 'dr',
-    'll m', 'll.m', 'llm',
-    'mag ', 'mag.', 'mag',
-    'mbb',
-  ];
-  for (const t of titles) {
-    s = s.split(t).join(' ');
-  }
-  s = s.replace(/\s+/g, ' ').trim();
-  return s;
-}
-
-function findMatchingVerwalter(
-  profiles: VerwalterProfile[],
-  extractedName: string | null | undefined,
-): VerwalterProfile | null {
-  if (!extractedName || !extractedName.trim() || profiles.length === 0) return null;
-  const needle = normalizeName(extractedName);
-  if (!needle) return null;
-  const needleTokens = needle.split(' ').filter(t => t.length >= 3);
-  if (needleTokens.length === 0) return null;
-  const matches = profiles.filter(p => {
-    const hay = normalizeName(p.name);
-    return needleTokens.every(t => hay.includes(t));
-  });
-  return matches.length === 1 ? matches[0] : null;
 }
 
 // ─── Main component ───
@@ -324,7 +287,7 @@ export function ErmittlungBriefeTab({
         </select>
         {selectedVerwalter && (
           <div className="text-[10px] text-text-dim mt-1">
-            {extractedGutachterName && normalizeName(extractedGutachterName).split(' ').some(t => t.length >= 3 && normalizeName(selectedVerwalter.name).includes(t))
+            {extractedGutachterName && normalizeVerwalterName(extractedGutachterName).split(' ').some(t => t.length >= 3 && normalizeVerwalterName(selectedVerwalter.name).includes(t))
               ? '✓ Anhand des Bestellungsbeschlusses vorausgewählt'
               : 'Manuell gewählt'}
             {' · Diktatzeichen: '}{selectedVerwalter.diktatzeichen || '—'}
