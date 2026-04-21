@@ -6,6 +6,16 @@ function isWeiblich(g: GenderInput): boolean {
   return s === 'weiblich' || s === 'w' || s === 'female' || s === 'f';
 }
 
+// Explicit positive recognizer for masculine so that future non-binary
+// extensions can distinguish "known masculine" from "unknown/null".
+// The main path still uses isWeiblich as the sole gate — both explicit
+// masculine and unknown/null default to masculine output.
+function isMaennlich(g: GenderInput): boolean {
+  if (!g) return false;
+  const s = g.toLowerCase();
+  return s === 'maennlich' || s === 'männlich' || s === 'm' || s === 'male';
+}
+
 export type SchuldnerVariant =
   | 'der_die'
   | 'Der_Die'
