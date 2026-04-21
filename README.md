@@ -123,8 +123,24 @@ Stufe 5 — Validierungs-Retry
 Ergebnis
   ├─ Strukturiertes JSON mit Quellenangaben (SourcedValue pro Feld)
   ├─ Durchsuchbares PDF (mit OCR-Text-Ebene bei gescannten Dokumenten)
-  ├─ 10 Anschreiben-Checklisten (Pflichtfelder pro Brieftyp)
+  ├─ 10 Standardschreiben-Generierung (DOCX aus Vorlage mit 32 FELD_*-Platzhaltern)
   └─ Gutachten-Generierung (DOCX aus Vorlage mit 90+ KI-Platzhaltern)
+```
+
+### Standardschreiben-Generierung
+
+Aus jeder abgeschlossenen Extraktion heraus lassen sich im `Anschreiben`-Tab
+alle 10 Standardbriefe (Bankenauskunft, Finanzamt, Versicherung, Gerichts-
+vollzieher, Steuerberater, Strafakte, Bausparkasse, KFZ-Halter KBA/Zulas-
+sungsstelle, Gewerbeauskunft) als DOCX erzeugen. Der Verwalter-Picker im
+Tab matched automatisch gegen den extrahierten Bestellungsbeschluss; fällt
+genau ein Profil zu, wird es vorausgewählt.
+
+Strafakte-Akteneinsicht öffnet zusätzlich ein Modal für drei Freitext-
+Felder (Person/Tatvorwurf/Gegenstand).
+
+Admin-Bereich → `BRIEFE`-Tab erlaubt Download/Upload/Rollback der Vorlagen
+(validiert `FELD_*`-Pflicht-Platzhalter pro Brieftyp).
 ```
 
 ### Schluesselkonzepte
@@ -154,14 +170,26 @@ npm run benchmark:compare -- 1,2            # Zwei Runs vergleichen
 
 ## API-Endpunkte
 
-| Methode | Pfad                 | Beschreibung                    | Auth |
-|---------|----------------------|---------------------------------|------|
-| POST    | `/api/auth/login`    | Benutzer-Anmeldung              | Nein |
-| POST    | `/api/auth/refresh`  | Access Token erneuern           | Nein |
-| POST    | `/api/extract`       | PDF hochladen & analysieren     | Ja   |
-| GET     | `/api/history`       | Vergangene Extraktionen         | Ja   |
-| GET     | `/api/history/:id`   | Einzelne Extraktion abrufen     | Ja   |
-| GET     | `/api/health`        | Health Check                    | Nein |
+| Methode | Pfad                                         | Beschreibung                                     | Auth  |
+|---------|----------------------------------------------|--------------------------------------------------|-------|
+| POST    | `/api/auth/login`                            | Benutzer-Anmeldung                               | Nein  |
+| POST    | `/api/auth/refresh`                          | Access Token erneuern                            | Nein  |
+| POST    | `/api/extract`                               | PDF hochladen & analysieren                      | Ja    |
+| GET     | `/api/history`                               | Vergangene Extraktionen                          | Ja    |
+| GET     | `/api/history/:id`                           | Einzelne Extraktion abrufen                      | Ja    |
+| GET     | `/api/history/:id/pdf`                       | Gespeicherte PDF streamen                        | Ja    |
+| PATCH   | `/api/extractions/:id/fields`                | Einzelnes Feld aktualisieren                     | Ja    |
+| POST    | `/api/generate-gutachten/:id/prepare`        | Gutachten-Slots via LLM befüllen                 | Ja    |
+| POST    | `/api/generate-gutachten/:id/generate`       | Gutachten-DOCX erzeugen                          | Ja    |
+| POST    | `/api/generate-letter/:id/:typ`              | Standardschreiben als DOCX erzeugen              | Ja    |
+| GET     | `/api/letter-templates`                      | Liste der 10 Vorlagen + Metadaten                | Ja    |
+| GET     | `/api/letter-templates/:typ/download`        | Aktuelle Vorlage herunterladen                   | Ja    |
+| PUT     | `/api/letter-templates/:typ`                 | Vorlage hochladen (validiert FELD_*-Pflichten)   | Admin |
+| POST    | `/api/letter-templates/:typ/rollback`        | Vorlage aus `.backup.docx` wiederherstellen      | Admin |
+| GET/PUT | `/api/kanzlei`                               | Kanzlei-Stammdaten lesen/schreiben               | Ja    |
+| GET/PUT | `/api/kanzlei/templates/:type`               | Gutachten-Vorlage herunter-/hochladen            | Admin |
+| GET     | `/api/verwalter` · `/api/sachbearbeiter`     | Profil-CRUD                                      | Ja    |
+| GET     | `/api/health`                                | Health Check                                     | Nein  |
 
 ## Sicherheit
 

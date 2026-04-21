@@ -154,10 +154,13 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 
 ### Letter Generation (`src/routes/generateLetter.ts` + `src/utils/letterGenerator.ts`)
 - `POST /api/generate-letter/:extractionId/:typ` — body: `{ verwalterId?: number, extras?: Record<string,string> }`. Returns DOCX or 4xx.
-- `letterGenerator.generateLetterFromTemplate(buffer, result, verwalter, extras)` — loads mapping, walks `<w:p>` paragraphs via inlined `processDocxParagraphs` (run-splitting safe), longest-first token replacement, final FELD_* wipe.
-- Gender helpers (`src/utils/genderHelpers.ts`) handle schuldner/verwalter forms including Nominativ (der/die), Akkusativ (den/die), Dativ (dem/der), Genitiv (Schuldners/Schuldnerin), and the Halters/Halterin phrase. Masculine default; explicit `'maennlich'`/`'männlich'` + feminine recognized.
-- `extras.verwalter_art` overrides the `Insolvenzverwalter` default (because `verwalter_profiles` has no `art` column).
-- Missing `verwalter_id` → 422 with `code: 'VERWALTER_REQUIRED'` (frontend surfaces tip to use Gutachten-Assistent).
+- `letterGenerator.generateLetterFromTemplate(buffer, result, verwalter, extras)` — loads mapping, two-pass XML replacement:
+  1. **Per-`<w:t>` replacement** — placeholders entirely inside one run get substituted in place. Run's `<w:rPr>` (bold/italic/underline) stays intact.
+  2. **Flatten-per-tab-segment fallback** — for placeholders split across runs, split the paragraph by `<w:tab/>`/`<w:br/>` first so tab positions survive, then flatten each segment and replace. Final `FELD_*` wipe kills any unmapped leakage.
+- Gender helpers (`src/utils/genderHelpers.ts`) handle schuldner/verwalter forms including Nominativ (der/die), Akkusativ (den/die), Dativ (dem/der), **Genitiv article (des/der)**, Genitiv substantive (Schuldners/Schuldnerin), and the Halters/Halterin phrase. Masculine default; explicit `'maennlich'`/`'männlich'` + feminine recognized.
+- Verwalter-Art default is **gendered** per `verwalter.geschlecht` — `Insolvenzverwalterin` for weiblich, `Insolvenzverwalter` otherwise. Override via `extras.verwalter_art` (e.g. `vorläufiger Insolvenzverwalter`, `Sachverständige`).
+- Missing `verwalter_id` → 422 with `code: 'VERWALTER_REQUIRED'`. Frontend AnschreibenTab has a Verwalter picker that auto-selects when exactly one profile's name matches `gutachterbestellung.gutachter_name` (normalized: title-stripped, punctuation-cleaned, ≥3-char tokens must all appear in profile), else falls back to the single profile if only one exists in the DB.
+- Readiness gate: backend uses `isLetterReady(result, typ)` from `letterChecklist.ts` — same pure required-field check the frontend's `recomputeLetterStatuses` runs. Advisory `fehlende_daten` from the LLM (e.g. "konkreter Gerichtsvollziehername") do NOT block generation; only missing JSON-defined required/OR fields do.
 - Strafakte-Akteneinsicht requires `extras.strafverfahren_{person,tatvorwurf,gegenstand}` — enforced via `uiInputs` checklist; 422 with `missing: [...]` if empty.
 
 ### Letter Templates Admin (`src/routes/letterTemplates.ts`)
