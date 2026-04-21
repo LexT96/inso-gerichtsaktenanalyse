@@ -212,15 +212,37 @@ export function buildLetterReplacements(
 }
 
 // Longest-first placeholder ordering avoids short keys shadowing longer ones.
-function replaceAllPlaceholders(text: string, replacements: Record<string, string>): string {
+function replaceAllPlaceholders(text: string, replacements: Record<string, string>, wipeUnmapped = true): string {
   const tokens = Object.keys(replacements).sort((a, b) => b.length - a.length);
   let out = text;
   for (const tok of tokens) {
     out = out.split(tok).join(replacements[tok] ?? '');
   }
-  // Any remaining FELD_* (unmapped) → remove to avoid leakage
-  out = out.replace(/FELD_[A-Za-zÄÖÜäöüß0-9_]+/g, '');
+  if (wipeUnmapped) {
+    // Any remaining FELD_* (unmapped) → remove to avoid leakage
+    out = out.replace(/FELD_[A-Za-zÄÖÜäöüß0-9_]+/g, '');
+  }
   return out;
+}
+
+// Pass 1: replace placeholders within each individual <w:t> element, preserving
+// the surrounding run's formatting (<w:rPr> stays untouched). Skips unmapped
+// FELD_* so that Pass 2 can catch run-split cases.
+function replacePerRunText(xml: string, replacements: Record<string, string>): string {
+  return xml.replace(
+    /(<w:t(?:\s[^>]*)?>)([^<]*)(<\/w:t>)/g,
+    (_full, open: string, text: string, close: string) => {
+      if (!text.includes('FELD_')) return open + text + close;
+      const replaced = replaceAllPlaceholders(
+        unescapeXmlEntities(text),
+        replacements,
+        /* wipeUnmapped */ false,
+      );
+      // Ensure whitespace is preserved after substitution.
+      const openWithSpace = open.includes('xml:space=') ? open : open.replace('<w:t', '<w:t xml:space="preserve"');
+      return openWithSpace + escapeXml(replaced) + close;
+    },
+  );
 }
 
 export function generateLetterFromTemplate(
@@ -235,6 +257,11 @@ export function generateLetterFromTemplate(
   if (!docXml) throw new Error('word/document.xml nicht gefunden — keine gültige DOCX-Datei');
   let xml = docXml.asText();
 
+  // Pass 1: per-<w:t> replacement preserves run-level formatting (bold/italic/underline).
+  xml = replacePerRunText(xml, replacements);
+
+  // Pass 2: for any FELD_* that survived (split across runs), flatten the paragraph.
+  // Formatting on the split-across-runs placeholder is lost; this is the rare case.
   xml = processDocxParagraphs(
     xml,
     (fullText) => fullText.includes('FELD_'),
