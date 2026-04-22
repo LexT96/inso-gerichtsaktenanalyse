@@ -48,65 +48,215 @@
     }
   },
   "insolvenzgerichte": {
-    "Wittlich": {
-      "name": "Amtsgericht Wittlich",
-      "adresse": "Kurfürstenstraße 63",
-      "plz_ort": "54516 Wittlich"
+    "Alzey": {
+      "name": "Amtsgericht Alzey",
+      "adresse": "Schlossgasse 32",
+      "plz_ort": "55232 Alzey"
     },
-    "Trier": {
-      "name": "Amtsgericht Trier",
-      "adresse": "Justizstraße 2-6",
-      "plz_ort": "54290 Trier"
+    "Bad Hersfeld": {
+      "name": "Amtsgericht Bad Hersfeld",
+      "adresse": "Dudenstraße 10",
+      "plz_ort": "36251 Bad Hersfeld"
     },
-    "Koblenz": {
-      "name": "Amtsgericht Koblenz",
-      "adresse": "Karmeliterstraße 14",
-      "plz_ort": "56068 Koblenz"
+    "Bad Homburg": {
+      "name": "Amtsgericht Bad Homburg v. d. Höhe",
+      "adresse": "Auf der Steinkaut 10-12",
+      "plz_ort": "61352 Bad Homburg v. d. Höhe"
     },
     "Bad Kreuznach": {
       "name": "Amtsgericht Bad Kreuznach",
       "adresse": "Mühlenstraße 34",
       "plz_ort": "55543 Bad Kreuznach"
     },
-    "Mainz": {
-      "name": "Amtsgericht Mainz",
-      "adresse": "Diether-von-Isenburg-Straße 1",
-      "plz_ort": "55116 Mainz"
+    "Bad Neuenahr-Ahrweiler": {
+      "name": "Amtsgericht Bad Neuenahr-Ahrweiler",
+      "adresse": "Wilhelmstraße 55/57",
+      "plz_ort": "53474 Bad Neuenahr-Ahrweiler"
     },
-    "Wiesbaden": {
-      "name": "Amtsgericht Wiesbaden",
-      "adresse": "Mainzer Straße 124",
-      "plz_ort": "65189 Wiesbaden"
+    "Betzdorf": {
+      "name": "Amtsgericht Betzdorf",
+      "adresse": "Friedrichstraße 17",
+      "plz_ort": "57518 Betzdorf"
     },
-    "Idar-Oberstein": {
-      "name": "Amtsgericht Idar-Oberstein",
-      "adresse": "Georg-Maus-Straße 2",
-      "plz_ort": "55743 Idar-Oberstein"
+    "Bingen am Rhein": {
+      "name": "Amtsgericht Bingen am Rhein",
+      "adresse": "Mainzer Straße 52",
+      "plz_ort": "55411 Bingen am Rhein"
+    },
+    "Bitburg": {
+      "name": "Amtsgericht Bitburg",
+      "adresse": "Gerichtsstraße 2-4",
+      "plz_ort": "54634 Bitburg"
+    },
+    "Cochem": {
+      "name": "Amtsgericht Cochem",
+      "adresse": "Ravenestraße 39",
+      "plz_ort": "56812 Cochem"
+    },
+    "Cuxhaven": {
+      "name": "Amtsgericht Cuxhaven",
+      "adresse": "Deichstraße 12",
+      "plz_ort": "27472 Cuxhaven"
+    },
+    "Darmstadt": {
+      "name": "Amtsgericht Darmstadt",
+      "adresse": "Mathildenplatz 15",
+      "plz_ort": "64283 Darmstadt"
+    },
+    "Eschwege": {
+      "name": "Amtsgericht Eschwege",
+      "adresse": "Friedrich-Wilhelm-Straße 39",
+      "plz_ort": "37269 Eschwege"
     },
     "Frankfurt am Main": {
       "name": "Amtsgericht Frankfurt am Main",
       "adresse": "Gerichtsstraße 2",
       "plz_ort": "60313 Frankfurt am Main"
     },
-    "Limburg": {
-      "name": "Amtsgericht Limburg a. d. Lahn",
-      "adresse": "Schiede 20",
-      "plz_ort": "65549 Limburg a. d. Lahn"
+    "Friedberg": {
+      "name": "Amtsgericht Friedberg (Hessen)",
+      "adresse": "Homburger Straße 18",
+      "plz_ort": "61169 Friedberg (Hessen)"
     },
-    "Montabaur": {
-      "name": "Amtsgericht Montabaur",
-      "adresse": "Peter-Altmeier-Platz 3",
-      "plz_ort": "56410 Montabaur"
+    "Fritzlar": {
+      "name": "Amtsgericht Fritzlar",
+      "adresse": "Schladenweg 1",
+      "plz_ort": "34560 Fritzlar"
+    },
+    "Fulda": {
+      "name": "Amtsgericht Fulda",
+      "adresse": "Königstraße 38",
+      "plz_ort": "36037 Fulda"
     },
     "Gießen": {
       "name": "Amtsgericht Gießen",
       "adresse": "Gutfleischstraße 1",
       "plz_ort": "35390 Gießen"
     },
-    "Cuxhaven": {
-      "name": "Amtsgericht Cuxhaven",
-      "adresse": "Deichstraße 12",
-      "plz_ort": "27472 Cuxhaven"
+    "Hanau": {
+      "name": "Amtsgericht Hanau",
+      "adresse": "Nußallee 17",
+      "plz_ort": "63450 Hanau"
+    },
+    "Idar-Oberstein": {
+      "name": "Amtsgericht Idar-Oberstein",
+      "adresse": "Georg-Maus-Straße 2",
+      "plz_ort": "55743 Idar-Oberstein"
+    },
+    "Kaiserslautern": {
+      "name": "Amtsgericht Kaiserslautern",
+      "adresse": "Bahnhofstraße 24",
+      "plz_ort": "67657 Kaiserslautern"
+    },
+    "Kassel": {
+      "name": "Amtsgericht Kassel",
+      "adresse": "Frankfurter Straße 9",
+      "plz_ort": "34117 Kassel"
+    },
+    "Koblenz": {
+      "name": "Amtsgericht Koblenz",
+      "adresse": "Karmeliterstraße 14",
+      "plz_ort": "56068 Koblenz"
+    },
+    "Korbach": {
+      "name": "Amtsgericht Korbach",
+      "adresse": "Hagenstraße 2",
+      "plz_ort": "34497 Korbach"
+    },
+    "Königstein": {
+      "name": "Amtsgericht Königstein im Taunus",
+      "adresse": "Gerichtsstraße 2",
+      "plz_ort": "61462 Königstein im Taunus"
+    },
+    "Landau in der Pfalz": {
+      "name": "Amtsgericht Landau in der Pfalz",
+      "adresse": "Marienring 13",
+      "plz_ort": "76829 Landau in der Pfalz"
+    },
+    "Limburg": {
+      "name": "Amtsgericht Limburg a. d. Lahn",
+      "adresse": "Schiede 20",
+      "plz_ort": "65549 Limburg a. d. Lahn"
+    },
+    "Ludwigshafen am Rhein": {
+      "name": "Amtsgericht Ludwigshafen am Rhein",
+      "adresse": "Wittelsbachstraße 10",
+      "plz_ort": "67061 Ludwigshafen am Rhein"
+    },
+    "Mainz": {
+      "name": "Amtsgericht Mainz",
+      "adresse": "Diether-von-Isenburg-Straße 1",
+      "plz_ort": "55116 Mainz"
+    },
+    "Marburg": {
+      "name": "Amtsgericht Marburg",
+      "adresse": "Universitätsstraße 48",
+      "plz_ort": "35037 Marburg"
+    },
+    "Mayen": {
+      "name": "Amtsgericht Mayen",
+      "adresse": "Sankt-Veit-Straße 38",
+      "plz_ort": "56727 Mayen"
+    },
+    "Montabaur": {
+      "name": "Amtsgericht Montabaur",
+      "adresse": "Peter-Altmeier-Platz 3",
+      "plz_ort": "56410 Montabaur"
+    },
+    "Neustadt an der Weinstraße": {
+      "name": "Amtsgericht Neustadt a.d. Weinstraße",
+      "adresse": "Robert-Stolz-Straße 20",
+      "plz_ort": "67433 Neustadt an der Weinstraße"
+    },
+    "Neuwied": {
+      "name": "Amtsgericht Neuwied",
+      "adresse": "Hermannstraße 39",
+      "plz_ort": "56564 Neuwied"
+    },
+    "Offenbach am Main": {
+      "name": "Amtsgericht Offenbach am Main",
+      "adresse": "Kaiserstraße 16-18",
+      "plz_ort": "63065 Offenbach am Main"
+    },
+    "Pirmasens": {
+      "name": "Amtsgericht Pirmasens",
+      "adresse": "Bahnhofstraße 22-26",
+      "plz_ort": "66953 Pirmasens"
+    },
+    "Saarbrücken": {
+      "name": "Amtsgericht Saarbrücken",
+      "adresse": "Franz-Josef-Röder-Straße 13",
+      "plz_ort": "66119 Saarbrücken"
+    },
+    "Trier": {
+      "name": "Amtsgericht Trier",
+      "adresse": "Justizstraße 2-6",
+      "plz_ort": "54290 Trier"
+    },
+    "Wetzlar": {
+      "name": "Amtsgericht Wetzlar",
+      "adresse": "Wertherstraße 1-2",
+      "plz_ort": "35578 Wetzlar"
+    },
+    "Wiesbaden": {
+      "name": "Amtsgericht Wiesbaden",
+      "adresse": "Mainzer Straße 124",
+      "plz_ort": "65189 Wiesbaden"
+    },
+    "Wittlich": {
+      "name": "Amtsgericht Wittlich",
+      "adresse": "Kurfürstenstraße 63",
+      "plz_ort": "54516 Wittlich"
+    },
+    "Worms": {
+      "name": "Amtsgericht Worms",
+      "adresse": "Hardtgasse 6",
+      "plz_ort": "67547 Worms"
+    },
+    "Zweibrücken": {
+      "name": "Amtsgericht Zweibrücken",
+      "adresse": "Herzogstraße 2",
+      "plz_ort": "66482 Zweibrücken"
     }
   },
   "partner": [

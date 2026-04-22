@@ -25,6 +25,8 @@ export interface SourcedBoolean {
 export interface Verfahrensdaten {
   aktenzeichen: SourcedValue;
   gericht: SourcedValue;
+  gericht_adresse?: SourcedValue;
+  gericht_plz_ort?: SourcedValue;
   richter: SourcedValue;
   antragsdatum: SourcedValue;
   beschlussdatum: SourcedValue;

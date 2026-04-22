@@ -540,6 +540,8 @@ const extractionResultSchemaInner = z.object({
     .preprocess(ensureObject, z.object({
       aktenzeichen: sourcedValueSchema.optional().default(defaultSourced),
       gericht: sourcedValueSchema.optional().default(defaultSourced),
+      gericht_adresse: sourcedValueSchema.optional().default(defaultSourced),
+      gericht_plz_ort: sourcedValueSchema.optional().default(defaultSourced),
       richter: sourcedValueSchema.optional().default(defaultSourced),
       antragsdatum: sourcedValueSchema.optional().default(defaultSourced),
       beschlussdatum: sourcedValueSchema.optional().default(defaultSourced),
