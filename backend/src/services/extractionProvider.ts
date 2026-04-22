@@ -38,8 +38,14 @@ export function supportsNativePdf(provider: Provider): boolean {
  * regardless of what EXTRACTION_PROVIDER is set to for the base extraction.
  *
  * Direct Anthropic API and Vertex support PDF. Langdock proxy does not.
+ *
+ * Debug flag: set FORCE_NO_NATIVE_PDF=1 to simulate Langdock-style restriction
+ * locally even when the actual baseURL is direct Anthropic. Useful for testing
+ * the image-batched fallback paths against real APIs without needing Langdock
+ * credentials.
  */
 export function anthropicSupportsNativePdf(): boolean {
+  if (process.env.FORCE_NO_NATIVE_PDF === '1') return false;
   if (process.env.GOOGLE_PROJECT_ID) return true; // Vertex
   return !config.ANTHROPIC_BASE_URL?.toLowerCase().includes('langdock');
 }
