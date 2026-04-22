@@ -24,6 +24,12 @@ interface SlotData {
   status: 'filled' | 'todo' | 'editorial';
 }
 
+interface MissingField {
+  feld: string;
+  label: string;
+  source: 'path' | 'computed' | 'input';
+}
+
 const JURISTISCHE_KEYWORDS = ['GmbH', 'UG', 'AG', 'SE', 'eG', 'gGmbH', 'KGaA', 'e.V.', 'Stiftung'];
 const PERSONEN_KEYWORDS = ['OHG', 'KG', 'GbR', 'PartG'];
 
@@ -72,6 +78,11 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
   const [newSbName, setNewSbName] = useState('');
   const [newSbEmail, setNewSbEmail] = useState('');
   const [newSbDurchwahl, setNewSbDurchwahl] = useState('');
+
+  // Missing KI_* fields discovered by backend scanning the template
+  const [missingFields, setMissingFields] = useState<MissingField[]>([]);
+  const [missingLoading, setMissingLoading] = useState(false);
+  const [fieldOverrides, setFieldOverrides] = useState<Record<string, string>>({});
 
   const { profiles, loading: loadingProfiles, createProfile, updateProfile, deleteProfile } = useVerwalter();
   const { profiles: sbProfiles, loading: loadingSb, createProfile: createSb } = useSachbearbeiter();
@@ -159,17 +170,47 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
     return body;
   };
 
+  const buildUserInputsWithOverrides = (): Record<string, string | Record<string, string>> => {
+    const body = buildUserInputs() as Record<string, string | Record<string, string>>;
+    // Only include non-empty overrides
+    const cleaned: Record<string, string> = {};
+    for (const [k, v] of Object.entries(fieldOverrides)) {
+      if (v && v.trim()) cleaned[k] = v.trim();
+    }
+    if (Object.keys(cleaned).length > 0) body.field_overrides = cleaned;
+    return body;
+  };
+
+  const handleFetchMissing = async () => {
+    if (missingLoading) return;
+    setMissingLoading(true);
+    setError('');
+    try {
+      const body = buildUserInputs();
+      const response = await apiClient.post(`/generate-gutachten/${extractionId}/missing-fields`, body);
+      setMissingFields(response.data.missingFields || []);
+    } catch (err) {
+      const axErr = err as { response?: { data?: { error?: string } } };
+      setError(axErr?.response?.data?.error || 'Fehlende Felder konnten nicht ermittelt werden');
+    } finally {
+      setMissingLoading(false);
+    }
+  };
+
   const handlePrepare = async () => {
     setPreparing(true);
     setError('');
     try {
-      const body = buildUserInputs();
+      const body = buildUserInputsWithOverrides();
       const response = await apiClient.post(`/generate-gutachten/${extractionId}/prepare`, body);
       const returnedSlots: SlotData[] = (response.data.slots || []).map((s: SlotData) => ({
         id: s.id, context: s.context || '', original: s.original || '',
         value: s.value || '', hint: s.hint || s.original || '', status: s.status,
       }));
       setSlots(returnedSlots);
+      if (Array.isArray(response.data.missingFields)) {
+        setMissingFields(response.data.missingFields);
+      }
     } catch (err) {
       const axErr = err as { response?: { data?: { error?: string } } };
       setError(axErr?.response?.data?.error || 'Vorbereitung fehlgeschlagen');
@@ -183,7 +224,7 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
     setError('');
     try {
       const finalSlots = slots.map(s => ({ id: s.id, value: s.value }));
-      const body = { userInputs: buildUserInputs(), slots: finalSlots };
+      const body = { userInputs: buildUserInputsWithOverrides(), slots: finalSlots };
       const response = await apiClient.post(
         `/generate-gutachten/${extractionId}/generate`, body, { responseType: 'blob' },
       );
@@ -434,44 +475,84 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
 
           {/* Step 4: Fehlende Angaben */}
           {step === 4 && (
-            <div className="space-y-3">
-              {!selectedVerwalter?.anderkonto_iban && (
-                <div>
-                  <label className="text-[10px] text-text-dim block mb-1">Anderkonto IBAN</label>
-                  <input value={anderkontoIban} onChange={e => setAnderkontoIban(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text font-mono"
-                    placeholder="DE__ ____ ____ ____ ____ __" />
+            <div className="space-y-4">
+              {/* Known slots the wizard has always asked about */}
+              <div className="space-y-3">
+                <div className="text-[10px] text-text-dim uppercase tracking-wide">Standard-Angaben</div>
+                {!selectedVerwalter?.anderkonto_iban && (
+                  <div>
+                    <label className="text-[10px] text-text-dim block mb-1">Anderkonto IBAN</label>
+                    <input value={anderkontoIban} onChange={e => setAnderkontoIban(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text font-mono"
+                      placeholder="DE__ ____ ____ ____ ____ __" />
+                  </div>
+                )}
+                {!selectedVerwalter?.anderkonto_bank && !anderkontoBank && (
+                  <div>
+                    <label className="text-[10px] text-text-dim block mb-1">Anderkonto Bank</label>
+                    <input value={anderkontoBank} onChange={e => setAnderkontoBank(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text"
+                      placeholder="z.B. Sparkasse Trier" />
+                  </div>
+                )}
+                {isJuristisch && (
+                  <div>
+                    <label className="text-[10px] text-text-dim block mb-1">Geschäftsführer</label>
+                    <input value={geschaeftsfuehrer} onChange={e => setGeschaeftsfuehrer(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text"
+                      placeholder="Name des Geschäftsführers" />
+                  </div>
+                )}
+                {isNatuerlich && (
+                  <div>
+                    <label className="text-[10px] text-text-dim block mb-1">Last GAVV</label>
+                    <input value={lastGavv} onChange={e => setLastGavv(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text"
+                      placeholder="Datum der letzten GAVV" />
+                  </div>
+                )}
+              </div>
+
+              {/* Dynamic missing KI_* fields from template scan */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] text-text-dim uppercase tracking-wide">
+                    Aus der Akte nicht extrahiert
+                    {!missingLoading && ` (${missingFields.length})`}
+                  </div>
+                  {missingLoading && <span className="text-[9px] text-text-muted">Lade…</span>}
                 </div>
-              )}
-              {!selectedVerwalter?.anderkonto_bank && !anderkontoBank && (
-                <div>
-                  <label className="text-[10px] text-text-dim block mb-1">Anderkonto Bank</label>
-                  <input value={anderkontoBank} onChange={e => setAnderkontoBank(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text"
-                    placeholder="z.B. Sparkasse Trier" />
-                </div>
-              )}
-              {isJuristisch && (
-                <div>
-                  <label className="text-[10px] text-text-dim block mb-1">Geschäftsführer</label>
-                  <input value={geschaeftsfuehrer} onChange={e => setGeschaeftsfuehrer(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text"
-                    placeholder="Name des Geschäftsführers" />
-                </div>
-              )}
-              {isNatuerlich && (
-                <div>
-                  <label className="text-[10px] text-text-dim block mb-1">Last GAVV</label>
-                  <input value={lastGavv} onChange={e => setLastGavv(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-bg border border-border rounded text-[11px] text-text"
-                    placeholder="Datum der letzten GAVV" />
-                </div>
-              )}
-              {selectedVerwalter?.anderkonto_iban && !isJuristisch && !lastGavv && (
-                <div className="p-3 bg-green-900/20 border border-green-800/40 rounded text-[11px] text-green-400 text-center">
-                  ✓ Alle Angaben vorhanden — Gutachten kann generiert werden
-                </div>
-              )}
+                {!missingLoading && missingFields.length === 0 && (
+                  <div className="p-3 bg-white border border-green-300 rounded text-[11px] text-green-700 text-center">
+                    ✓ Alle Template-Felder konnten aus der Extraktion gefüllt werden
+                  </div>
+                )}
+                {!missingLoading && missingFields.length > 0 && (
+                  <>
+                    <div className="text-[9px] text-text-muted leading-relaxed">
+                      Nicht ausgefüllte Felder erscheinen im Gutachten als <span className="font-mono text-ie-amber">[TODO: …]</span>. Alternativ: Wizard schließen und ein weiteres Dokument hochladen.
+                    </div>
+                    <div className="max-h-[300px] overflow-auto pr-1 space-y-1.5">
+                      {missingFields.map(mf => (
+                        <div key={mf.feld} className="flex items-center gap-2">
+                          <label
+                            className="flex-shrink-0 w-[150px] text-[10px] text-text-dim truncate"
+                            title={`${mf.label} · ${mf.feld}`}
+                          >
+                            {mf.label}
+                          </label>
+                          <input
+                            value={fieldOverrides[mf.feld] ?? ''}
+                            onChange={e => setFieldOverrides(prev => ({ ...prev, [mf.feld]: e.target.value }))}
+                            className="flex-1 px-2 py-1 bg-bg border border-border rounded text-[11px] text-text"
+                            placeholder="leer lassen für [TODO: …]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
 
@@ -531,6 +612,7 @@ export function GutachtenWizard({ result, extractionId, onUpdateField, onClose }
           </button>
           {step < 5 ? (
             <button onClick={() => {
+              if (step === 3) handleFetchMissing(); // Load missing-field list for step 4
               if (step === 4) handlePrepare(); // Start preparation when moving to step 5
               setStep(s => Math.min(5, s + 1));
             }} disabled={!canAdvance(step)}
