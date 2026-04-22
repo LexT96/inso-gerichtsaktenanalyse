@@ -474,6 +474,88 @@ async function extractPdfPages(pdfBuffer: Buffer, pageIndices: number[]): Promis
   return Buffer.from(await newDoc.save());
 }
 
+/**
+ * Send one batch of Fragebogen pages as JPEG images to Claude Vision via the
+ * configured Anthropic backend (works on Langdock since it accepts type:'image').
+ * Returns the parsed handwriting JSON for this batch, or null if the batch
+ * failed (network, parse error, all-empty response).
+ */
+async function callHandwritingBatch(
+  batchPages: number[],
+  imagesByPage: Map<number, string>,
+  promptSuffix: string,
+  cacheable: boolean,
+): Promise<Record<string, { wert: unknown; quelle: string }> | null> {
+  const content: Array<
+    | { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }
+    | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg'; data: string } }
+  > = [];
+  for (const p of batchPages) {
+    const b64 = imagesByPage.get(p);
+    if (!b64) continue; // page render failed earlier; skip
+    content.push({ type: 'text', text: `=== SEITE ${p + 1} ===` });
+    content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } });
+  }
+  if (content.length === 0) return null;
+
+  // Final prompt block — cache_control on the static portion lets Anthropic
+  // reuse it across the other batches (5 min TTL → 90% input savings)
+  const finalText: { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } } = {
+    type: 'text',
+    text: `${HANDWRITING_PROMPT}${promptSuffix}`,
+  };
+  if (cacheable) finalText.cache_control = { type: 'ephemeral' };
+  content.push(finalText);
+
+  let response;
+  try {
+    response = await callWithRetry(() => createAnthropicMessage({
+      model: config.EXTRACTION_MODEL,
+      max_tokens: 8192,
+      temperature: 0,
+      messages: [{ role: 'user' as const, content: content as never }],
+    }));
+  } catch (err) {
+    logger.warn('Handwriting batch call failed', {
+      pages: batchPages.map(p => p + 1),
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+
+  if (response.stop_reason === 'max_tokens') {
+    logger.warn('Handwriting batch hit max_tokens, output may be truncated', {
+      pages: batchPages.map(p => p + 1),
+    });
+  }
+
+  const text = response.content
+    .filter((c) => c.type === 'text')
+    .map((c) => (c as { text: string }).text)
+    .join('');
+
+  try {
+    const jsonStr = extractJsonFromText(text);
+    try {
+      return JSON.parse(jsonStr) as Record<string, { wert: unknown; quelle: string }>;
+    } catch {
+      const { jsonrepair } = await import('jsonrepair');
+      const parsed = JSON.parse(jsonrepair(jsonStr)) as Record<string, { wert: unknown; quelle: string }>;
+      logger.info('Handwriting batch JSON per jsonrepair repariert', {
+        pages: batchPages.map(p => p + 1),
+      });
+      return parsed;
+    }
+  } catch (err) {
+    logger.warn('Handwriting batch JSON parse failed', {
+      pages: batchPages.map(p => p + 1),
+      error: err instanceof Error ? err.message : String(err),
+      sample: text.slice(0, 300),
+    });
+    return null;
+  }
+}
+
 const HANDWRITING_PROMPT = `Du bist ein OCR-Spezialist für handschriftlich ausgefüllte deutsche Insolvenz-Fragebögen.
 
 AUFGABE: Lies JEDES handschriftlich ausgefüllte Feld in diesen Formularseiten. Die Formulare sind vorgedruckt mit Feldnamen, und der Antragsteller hat die Werte HANDSCHRIFTLICH eingetragen.
