@@ -610,19 +610,25 @@ async function extractHandwrittenFormFields(
   logger.info('Fragebogen pages detected for handwriting extraction', {
     pages: formPages.map(p => p + 1),
     count: formPages.length,
-    mode: pdfBuffer && anthropicSupportsNativePdf() ? 'native-pdf' : 'text',
+    mode: !pdfBuffer ? 'text' : (anthropicSupportsNativePdf() ? 'native-pdf' : 'image-batched'),
   });
 
   const handwritingModel = config.EXTRACTION_MODEL;
   const pageMapping = formPages.map((p, i) => `PDF-Seite ${i + 1} = Originalseite ${p + 1}`).join(', ');
   const promptSuffix = `\n\nSeitenzuordnung: ${pageMapping}\nBitte verwende die Originalseitennummern in der quelle.`;
 
-  let response;
+  // Three-way branch: native-pdf (best, direct Anthropic), image-batched
+  // (Langdock-compatible), or text-mode fallback (last-resort if no PDF)
+  let parsed: Record<string, { wert: unknown; quelle: string }> | null = null;
+  let modeUsed: 'native-pdf' | 'image-batched' | 'text';
+  let batchesOk = 0;
+  let batchesFailed = 0;
+
   if (pdfBuffer && anthropicSupportsNativePdf()) {
-    // Native PDF mode: send mini-PDF for vision-based handwriting OCR
+    modeUsed = 'native-pdf';
     const miniPdf = await extractPdfPages(pdfBuffer, formPages);
     const base64 = miniPdf.toString('base64');
-    response = await callWithRetry(() => createAnthropicMessage({
+    const response = await callWithRetry(() => createAnthropicMessage({
       model: handwritingModel,
       max_tokens: 8192,
       temperature: 0,
@@ -634,12 +640,67 @@ async function extractHandwrittenFormFields(
         ],
       }],
     }));
+    if (response.stop_reason === 'max_tokens') {
+      logger.warn('Handwriting native-PDF hit max_tokens', { pages: formPages.map(p => p + 1) });
+    }
+    const text = response.content
+      .filter((c) => c.type === 'text')
+      .map((c) => (c as { text: string }).text)
+      .join('');
+    try {
+      const jsonStr = extractJsonFromText(text);
+      try {
+        parsed = JSON.parse(jsonStr) as Record<string, { wert: unknown; quelle: string }>;
+      } catch {
+        const { jsonrepair } = await import('jsonrepair');
+        parsed = JSON.parse(jsonrepair(jsonStr)) as Record<string, { wert: unknown; quelle: string }>;
+        logger.info('Handwriting native-PDF JSON per jsonrepair repariert');
+      }
+    } catch (err) {
+      logger.warn('Handwriting native-PDF JSON parse failed', {
+        error: err instanceof Error ? err.message : String(err),
+        sample: text.slice(0, 300),
+      });
+      return result;
+    }
+  } else if (pdfBuffer) {
+    modeUsed = 'image-batched';
+    // Langdock-compatible path: render Fragebogen pages as JPEGs and batch them
+    const { renderPagesToJpeg } = await import('../utils/pageImageRenderer');
+    const imagesByPage = renderPagesToJpeg(pdfBuffer, formPages, 150);
+    const renderedPages = formPages.filter(p => imagesByPage.has(p));
+    if (renderedPages.length < formPages.length) {
+      logger.warn('Some Fragebogen pages failed to render', {
+        requested: formPages.length,
+        rendered: renderedPages.length,
+        missing: formPages.filter(p => !imagesByPage.has(p)).map(p => p + 1),
+      });
+    }
+    const batches = chunk(renderedPages, 4);
+    const tasks = batches.map((batchPages) => async () => {
+      // Cache the static prompt across all batches (5 min TTL → ~90% input savings on follow-ups)
+      return await callHandwritingBatch(batchPages, imagesByPage, promptSuffix, true);
+    });
+    const settled = await runWithConcurrency(tasks, 2);
+    const mergedBatches: Record<string, { wert: unknown; quelle: string }> = {};
+    for (const r of settled) {
+      if (r.status === 'fulfilled' && r.value) {
+        batchesOk++;
+        // Last-batch-wins for duplicate keys (rare; merge below only fills empty
+        // target fields anyway, so duplicates don't override anything material)
+        Object.assign(mergedBatches, r.value);
+      } else {
+        batchesFailed++;
+      }
+    }
+    parsed = batchesOk > 0 ? mergedBatches : null;
   } else {
-    // Text mode (Langdock): send OCR text of form pages — still catches structured fields
+    modeUsed = 'text';
+    // Last-resort: send OCR text only (used when no PDF buffer is available)
     const formTextBlock = formPages
       .map(p => `=== SEITE ${p + 1} ===\n${pageTexts[p] ?? ''}`)
       .join('\n\n');
-    response = await callWithRetry(() => createAnthropicMessage({
+    const response = await callWithRetry(() => createAnthropicMessage({
       model: handwritingModel,
       max_tokens: 8192,
       temperature: 0,
@@ -648,29 +709,33 @@ async function extractHandwrittenFormFields(
         content: `${HANDWRITING_PROMPT}${promptSuffix}\n\n--- FORMULARE (OCR-Text) ---\n\n${formTextBlock}`,
       }],
     }));
+    if (response.stop_reason === 'max_tokens') {
+      logger.warn('Handwriting text-mode hit max_tokens', { pages: formPages.map(p => p + 1) });
+    }
+    const text = response.content
+      .filter((c) => c.type === 'text')
+      .map((c) => (c as { text: string }).text)
+      .join('');
+    try {
+      const jsonStr = extractJsonFromText(text);
+      try {
+        parsed = JSON.parse(jsonStr) as Record<string, { wert: unknown; quelle: string }>;
+      } catch {
+        const { jsonrepair } = await import('jsonrepair');
+        parsed = JSON.parse(jsonrepair(jsonStr)) as Record<string, { wert: unknown; quelle: string }>;
+        logger.info('Handwriting text-mode JSON per jsonrepair repariert');
+      }
+    } catch (err) {
+      logger.warn('Handwriting text-mode JSON parse failed', {
+        error: err instanceof Error ? err.message : String(err),
+        sample: text.slice(0, 300),
+      });
+      return result;
+    }
   }
 
-  const text = response.content
-    .filter((c) => c.type === 'text')
-    .map((c) => (c as { text: string }).text)
-    .join('');
-
-  let parsed: Record<string, { wert: unknown; quelle: string }>;
-  try {
-    const jsonStr = extractJsonFromText(text);
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch {
-      // JSON likely truncated by max_tokens — try jsonrepair
-      const { jsonrepair } = await import('jsonrepair');
-      parsed = JSON.parse(jsonrepair(jsonStr));
-      logger.info('Handwriting JSON per jsonrepair repariert');
-    }
-  } catch (err) {
-    logger.warn('Handwriting extraction JSON parse failed', {
-      error: err instanceof Error ? err.message : String(err),
-      sample: text.slice(0, 300),
-    });
+  if (!parsed) {
+    logger.warn('Handwriting extraction produced no parsed data', { mode: modeUsed });
     return result;
   }
 
@@ -741,11 +806,13 @@ async function extractHandwrittenFormFields(
   }
 
   logger.info('Handwriting extraction completed', {
+    mode: modeUsed,
     fieldsFound: Object.keys(parsed).length,
     merged,
     skipped: skipped.length,
-    skippedFields: skipped, // base extraction had non-empty values; handwriting did NOT override
+    skippedFields: skipped,
     formPages: formPages.length,
+    ...(modeUsed === 'image-batched' ? { batchesOk, batchesFailed } : {}),
   });
 
   return result;
