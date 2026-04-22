@@ -32,6 +32,18 @@ export function supportsNativePdf(provider: Provider): boolean {
   return provider === 'anthropic' || provider === 'vertex';
 }
 
+/**
+ * Does the configured Anthropic client support native PDF (document content type)?
+ * Use this for any pass that calls Claude directly (handwriting, PZU, slot filling),
+ * regardless of what EXTRACTION_PROVIDER is set to for the base extraction.
+ *
+ * Direct Anthropic API and Vertex support PDF. Langdock proxy does not.
+ */
+export function anthropicSupportsNativePdf(): boolean {
+  if (process.env.GOOGLE_PROJECT_ID) return true; // Vertex
+  return !config.ANTHROPIC_BASE_URL?.toLowerCase().includes('langdock');
+}
+
 /** Is this provider rate-limited (needs serialized calls)? */
 export function isRateLimited(provider: Provider): boolean {
   // Langdock now has 200K TPM — no longer rate-limited
