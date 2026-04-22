@@ -600,7 +600,8 @@ Wenn ein Feld leer ist oder nicht lesbar: NICHT aufnehmen. Nur tatsächlich gele
 export async function extractHandwrittenFormFields(
   result: ExtractionResult,
   pdfBuffer: Buffer | null,
-  pageTexts: string[]
+  pageTexts: string[],
+  ocrResult?: OcrResult | null,
 ): Promise<ExtractionResult> {
   const formPages = detectFragebogenPages(pageTexts);
   if (formPages.length === 0) {
@@ -812,6 +813,39 @@ export async function extractHandwrittenFormFields(
       quelle: `${parsed.betriebsrat.quelle} (Handschrift-Extraktion)`,
     };
     merged++;
+  }
+
+  // Inject synthetic OCR entries for handwriting findings so frontend Ctrl-F
+  // can find handwritten values on the right page (footer band; not pixel-exact)
+  let ocrEntriesAdded = 0;
+  if (ocrResult && parsed) {
+    for (const [, sv] of Object.entries(parsed)) {
+      if (!sv?.wert) continue;
+      const valueStr = String(sv.wert).trim();
+      if (!valueStr) continue;
+      // Parse "Seite X, ..." from the quelle to find the target page
+      const m = String(sv.quelle ?? '').match(/Seite\s+(\d+)/i);
+      if (!m) continue;
+      const pageOneIndexed = parseInt(m[1], 10);
+      const pageIdx = pageOneIndexed - 1;
+      if (pageIdx < 0 || pageIdx >= ocrResult.pages.length) continue;
+      // Footer-band polygon (in inches; ocrLayerService converts to points)
+      // A4 = ~8.27 x 11.69 in; place at y = 11.4 to 11.6 (just above bottom edge)
+      const footerY1 = 11.4;
+      const footerY2 = 11.6;
+      const synthetic: { text: string; confidence: number; polygon: number[] } = {
+        text: valueStr,
+        confidence: 0.5, // marks as synthetic (real Azure DI words are typically > 0.85)
+        polygon: [0.5, footerY1, 7.5, footerY1, 7.5, footerY2, 0.5, footerY2],
+      };
+      const page = ocrResult.pages[pageIdx];
+      if (!page.wordConfidences) page.wordConfidences = [];
+      page.wordConfidences.push(synthetic);
+      ocrEntriesAdded++;
+    }
+    if (ocrEntriesAdded > 0) {
+      logger.info('Handwriting OCR-layer annotations injected', { ocrEntriesAdded });
+    }
   }
 
   logger.info('Handwriting extraction completed', {
@@ -1539,9 +1573,31 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
     if (pdfBuffer || pageTexts.length > 0) {
       report('Handschriftliche Formulare werden gelesen…', 85);
       try {
-        result = await extractHandwrittenFormFields(result, pdfBuffer, pageTexts);
+        result = await extractHandwrittenFormFields(result, pdfBuffer, pageTexts, ocrResult);
       } catch (err) {
         logger.warn('Handwriting extraction failed, continuing', { error: err instanceof Error ? err.message : String(err) });
+      }
+      // If handwriting injected synthetic OCR-layer annotations, rebuild the
+      // searchable PDF so frontend Ctrl-F finds handwritten values
+      if (ocrResult && pdfBuffer) {
+        try {
+          const { addOcrTextLayer } = await import('./ocrLayerService');
+          const updatedPdf = addOcrTextLayer(pdfBuffer, ocrResult);
+          if (updatedPdf !== pdfBuffer && extractionId) {
+            pdfBuffer = updatedPdf;
+            const ocrPdfDir = path.join(
+              path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs'),
+              String(extractionId),
+            );
+            const fs = await import('fs');
+            fs.writeFileSync(path.join(ocrPdfDir, '0_gerichtsakte.pdf'), pdfBuffer);
+            logger.info('PDF mit Handschrift-Annotation aktualisiert', { extractionId });
+          }
+        } catch (err) {
+          logger.warn('Failed to rebuild OCR layer with handwriting annotations', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
       try {
         result = await extractPzuZustellungsdatum(result, pdfBuffer, pageTexts);
