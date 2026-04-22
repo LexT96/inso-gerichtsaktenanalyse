@@ -22,6 +22,7 @@ import { extractForderungen } from '../utils/forderungenExtractor';
 import { semanticVerify } from '../utils/semanticVerifier';
 import { extractAktiva } from '../utils/aktivaExtractor';
 import { analyzeAnfechtung } from '../utils/anfechtungsAnalyzer';
+import { renderPagesToJpeg } from '../utils/pageImageRenderer';
 import { enrichmentReview } from '../utils/enrichmentReview';
 import { PDFDocument } from 'pdf-lib';
 import type { ExtractionResult } from '../types/extraction';
@@ -666,7 +667,6 @@ async function extractHandwrittenFormFields(
   } else if (pdfBuffer) {
     modeUsed = 'image-batched';
     // Langdock-compatible path: render Fragebogen pages as JPEGs and batch them
-    const { renderPagesToJpeg } = await import('../utils/pageImageRenderer');
     const imagesByPage = renderPagesToJpeg(pdfBuffer, formPages, 150);
     const renderedPages = formPages.filter(p => imagesByPage.has(p));
     if (renderedPages.length < formPages.length) {
@@ -683,6 +683,15 @@ async function extractHandwrittenFormFields(
     });
     const settled = await runWithConcurrency(tasks, 2);
     const mergedBatches: Record<string, { wert: unknown; quelle: string }> = {};
+    // Bucket settled results into ok/failed:
+    // - fulfilled with a value -> ok (parsed JSON present)
+    // - fulfilled with null -> failed (callHandwritingBatch returned null:
+    //   either no images for the batch, or JSON parse hard-failed after
+    //   jsonrepair fallback)
+    // - rejected -> failed (network/API error caught inside the helper or
+    //   thrown by callWithRetry)
+    // We don't distinguish these in the log because the user-visible
+    // outcome is identical (no merged data from that batch).
     for (const r of settled) {
       if (r.status === 'fulfilled' && r.value) {
         batchesOk++;
