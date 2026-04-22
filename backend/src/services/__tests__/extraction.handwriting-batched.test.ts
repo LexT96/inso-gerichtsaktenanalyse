@@ -1,5 +1,5 @@
 import '../../env'; // Load .env before importing config
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { chunk, runWithConcurrency } from '../extraction';
 
 describe('chunk', () => {
@@ -57,5 +57,122 @@ describe('runWithConcurrency', () => {
     const tasks = Array.from({ length: 6 }, make);
     await runWithConcurrency(tasks, 2);
     expect(maxInFlight).toBe(2);
+  });
+});
+
+// ─── Integration tests: image-batched mode ───────────────────────────────────
+
+vi.mock('../anthropic', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../anthropic')>();
+  return {
+    ...actual,
+    createAnthropicMessage: vi.fn(),
+    callWithRetry: vi.fn((fn: () => Promise<unknown>) => fn()),
+  };
+});
+vi.mock('../../utils/pageImageRenderer', () => ({
+  renderPagesToJpeg: vi.fn(),
+}));
+vi.mock('../extractionProvider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../extractionProvider')>();
+  return {
+    ...actual,
+    anthropicSupportsNativePdf: () => false, // force image-batched mode
+    detectProvider: () => 'langdock' as const,
+  };
+});
+
+describe('extractHandwrittenFormFields image-batched', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('merges fields from successful batches and skips failed ones', async () => {
+    const { extractHandwrittenFormFields } = await import('../extraction');
+    const { createAnthropicMessage } = await import('../anthropic');
+    const { renderPagesToJpeg } = await import('../../utils/pageImageRenderer');
+
+    // Render returns 5 pages of dummy base64
+    (renderPagesToJpeg as ReturnType<typeof vi.fn>).mockReturnValue(
+      new Map([0, 1, 2, 3, 4].map(i => [i, 'BASE64DATA']))
+    );
+
+    // 5 pages -> chunk(_, 4) -> two batches: [0,1,2,3] and [4]
+    // Both batches succeed; first returns telefon, second returns email
+    let callCount = 0;
+    (createAnthropicMessage as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          stop_reason: 'end_turn',
+          content: [{ type: 'text', text: '{"telefon":{"wert":"06545 9121110","quelle":"Seite 1"}}' }],
+        };
+      }
+      if (callCount === 2) {
+        return {
+          stop_reason: 'end_turn',
+          content: [{ type: 'text', text: '{"email":{"wert":"info@example.de","quelle":"Seite 5"}}' }],
+        };
+      }
+      throw new Error('unexpected batch');
+    });
+
+    // Minimal Schuldner fixture — only the fields touched by the test need to exist.
+    // Use `as never` to bypass the full type check; the merge code only inspects
+    // the listed fields.
+    const result = {
+      schuldner: {
+        telefon: { wert: '', quelle: '' },
+        email: { wert: '', quelle: '' },
+      },
+    } as never;
+
+    // pageTexts contains FRAGEBOGEN markers on pages 0-4 to trigger detection
+    const pageTexts = ['Fragebogen', 'Fragebogen', 'Fragebogen', 'Fragebogen', 'Fragebogen'];
+    const pdfBuffer = Buffer.from([0x25, 0x50, 0x44, 0x46]); // %PDF dummy
+
+    await extractHandwrittenFormFields(result, pdfBuffer, pageTexts);
+
+    expect(callCount).toBe(2);
+    expect(result.schuldner.telefon.wert).toBe('06545 9121110');
+    expect(result.schuldner.email.wert).toBe('info@example.de');
+  });
+
+  it('survives a partial batch failure', async () => {
+    const { extractHandwrittenFormFields } = await import('../extraction');
+    const { createAnthropicMessage } = await import('../anthropic');
+    const { renderPagesToJpeg } = await import('../../utils/pageImageRenderer');
+
+    (renderPagesToJpeg as ReturnType<typeof vi.fn>).mockReturnValue(
+      new Map([0, 1, 2, 3, 4].map(i => [i, 'BASE64DATA']))
+    );
+
+    let callCount = 0;
+    (createAnthropicMessage as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          stop_reason: 'end_turn',
+          content: [{ type: 'text', text: '{"telefon":{"wert":"06545 9121110","quelle":"Seite 1"}}' }],
+        };
+      }
+      throw new Error('simulated batch failure');
+    });
+
+    const result = {
+      schuldner: {
+        telefon: { wert: '', quelle: '' },
+        email: { wert: '', quelle: '' },
+      },
+    } as never;
+    const pageTexts = ['Fragebogen', 'Fragebogen', 'Fragebogen', 'Fragebogen', 'Fragebogen'];
+    const pdfBuffer = Buffer.from([0x25, 0x50, 0x44, 0x46]);
+
+    await extractHandwrittenFormFields(result, pdfBuffer, pageTexts);
+
+    // Successful batch's value is merged
+    expect(result.schuldner.telefon.wert).toBe('06545 9121110');
+    // Failed batch's value did NOT make it through
+    expect(result.schuldner.email.wert).toBe('');
   });
 });

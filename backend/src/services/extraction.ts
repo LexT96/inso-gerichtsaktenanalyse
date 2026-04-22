@@ -597,7 +597,7 @@ Antworte AUSSCHLIESSLICH mit validem JSON. Für jedes gefundene Feld:
 
 Wenn ein Feld leer ist oder nicht lesbar: NICHT aufnehmen. Nur tatsächlich gelesene Werte.`;
 
-async function extractHandwrittenFormFields(
+export async function extractHandwrittenFormFields(
   result: ExtractionResult,
   pdfBuffer: Buffer | null,
   pageTexts: string[]
