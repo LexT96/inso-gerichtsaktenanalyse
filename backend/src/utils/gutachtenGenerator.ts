@@ -582,13 +582,16 @@ function computeGutachtenField(
     case 'gericht_adresse': {
       const gericht = getByPath(result, 'verfahrensdaten.gericht.wert');
       const court = lookupGerichtAddress(gericht);
-      return court?.adresse || '';
+      if (court?.adresse) return court.adresse;
+      // Fallback: address extracted from the Akte (Briefkopf des Beschlusses)
+      return getByPath(result, 'verfahrensdaten.gericht_adresse.wert') || '';
     }
 
     case 'gericht_plz_ort': {
       const gericht2 = getByPath(result, 'verfahrensdaten.gericht.wert');
       const court2 = lookupGerichtAddress(gericht2);
-      return court2?.plz_ort || '';
+      if (court2?.plz_ort) return court2.plz_ort;
+      return getByPath(result, 'verfahrensdaten.gericht_plz_ort.wert') || '';
     }
 
     // --- Verwalter gender variants ---

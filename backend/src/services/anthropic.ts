@@ -91,6 +91,8 @@ Antworte AUSSCHLIESSLICH mit validem JSON (kein Markdown, keine Backticks). WICH
   "verfahrensdaten": {
     "aktenzeichen": {"wert": "", "quelle": ""},
     "gericht": {"wert": "", "quelle": ""},
+    "gericht_adresse": {"wert": "", "quelle": ""},
+    "gericht_plz_ort": {"wert": "", "quelle": ""},
     "richter": {"wert": "", "quelle": ""},
     "antragsdatum": {"wert": "", "quelle": ""},
     "beschlussdatum": {"wert": "", "quelle": ""},
@@ -314,6 +316,8 @@ Wenn eine DOKUMENTSTRUKTUR mitgegeben wird, nutze sie NUR um zu verstehen welche
 Extrahiere ALLE verfügbaren Daten. Bei fehlenden Informationen setze null/leere Strings und fülle fehlende_informationen mit konkreten Hinweisen, wie die Information ermittelt werden kann.
 Für einzelforderungen: Erstelle nur eine GROBE Übersicht — die detaillierte Extraktion aller Einzelforderungen erfolgt in einem separaten Analyseschritt. Trage hier nur den Antragsteller (mit ist_antragsteller: true) und offensichtliche Hauptforderungen ein. Keine Vollständigkeit nötig.
 Für verfahrensstadium: Erkenne aus dem Beschluss/der Akte: "Eröffnungsverfahren" (vorläufige Verwaltung angeordnet, Verfahren noch nicht eröffnet), "Eröffnetes Verfahren" (Eröffnungsbeschluss ergangen), oder "Unbekannt". Für verfahrensart: "Regelinsolvenz" (Unternehmen/Selbständige), "Verbraucherinsolvenz" (§ 304 InsO, natürliche Person ohne selbständige Tätigkeit), oder "Unbekannt".
+
+Für gericht_adresse und gericht_plz_ort: Suche im Briefkopf des Beschlusses bzw. der Gerichtsschreiben nach der Postanschrift des Gerichts. gericht_adresse = nur Straße und Hausnummer (z.B. "Ravenestraße 39"), gericht_plz_ort = PLZ und Ort (z.B. "56812 Cochem"). Wenn nicht im Dokument auffindbar, beide Werte leer lassen.
 Für ehegatte: Wenn im Insolvenzantrag oder der Vermögensauskunft ein Ehegatte/Lebenspartner genannt wird: Name, Geburtsdatum, Güterstand (oft in Vermögensauskunft oder Ehevertrag). gueterstand: "zugewinngemeinschaft" (gesetzlicher Güterstand, Standard wenn verheiratet und nichts anderes angegeben), "guetertrennung" (wenn Ehevertrag vorhanden), "guetergemeinschaft" (selten), "unbekannt". Wenn kein Ehegatte erwähnt: ehegatte weglassen.
 WICHTIG — betriebsstaette_adresse vs. aktuelle_adresse: Das sind ZWEI VERSCHIEDENE Felder. aktuelle_adresse = Wohnanschrift (aus Meldeauskunft). betriebsstaette_adresse = Geschäftsadresse (aus Insolvenzantrag, Leistungsbescheid, Gewerberegister). Bei Einzelunternehmern stehen oft UNTERSCHIEDLICHE Adressen im Antrag (unter dem Firmennamen) und in der Meldeauskunft (Privatanschrift). Die Adresse im Insolvenzantrag UNTER oder NEBEN dem Firmennamen ist die Betriebsstätte, NICHT die Privatanschrift. NIEMALS die Meldeadresse als betriebsstaette_adresse verwenden wenn eine andere Adresse im Antrag steht. Beispiel: Meldeauskunft sagt "Niederstraße 118", Antrag sagt "Mehmet Bayar, Niederstraße 87, 54293 Trier, handelnd als Einzelunternehmer mit Pizza Kebaphaus" → aktuelle_adresse = Niederstraße 118, betriebsstaette_adresse = Niederstraße 87.
 Für beschaeftigung: Wenn Arbeitgeber, Einkommen oder Beschäftigungsverhältnis erwähnt: Arbeitgeber Name/Adresse, Nettoeinkommen, Art (Vollzeit/Teilzeit/Minijob/Selbständig/Rentner/Arbeitslos). Wenn nicht erwähnt: beschaeftigung weglassen.
