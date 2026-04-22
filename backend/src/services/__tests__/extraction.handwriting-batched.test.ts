@@ -1,6 +1,7 @@
 import '../../env'; // Load .env before importing config
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { chunk, runWithConcurrency } from '../extraction';
+import type { ExtractionResult } from '../../types/extraction';
 
 describe('chunk', () => {
   it('returns empty array for empty input', () => {
@@ -118,20 +119,18 @@ describe('extractHandwrittenFormFields image-batched', () => {
     });
 
     // Minimal Schuldner fixture — only the fields touched by the test need to exist.
-    // Use `as never` to bypass the full type check; the merge code only inspects
-    // the listed fields.
     const result = {
       schuldner: {
         telefon: { wert: '', quelle: '' },
         email: { wert: '', quelle: '' },
       },
-    } as never;
+    } as { schuldner: { telefon: { wert: string; quelle: string }; email: { wert: string; quelle: string } } };
 
     // pageTexts contains FRAGEBOGEN markers on pages 0-4 to trigger detection
     const pageTexts = ['Fragebogen', 'Fragebogen', 'Fragebogen', 'Fragebogen', 'Fragebogen'];
     const pdfBuffer = Buffer.from([0x25, 0x50, 0x44, 0x46]); // %PDF dummy
 
-    await extractHandwrittenFormFields(result, pdfBuffer, pageTexts);
+    await extractHandwrittenFormFields(result as unknown as ExtractionResult, pdfBuffer, pageTexts);
 
     expect(callCount).toBe(2);
     expect(result.schuldner.telefon.wert).toBe('06545 9121110');
@@ -164,11 +163,11 @@ describe('extractHandwrittenFormFields image-batched', () => {
         telefon: { wert: '', quelle: '' },
         email: { wert: '', quelle: '' },
       },
-    } as never;
+    } as { schuldner: { telefon: { wert: string; quelle: string }; email: { wert: string; quelle: string } } };
     const pageTexts = ['Fragebogen', 'Fragebogen', 'Fragebogen', 'Fragebogen', 'Fragebogen'];
     const pdfBuffer = Buffer.from([0x25, 0x50, 0x44, 0x46]);
 
-    await extractHandwrittenFormFields(result, pdfBuffer, pageTexts);
+    await extractHandwrittenFormFields(result as unknown as ExtractionResult, pdfBuffer, pageTexts);
 
     // Successful batch's value is merged
     expect(result.schuldner.telefon.wert).toBe('06545 9121110');
