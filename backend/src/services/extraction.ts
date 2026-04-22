@@ -236,6 +236,36 @@ export function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+/**
+ * Run async tasks with at most `concurrency` running in parallel.
+ * Returns settled results in input order (Promise.allSettled semantics).
+ */
+export async function runWithConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  concurrency: number,
+): Promise<PromiseSettledResult<T>[]> {
+  if (concurrency <= 0) throw new Error('concurrency must be > 0');
+  const results: PromiseSettledResult<T>[] = new Array(tasks.length);
+  let next = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const idx = next++;
+      if (idx >= tasks.length) return;
+      try {
+        const value = await tasks[idx]();
+        results[idx] = { status: 'fulfilled', value };
+      } catch (err) {
+        results[idx] = { status: 'rejected', reason: err };
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 function detectFragebogenPages(pageTexts: string[]): number[] {
   const pages: number[] = [];
   for (let i = 0; i < pageTexts.length; i++) {
