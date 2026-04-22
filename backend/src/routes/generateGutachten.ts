@@ -6,6 +6,8 @@ import { readResultJson } from '../db/resultJson';
 import {
   prepareGutachten,
   generateGutachtenFinal,
+  computeMissingFields,
+  determineTemplateType,
   type GutachtenUserInputs,
 } from '../utils/gutachtenGenerator';
 import type { ExtractionResult } from '../types/extraction';
@@ -16,6 +18,17 @@ function parseUserInputs(body: Record<string, unknown>): GutachtenUserInputs | n
   const { verwalter_diktatzeichen, verwalter_geschlecht } = body;
   if (!verwalter_diktatzeichen || typeof verwalter_diktatzeichen !== 'string') return null;
   if (verwalter_geschlecht !== 'maennlich' && verwalter_geschlecht !== 'weiblich') return null;
+
+  let field_overrides: Record<string, string> | undefined;
+  const raw = body.field_overrides;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    field_overrides = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof k === 'string' && k.startsWith('KI_') && typeof v === 'string') {
+        field_overrides[k] = v;
+      }
+    }
+  }
 
   return {
     verwalter_diktatzeichen: String(verwalter_diktatzeichen),
@@ -35,6 +48,7 @@ function parseUserInputs(body: Record<string, unknown>): GutachtenUserInputs | n
     sachbearbeiter_email: body.sachbearbeiter_email ? String(body.sachbearbeiter_email) : undefined,
     sachbearbeiter_durchwahl: body.sachbearbeiter_durchwahl ? String(body.sachbearbeiter_durchwahl) : undefined,
     verwalter_standort_telefon: body.verwalter_standort_telefon ? String(body.verwalter_standort_telefon) : undefined,
+    field_overrides,
   };
 }
 
@@ -46,6 +60,29 @@ function loadExtraction(extractionId: number, userId: number): ExtractionResult 
   if (!row?.result_json) return null;
   return readResultJson<ExtractionResult>(row.result_json)!;
 }
+
+// POST /:extractionId/missing-fields — fast sync call to detect empty KI_* placeholders
+// used for the Wizard's "Fehlende Werte" step before the slow /prepare call
+router.post('/:extractionId/missing-fields', authMiddleware, (req: Request, res: Response): void => {
+  try {
+    const extractionId = parseInt(String(req.params['extractionId'] ?? ''), 10);
+    if (isNaN(extractionId)) { res.status(400).json({ error: 'Ungültige Extraktions-ID' }); return; }
+
+    const userInputs = parseUserInputs(req.body);
+    if (!userInputs) { res.status(400).json({ error: 'verwalter_diktatzeichen und verwalter_geschlecht sind erforderlich' }); return; }
+
+    const result = loadExtraction(extractionId, req.user!.userId);
+    if (!result) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
+
+    const rechtsform = String(result.schuldner?.rechtsform?.wert ?? '');
+    const templateType = determineTemplateType(rechtsform);
+    const missingFields = computeMissingFields(result, userInputs, templateType);
+    res.json({ templateType, missingFields });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Missing-Fields-Check fehlgeschlagen';
+    res.status(500).json({ error: msg });
+  }
+});
 
 // POST /:extractionId/prepare — extract slots, fill via Claude, return JSON
 router.post('/:extractionId/prepare', authMiddleware, heavyOperationRateLimit, async (req: Request, res: Response): Promise<void> => {

@@ -62,6 +62,14 @@ export interface GutachtenUserInputs {
   sachbearbeiter_email?: string;
   sachbearbeiter_durchwahl?: string;
   verwalter_standort_telefon?: string;
+  /** Manual overrides per KI_* placeholder — fill in fields the extraction couldn't resolve. */
+  field_overrides?: Record<string, string>;
+}
+
+export interface MissingField {
+  feld: string;
+  label: string;
+  source: 'path' | 'computed' | 'input';
 }
 
 export type TemplateType = 'natuerliche_person' | 'juristische_person' | 'personengesellschaft';
@@ -659,7 +667,93 @@ export function buildReplacements(
     replacements['KI_Gutachter_Email'] = userInputs.verwalter_email;
   }
 
+  // Manual field_overrides win over everything (user-filled in wizard step 4)
+  if (userInputs.field_overrides) {
+    for (const [feld, val] of Object.entries(userInputs.field_overrides)) {
+      if (typeof val === 'string' && val.trim()) {
+        replacements[feld] = val.trim();
+      }
+    }
+  }
+
   return replacements;
+}
+
+// --- Human-readable label derivation for KI_* placeholders ---
+
+/** Convert a KI_* placeholder name to a human-readable German label. */
+export function feldToLabel(feld: string): string {
+  let name = feld.replace(/^KI_/, '');
+  name = name.replace(/_/g, ' ');
+  name = name.replace(/\bAdr\b/g, 'Adresse');
+  name = name.replace(/\bAZ\b/g, 'Aktenzeichen');
+  name = name.replace(/\bHRB\b/g, 'Handelsregister-Nr.');
+  name = name.replace(/\bSVTraeger\b/gi, 'SV-Träger');
+  name = name.replace(/\bGAVV\b/g, 'GAVV');
+  name = name.replace(/Beschaeftigung/gi, 'Beschäftigung');
+  name = name.replace(/Geschaeftsfuehrer/gi, 'Geschäftsführer');
+  name = name.replace(/Staatsangehoerigkeit/gi, 'Staatsangehörigkeit');
+  name = name.replace(/Pfaend/gi, 'Pfänd');
+  name = name.replace(/Betriebsstaette/gi, 'Betriebsstätte');
+  name = name.replace(/Gro(?:ss|ß)/gi, '');
+  name = name.replace(/\s+/g, ' ').trim();
+  return name;
+}
+
+// --- Compute which KI_* fields are present in the template but couldn't be resolved ---
+
+/**
+ * Collects placeholders that appear in the generated template's XML but resolve to empty.
+ * Skips pure grammatical helpers (der/die/dem/des etc.) which always have a default.
+ */
+export function computeMissingFields(
+  result: ExtractionResult,
+  userInputs: GutachtenUserInputs,
+  templateType: TemplateType
+): MissingField[] {
+  const mapping = loadMapping();
+  const templateFilename = mapping.templates[templateType];
+  if (!templateFilename) return [];
+  const templatePath = path.resolve(TEMPLATES_DIR, templateFilename);
+  if (!fs.existsSync(templatePath)) return [];
+
+  const zip = new PizZip(fs.readFileSync(templatePath, 'binary'));
+  const allText: string[] = [];
+  for (const partName of XML_PARTS) {
+    const file = zip.file(partName);
+    if (file) allText.push(file.asText());
+  }
+  const combined = allText.join('\n');
+
+  const replacements = buildReplacements(result, userInputs);
+
+  // Grammatical helpers that always have a default value — hide from missing UI
+  const GRAMMATICAL_SUFFIXES = [
+    'der_die', 'dem_der', 'den_die', 'des_der', 'des_', 'zum_', 'zum_zur',
+    'Artikel', 'Der_Die_Groß', 'Der_Die_Gross',
+    'Schuldnerin', 'Schuldners_Schuldnerin', 'Unterzeichner_Genitiv',
+  ];
+
+  const seen = new Set<string>();
+  const missing: MissingField[] = [];
+  for (const [feld, def] of Object.entries(mapping.felder)) {
+    if (seen.has(feld)) continue;
+    if (!combined.includes(feld)) continue; // not used in this template
+    const value = replacements[feld] ?? '';
+    if (value.trim() !== '') continue;
+
+    // Skip grammatical helpers that compute a default even without data
+    const short = feld.replace(/^KI_/, '');
+    const isHelper = GRAMMATICAL_SUFFIXES.some(suffix => short.endsWith(suffix));
+    if (isHelper) continue;
+
+    seen.add(feld);
+    const source: 'path' | 'computed' | 'input' =
+      def.path ? 'path' : def.computed ? 'computed' : 'input';
+    missing.push({ feld, label: feldToLabel(feld), source });
+  }
+
+  return missing.sort((a, b) => a.label.localeCompare(b.label, 'de'));
 }
 
 // --- Reusable DOCX paragraph processor (handles Word run-splitting) ---
@@ -1317,11 +1411,13 @@ function replaceFieldsInXml(xml: string, replacements: Record<string, string>): 
   function doReplace(fullText: string): string {
     let replaced = fullText;
     for (const key of sortedKeys) {
+      const val = replacements[key];
       const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escaped + '(?:_\\d+)?', 'g');
-      replaced = replaced.replace(regex, replacements[key] ?? '');
+      const finalVal = (val !== undefined && val.trim() !== '') ? val : `[TODO: ${feldToLabel(key)}]`;
+      replaced = replaced.replace(regex, finalVal);
     }
-    replaced = replaced.replace(/KI_[\w\u00C0-\u024F]+/g, '');
+    replaced = replaced.replace(/KI_[\w\u00C0-\u024F]+/g, (match) => `[TODO: ${feldToLabel(match)}]`);
     return replaced;
   }
 
@@ -1420,7 +1516,12 @@ function loadAndPrepareTemplate(
 export async function prepareGutachten(
   result: ExtractionResult,
   userInputs: GutachtenUserInputs
-): Promise<{ templateType: TemplateType; slots: GutachtenSlot[]; feldValues: Record<string, string> }> {
+): Promise<{
+  templateType: TemplateType;
+  slots: GutachtenSlot[];
+  feldValues: Record<string, string>;
+  missingFields: MissingField[];
+}> {
   const { zip, templateType, replacements } = loadAndPrepareTemplate(result, userInputs);
 
   let allSlots: SlotInfo[] = [];
@@ -1432,8 +1533,9 @@ export async function prepareGutachten(
   }
 
   const filledSlots = await fillSlots(allSlots, result);
+  const missingFields = computeMissingFields(result, userInputs, templateType);
 
-  return { templateType, slots: filledSlots, feldValues: replacements };
+  return { templateType, slots: filledSlots, feldValues: replacements, missingFields };
 }
 
 // --- Generate: apply final slot values and return DOCX buffer ---
