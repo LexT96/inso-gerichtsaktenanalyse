@@ -1,7 +1,7 @@
 import path from 'path';
 import { extractComprehensive, extractFromPageTexts, callWithRetry, extractJsonFromText, createAnthropicMessage, EXTRACTION_PROMPT } from './anthropic';
 import { extractWithOpenAI } from './openaiExtractor';
-import { detectProvider, supportsNativePdf, isRateLimited, logProviderConfig } from './extractionProvider';
+import { detectProvider, supportsNativePdf, anthropicSupportsNativePdf, isRateLimited, logProviderConfig } from './extractionProvider';
 import { computeExtractionStats } from '../utils/computeStats';
 import { config } from '../config';
 import { extractTextPerPage, removeWatermarksFromTexts } from './pdfProcessor';
@@ -316,7 +316,7 @@ export async function extractPzuZustellungsdatum(
     return result;
   }
 
-  const useNativePdf = pdfBuffer && supportsNativePdf(detectProvider());
+  const useNativePdf = pdfBuffer && anthropicSupportsNativePdf();
   logger.info('PZU page groups detected for Zustellungsdatum re-extraction', {
     groups: groups.map(g => g.map(p => p + 1)),
     mode: useNativePdf ? 'native-pdf' : 'text',
@@ -488,7 +488,7 @@ async function extractHandwrittenFormFields(
   logger.info('Fragebogen pages detected for handwriting extraction', {
     pages: formPages.map(p => p + 1),
     count: formPages.length,
-    mode: pdfBuffer && supportsNativePdf(detectProvider()) ? 'native-pdf' : 'text',
+    mode: pdfBuffer && anthropicSupportsNativePdf() ? 'native-pdf' : 'text',
   });
 
   const handwritingModel = config.EXTRACTION_MODEL;
@@ -496,7 +496,7 @@ async function extractHandwrittenFormFields(
   const promptSuffix = `\n\nSeitenzuordnung: ${pageMapping}\nBitte verwende die Originalseitennummern in der quelle.`;
 
   let response;
-  if (pdfBuffer && supportsNativePdf(detectProvider())) {
+  if (pdfBuffer && anthropicSupportsNativePdf()) {
     // Native PDF mode: send mini-PDF for vision-based handwriting OCR
     const miniPdf = await extractPdfPages(pdfBuffer, formPages);
     const base64 = miniPdf.toString('base64');
@@ -555,6 +555,7 @@ async function extractHandwrittenFormFields(
   // Merge into result — only fill fields that are currently empty
   const s = result.schuldner;
   let merged = 0;
+  const skipped: string[] = [];
 
   const mergeField = (target: { wert: unknown; quelle: string } | undefined, key: string) => {
     const source = parsed[key];
@@ -567,15 +568,29 @@ async function extractHandwrittenFormFields(
       target.wert = source.wert as string;
       target.quelle = `${source.quelle} (Handschrift-Extraktion)`;
       merged++;
+    } else {
+      skipped.push(key);
     }
   };
 
+  // Personal data — handwritten Fragebogen often has these when base extraction missed
+  mergeField(s.name, 'name');
+  mergeField(s.vorname, 'vorname');
+  mergeField(s.geburtsdatum, 'geburtsdatum');
+  mergeField(s.geburtsort, 'geburtsort');
+  mergeField(s.geburtsland, 'geburtsland');
+  mergeField(s.staatsangehoerigkeit, 'staatsangehoerigkeit');
+  // Contact + address
   mergeField(s.telefon, 'telefon');
   mergeField(s.mobiltelefon, 'mobiltelefon');
   mergeField(s.email, 'email');
+  mergeField(s.aktuelle_adresse, 'aktuelle_adresse');
+  // Business
   mergeField(s.betriebsstaette_adresse, 'betriebsstaette_adresse');
   mergeField(s.geschaeftszweig, 'geschaeftszweig');
   mergeField(s.unternehmensgegenstand, 'unternehmensgegenstand');
+  mergeField(s.firma, 'firma');
+  // Tax
   mergeField(s.finanzamt, 'finanzamt');
   mergeField(s.steuernummer, 'steuernummer');
   mergeField(s.ust_id, 'ust_id');
@@ -583,8 +598,7 @@ async function extractHandwrittenFormFields(
   mergeField(s.sozialversicherungstraeger, 'sozialversicherungstraeger');
   mergeField(s.letzter_jahresabschluss, 'letzter_jahresabschluss');
   mergeField(s.bankverbindungen, 'bankverbindungen');
-  mergeField(s.aktuelle_adresse, 'aktuelle_adresse');
-  mergeField(s.firma, 'firma');
+  // Personal status
   mergeField(s.familienstand, 'familienstand');
   mergeField(s.geschlecht, 'geschlecht');
 
@@ -607,6 +621,8 @@ async function extractHandwrittenFormFields(
   logger.info('Handwriting extraction completed', {
     fieldsFound: Object.keys(parsed).length,
     merged,
+    skipped: skipped.length,
+    skippedFields: skipped, // base extraction had non-empty values; handwriting did NOT override
     formPages: formPages.length,
   });
 
