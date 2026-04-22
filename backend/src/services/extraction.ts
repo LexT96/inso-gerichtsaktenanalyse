@@ -602,11 +602,12 @@ export async function extractHandwrittenFormFields(
   pdfBuffer: Buffer | null,
   pageTexts: string[],
   ocrResult?: OcrResult | null,
-): Promise<ExtractionResult> {
+): Promise<{ result: ExtractionResult; ocrEntriesAdded: number }> {
+  let ocrEntriesAdded = 0;
   const formPages = detectFragebogenPages(pageTexts);
   if (formPages.length === 0) {
     logger.info('No Fragebogen pages detected, skipping handwriting pass');
-    return result;
+    return { result, ocrEntriesAdded };
   }
 
   logger.info('Fragebogen pages detected for handwriting extraction', {
@@ -663,7 +664,7 @@ export async function extractHandwrittenFormFields(
         error: err instanceof Error ? err.message : String(err),
         sample: text.slice(0, 300),
       });
-      return result;
+      return { result, ocrEntriesAdded };
     }
   } else if (pdfBuffer) {
     modeUsed = 'image-batched';
@@ -740,13 +741,13 @@ export async function extractHandwrittenFormFields(
         error: err instanceof Error ? err.message : String(err),
         sample: text.slice(0, 300),
       });
-      return result;
+      return { result, ocrEntriesAdded };
     }
   }
 
   if (!parsed) {
     logger.warn('Handwriting extraction produced no parsed data', { mode: modeUsed });
-    return result;
+    return { result, ocrEntriesAdded };
   }
 
   // Merge into result — only fill fields that are currently empty
@@ -817,7 +818,6 @@ export async function extractHandwrittenFormFields(
 
   // Inject synthetic OCR entries for handwriting findings so frontend Ctrl-F
   // can find handwritten values on the right page (footer band; not pixel-exact)
-  let ocrEntriesAdded = 0;
   if (ocrResult && parsed) {
     for (const [, sv] of Object.entries(parsed)) {
       if (!sv?.wert) continue;
@@ -855,10 +855,15 @@ export async function extractHandwrittenFormFields(
     skipped: skipped.length,
     skippedFields: skipped,
     formPages: formPages.length,
-    ...(modeUsed === 'image-batched' ? { batchesOk, batchesFailed } : {}),
+    ...(modeUsed === 'image-batched' ? {
+      batches: batchesOk + batchesFailed,
+      batchesOk,
+      batchesFailed,
+      imageTokensEstimated: formPages.length * 2900,
+    } : {}),
   });
 
-  return result;
+  return { result, ocrEntriesAdded };
 }
 
 // ─── Post-processing: apply transparent defaults and inferences ───
@@ -1572,14 +1577,17 @@ Antworte NUR mit validem JSON: {"feldpfad": {"wert": "...", "quelle": "Seite X, 
     // structured form fields that the base extraction missed.
     if (pdfBuffer || pageTexts.length > 0) {
       report('Handschriftliche Formulare werden gelesen…', 85);
+      let handwritingOcrEntriesAdded = 0;
       try {
-        result = await extractHandwrittenFormFields(result, pdfBuffer, pageTexts, ocrResult);
+        const handwritingOutcome = await extractHandwrittenFormFields(result, pdfBuffer, pageTexts, ocrResult);
+        result = handwritingOutcome.result;
+        handwritingOcrEntriesAdded = handwritingOutcome.ocrEntriesAdded;
       } catch (err) {
         logger.warn('Handwriting extraction failed, continuing', { error: err instanceof Error ? err.message : String(err) });
       }
       // If handwriting injected synthetic OCR-layer annotations, rebuild the
       // searchable PDF so frontend Ctrl-F finds handwritten values
-      if (ocrResult && pdfBuffer) {
+      if (handwritingOcrEntriesAdded > 0 && ocrResult && pdfBuffer) {
         try {
           const { addOcrTextLayer } = await import('./ocrLayerService');
           const updatedPdf = addOcrTextLayer(pdfBuffer, ocrResult);
