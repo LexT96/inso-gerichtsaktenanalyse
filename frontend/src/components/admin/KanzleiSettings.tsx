@@ -244,6 +244,45 @@ export function KanzleiSettings() {
     setData({ ...data, standorte: updated });
   }
 
+  // ─── Insolvenzgerichte handlers ───
+
+  function setGerichtField(key: string, field: 'name' | 'adresse' | 'plz_ort', value: string) {
+    if (!data) return;
+    const current = data.insolvenzgerichte[key] ?? { name: '', adresse: '', plz_ort: '' };
+    setData({
+      ...data,
+      insolvenzgerichte: { ...data.insolvenzgerichte, [key]: { ...current, [field]: value } },
+    });
+  }
+
+  function setGerichtKey(oldKey: string, newKey: string) {
+    if (!data || newKey === oldKey || !newKey.trim()) return;
+    const entries = Object.entries(data.insolvenzgerichte);
+    const reordered = entries.map(([k, v]) => k === oldKey
+      ? [newKey, v] as [string, { name: string; adresse: string; plz_ort: string }]
+      : [k, v] as [string, { name: string; adresse: string; plz_ort: string }]
+    );
+    setData({ ...data, insolvenzgerichte: Object.fromEntries(reordered) });
+  }
+
+  function addGericht() {
+    if (!data) return;
+    let key = 'Neu';
+    let n = 1;
+    while (key in data.insolvenzgerichte) { key = `Neu ${n++}`; }
+    setData({
+      ...data,
+      insolvenzgerichte: { ...data.insolvenzgerichte, [key]: { name: '', adresse: '', plz_ort: '' } },
+    });
+  }
+
+  function removeGericht(key: string) {
+    if (!data) return;
+    const updated = { ...data.insolvenzgerichte };
+    delete updated[key];
+    setData({ ...data, insolvenzgerichte: updated });
+  }
+
   // ─── Save ───
 
   async function handleSave() {
@@ -289,6 +328,7 @@ export function KanzleiSettings() {
   }
 
   const standortEntries = Object.entries(data.standorte);
+  const gerichtEntries = Object.entries(data.insolvenzgerichte);
 
   return (
     <div className="space-y-6">
@@ -433,6 +473,76 @@ export function KanzleiSettings() {
         </div>
         <button onClick={addStandort} className={`${btnGhost} mt-2 w-full text-center text-[10px]`}>
           + Standort hinzufügen
+        </button>
+      </div>
+
+      {/* ─── Insolvenzgerichte ─── */}
+      <div className={cardClass}>
+        <SectionLabel>Insolvenzgerichte ({gerichtEntries.length})</SectionLabel>
+        <div className="text-[9px] text-text-dim leading-relaxed mb-2">
+          Empfänger-Adressen für die Gutachten-Briefköpfe. Schlüssel = Stadt (für die Substring-Erkennung aus dem extrahierten Gerichts-Namen).
+        </div>
+        <div className="space-y-2">
+          {gerichtEntries.map(([key, gericht]) => (
+            <div key={key} className="grid grid-cols-[140px_1fr_1fr_140px_28px] gap-2 items-start bg-bg/50 border border-border/40 rounded p-2">
+              {/* Stadt (key) */}
+              <div className="flex flex-col gap-1">
+                <span className={labelClass}>Stadt</span>
+                <input
+                  type="text"
+                  value={key}
+                  onChange={e => setGerichtKey(key, e.target.value)}
+                  className="bg-bg border border-border rounded-sm text-[11px] px-2 py-1 font-mono text-text focus:outline-none focus:border-accent transition-colors"
+                />
+              </div>
+              {/* Name */}
+              <div className="flex flex-col gap-1">
+                <span className={labelClass}>Name</span>
+                <input
+                  type="text"
+                  value={gericht.name}
+                  onChange={e => setGerichtField(key, 'name', e.target.value)}
+                  placeholder="Amtsgericht XYZ"
+                  className="bg-bg border border-border rounded-sm text-[11px] px-2 py-1 font-mono text-text focus:outline-none focus:border-accent transition-colors"
+                />
+              </div>
+              {/* Adresse */}
+              <div className="flex flex-col gap-1">
+                <span className={labelClass}>Adresse</span>
+                <input
+                  type="text"
+                  value={gericht.adresse}
+                  onChange={e => setGerichtField(key, 'adresse', e.target.value)}
+                  placeholder="Straße Nr."
+                  className="bg-bg border border-border rounded-sm text-[11px] px-2 py-1 font-mono text-text focus:outline-none focus:border-accent transition-colors"
+                />
+              </div>
+              {/* PLZ + Ort */}
+              <div className="flex flex-col gap-1">
+                <span className={labelClass}>PLZ + Ort</span>
+                <input
+                  type="text"
+                  value={gericht.plz_ort}
+                  onChange={e => setGerichtField(key, 'plz_ort', e.target.value)}
+                  placeholder="54290 Trier"
+                  className="bg-bg border border-border rounded-sm text-[11px] px-2 py-1 font-mono text-text focus:outline-none focus:border-accent transition-colors"
+                />
+              </div>
+              {/* Delete */}
+              <div className="flex items-start pt-5">
+                <button
+                  onClick={() => removeGericht(key)}
+                  title="Gericht löschen"
+                  className={`${btnDanger} px-1.5 py-1 text-[10px]`}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={addGericht} className={`${btnGhost} mt-2 w-full text-center text-[10px]`}>
+          + Insolvenzgericht hinzufügen
         </button>
       </div>
 
