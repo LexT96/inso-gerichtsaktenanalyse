@@ -54,6 +54,7 @@ services:
       - ./frontend/public:/app/public
     environment:
       - VITE_PROXY_TARGET=http://backend:3004
+      - VITE_APP_TITLE=${VITE_APP_TITLE:-Aktenanalyse (dev)}
     depends_on:
       - backend
     restart: "no"
