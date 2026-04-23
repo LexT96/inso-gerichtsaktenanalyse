@@ -1,0 +1,47 @@
+name: Promote main → demo
+
+# Manually-triggered workflow to pull main into demo.
+# Demo has its own kanzlei.json + Gutachten-Templates (KlareProzesse Demo-Kanzlei),
+# so we merge main into demo (not reset) to preserve those demo-only files.
+# If the merge conflicts, resolve locally and push demo manually.
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: Merge strategy
+        type: choice
+        options:
+          - merge
+          - rebase
+        default: merge
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: demo
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure git
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Merge main into demo
+        env:
+          STRATEGY: ${{ inputs.strategy }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if [ "$STRATEGY" = "rebase" ]; then
+            git rebase origin/main
+          else
+            git merge --no-ff origin/main -m "chore(demo): promote main into demo"
+          fi
+      - name: Push
+        run: git push origin demo

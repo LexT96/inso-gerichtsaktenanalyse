@@ -1,0 +1,52 @@
+name: Deploy — prod
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Prod VM doesn't exist yet. Until PROD_ENABLED repo variable is "true",
+    # this job is skipped and notify-not-deployed warns instead.
+    if: ${{ vars.PROD_ENABLED == 'true' }}
+    environment:
+      name: prod
+      url: https://aktenanalyse.klareprozesse.de
+    steps:
+      - name: SSH into prod and deploy
+        env:
+          SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          SSH_HOST: ${{ secrets.PROD_HOST }}
+          SSH_USER: ${{ secrets.PROD_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/app
+          git fetch --prune origin
+          git reset --hard origin/main
+          docker compose up -d --build
+          docker image prune -f
+          echo '=== Deployed commit ==='
+          git log -1 --oneline
+          echo '=== Container status ==='
+          docker compose ps
+          REMOTE
+
+  notify-not-deployed:
+    runs-on: ubuntu-latest
+    if: ${{ vars.PROD_ENABLED != 'true' }}
+    steps:
+      - name: Prod deployment skipped
+        run: |
+          echo '::warning title=Prod not deployed::PROD_ENABLED repo variable is not "true". Set it once the prod VM exists and PROD_SSH_KEY / PROD_HOST / PROD_USER secrets are populated.'
