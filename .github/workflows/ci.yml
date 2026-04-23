@@ -22,7 +22,15 @@ jobs:
       - name: TypeScript compile
         run: npm run build
       - name: Unit tests
-        run: npm test
+        # config.ts exits if JWT_SECRET/DB_ENCRYPTION_KEY (each min 32 chars)
+        # or ANTHROPIC_API_KEY are unset. Generate low-entropy placeholders
+        # inline so gitleaks doesn't flag this file.
+        run: |
+          export ANTHROPIC_API_KEY=ci
+          export JWT_SECRET=$(printf 'x%.0s' {1..40})
+          export DB_ENCRYPTION_KEY=$(printf 'y%.0s' {1..40})
+          export DEFAULT_ADMIN_PASSWORD=ci
+          npm test
 
   frontend:
     runs-on: ubuntu-latest
