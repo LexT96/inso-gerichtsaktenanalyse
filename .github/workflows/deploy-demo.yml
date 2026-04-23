@@ -1,0 +1,41 @@
+name: Deploy — demo
+
+on:
+  push:
+    branches: [demo]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: demo
+      url: https://46-224-7-60.sslip.io
+    steps:
+      - name: SSH into demo and deploy
+        env:
+          SSH_KEY: ${{ secrets.DEMO_SSH_KEY }}
+          SSH_HOST: ${{ secrets.DEMO_HOST }}
+          SSH_USER: ${{ secrets.DEMO_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/app
+          git fetch --prune origin
+          git reset --hard origin/demo
+          docker compose up -d --build
+          docker image prune -f
+          echo '=== Deployed commit ==='
+          git log -1 --oneline
+          echo '=== Container status ==='
+          docker compose ps
+          REMOTE

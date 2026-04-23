@@ -68,6 +68,7 @@ services:
       args:
         - VITE_AZURE_TENANT_ID=${VITE_AZURE_TENANT_ID:-}
         - VITE_AZURE_CLIENT_ID=${VITE_AZURE_CLIENT_ID:-}
+        - VITE_APP_TITLE=${VITE_APP_TITLE:-Aktenanalyse}
     expose:
       - "80"
     depends_on:

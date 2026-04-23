@@ -40,6 +40,7 @@ services:
         - VITE_AZURE_TENANT_ID=${VITE_AZURE_TENANT_ID:-}
         - VITE_AZURE_CLIENT_ID=${VITE_AZURE_CLIENT_ID:-}
         - VITE_ENABLE_DEMO_FLOW=1
+        - VITE_APP_TITLE=${VITE_APP_TITLE:-Aktenanalyse}
     ports:
       - "80:80"
     depends_on:
