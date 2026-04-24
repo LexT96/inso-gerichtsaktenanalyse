@@ -21,3 +21,8 @@ terraform/*.tfstate
 terraform/*.tfstate.backup
 terraform/terraform.tfvars
 terraform/.terraform.lock.hcl
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
