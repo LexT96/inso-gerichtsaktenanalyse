@@ -99,7 +99,10 @@ describe('extractHandwrittenFormFields image-batched', () => {
     );
 
     // 5 pages -> chunk(_, 4) -> two batches: [0,1,2,3] and [4]
-    // Both batches succeed; first returns telefon, second returns email
+    // Both batches succeed; first returns telefon, second returns email.
+    // Calls 3+ come from the gap-fill pass probing registry fields that are
+    // absent from the minimal schuldner fixture; they return empty JSON so
+    // no merge happens.
     let callCount = 0;
     (createAnthropicMessage as ReturnType<typeof vi.fn>).mockImplementation(async () => {
       callCount++;
@@ -115,7 +118,12 @@ describe('extractHandwrittenFormFields image-batched', () => {
           content: [{ type: 'text', text: '{"email":{"wert":"info@example.de","quelle":"Seite 5"}}' }],
         };
       }
-      throw new Error('unexpected batch');
+      // Gap-fill probes for registry fields not present in the minimal fixture.
+      // Return empty JSON so no field gets merged.
+      return {
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: '{}' }],
+      };
     });
 
     // Minimal Schuldner fixture — only the fields touched by the test need to exist.
@@ -132,7 +140,9 @@ describe('extractHandwrittenFormFields image-batched', () => {
 
     await extractHandwrittenFormFields(result as unknown as ExtractionResult, pdfBuffer, pageTexts);
 
-    expect(callCount).toBe(2);
+    // 2 main-pass batches + N gap-fill probes for registry fields absent from the
+    // minimal fixture (those return {} so nothing is merged).
+    expect(callCount).toBeGreaterThanOrEqual(2);
     expect(result.schuldner.telefon.wert).toBe('06545 9121110');
     expect(result.schuldner.email.wert).toBe('info@example.de');
   });
@@ -173,5 +183,134 @@ describe('extractHandwrittenFormFields image-batched', () => {
     expect(result.schuldner.telefon.wert).toBe('06545 9121110');
     // Failed batch's value did NOT make it through
     expect(result.schuldner.email.wert).toBe('');
+  });
+});
+
+describe('runHandwritingGapFill', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('probes each critical field that is empty after main pass', async () => {
+    const { runHandwritingGapFill } = await import('../handwritingGapFill');
+    const { createAnthropicMessage } = await import('../anthropic');
+
+    // All 6 critical fields empty -> should fire a probe per critical field
+    const result = {
+      schuldner: {
+        telefon: { wert: '', quelle: '' },
+        email: { wert: '', quelle: '' },
+        betriebsstaette_adresse: { wert: '', quelle: '' },
+        steuerberater: { wert: '', quelle: '' },
+        finanzamt: { wert: '', quelle: '' },
+        firma: { wert: '', quelle: '' },
+      },
+    };
+
+    (createAnthropicMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: '{}' }],
+    });
+
+    const imagesByPage = new Map([[0, 'BASE64'], [1, 'BASE64']]);
+    const outcome = await runHandwritingGapFill({
+      result: result as unknown as import('../../types/extraction').ExtractionResult,
+      pageIndices: [0, 1],
+      imagesByPage,
+    });
+
+    expect(outcome.probesSent).toBe(6);
+    expect(outcome.probesFailed).toBe(0);
+    expect(outcome.gapsFilled).toBe(0);
+  });
+
+  it('skips critical fields that already have a value', async () => {
+    const { runHandwritingGapFill } = await import('../handwritingGapFill');
+    const { createAnthropicMessage } = await import('../anthropic');
+
+    const result = {
+      schuldner: {
+        telefon: { wert: '0123 456', quelle: 'existing' },
+        email: { wert: '', quelle: '' },
+        betriebsstaette_adresse: { wert: '', quelle: '' },
+        steuerberater: { wert: 'STB', quelle: 'existing' },
+        finanzamt: { wert: '', quelle: '' },
+        firma: { wert: 'Foo GmbH', quelle: 'existing' },
+      },
+    };
+
+    (createAnthropicMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: '{}' }],
+    });
+
+    const outcome = await runHandwritingGapFill({
+      result: result as unknown as import('../../types/extraction').ExtractionResult,
+      pageIndices: [0],
+      imagesByPage: new Map([[0, 'BASE64']]),
+    });
+
+    expect(outcome.probesSent).toBe(3);
+  });
+
+  it('merges a probe value into the result when found', async () => {
+    const { runHandwritingGapFill } = await import('../handwritingGapFill');
+    const { createAnthropicMessage } = await import('../anthropic');
+
+    const result = {
+      schuldner: {
+        telefon: { wert: 'prefilled', quelle: '' },
+        email: { wert: 'prefilled', quelle: '' },
+        betriebsstaette_adresse: { wert: '', quelle: '' },
+        steuerberater: { wert: 'prefilled', quelle: '' },
+        finanzamt: { wert: 'prefilled', quelle: '' },
+        firma: { wert: 'prefilled', quelle: '' },
+      },
+    };
+
+    (createAnthropicMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: '{"betriebsstaette_adresse":{"wert":"Zur Oberen Heide 11, 56865 Blankenrath","quelle":"Seite 1, Firmenanschrift"}}' }],
+    });
+
+    const outcome = await runHandwritingGapFill({
+      result: result as unknown as import('../../types/extraction').ExtractionResult,
+      pageIndices: [0],
+      imagesByPage: new Map([[0, 'BASE64']]),
+    });
+
+    expect(outcome.probesSent).toBe(1);
+    expect(outcome.gapsFilled).toBe(1);
+    const r = result.schuldner.betriebsstaette_adresse;
+    expect(r.wert).toBe('Zur Oberen Heide 11, 56865 Blankenrath');
+    expect(r.quelle).toContain('Handschrift-Gap-Fill');
+  });
+
+  it('survives a probe that throws', async () => {
+    const { runHandwritingGapFill } = await import('../handwritingGapFill');
+    const { createAnthropicMessage } = await import('../anthropic');
+
+    const result = {
+      schuldner: {
+        telefon: { wert: '', quelle: '' },
+        email: { wert: 'prefilled', quelle: '' },
+        betriebsstaette_adresse: { wert: 'prefilled', quelle: '' },
+        steuerberater: { wert: 'prefilled', quelle: '' },
+        finanzamt: { wert: 'prefilled', quelle: '' },
+        firma: { wert: 'prefilled', quelle: '' },
+      },
+    };
+
+    (createAnthropicMessage as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
+
+    const outcome = await runHandwritingGapFill({
+      result: result as unknown as import('../../types/extraction').ExtractionResult,
+      pageIndices: [0],
+      imagesByPage: new Map([[0, 'BASE64']]),
+    });
+
+    expect(outcome.probesSent).toBe(1);
+    expect(outcome.probesFailed).toBe(1);
+    expect(outcome.gapsFilled).toBe(0);
   });
 });
