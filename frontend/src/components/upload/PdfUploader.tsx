@@ -8,9 +8,10 @@ interface PdfUploaderProps {
   loading: boolean;
   proMode: boolean;
   onProModeChange: (enabled: boolean) => void;
+  isAdmin?: boolean;
 }
 
-export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading, proMode: _proMode, onProModeChange: _onProModeChange }: PdfUploaderProps) {
+export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading, proMode, onProModeChange, isAdmin }: PdfUploaderProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback((e: DragEvent<HTMLDivElement> | ChangeEvent<HTMLInputElement>) => {
@@ -54,24 +55,26 @@ export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading, pr
           >
             {loading ? 'ANALYSIERE…' : 'AKTE ANALYSIEREN'}
           </button>
-          {/* Pro mode toggle — disabled for now
-          <div className="mt-3 flex items-center justify-center gap-2" onClick={e => e.stopPropagation()}>
-            <button
-              onClick={() => onProModeChange(!proMode)}
-              className={`relative w-8 h-[18px] rounded-full transition-colors duration-200 ${proMode ? 'bg-accent' : 'bg-border'}`}
-            >
-              <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform duration-200 ${proMode ? 'left-[16px]' : 'left-[2px]'}`} />
-            </button>
-            <span className={`text-[10px] font-mono ${proMode ? 'text-accent font-semibold' : 'text-text-muted'}`}>
-              PRO
-            </span>
-            {proMode && (
-              <span className="text-[9px] text-text-muted font-mono">
-                Opus · präziser · ~3-5 Min
+          {/* Pro mode: Opus 4.6 — nur für Admins */}
+          {isAdmin && (
+            <div className="mt-3 flex items-center justify-center gap-2" onClick={e => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => onProModeChange(!proMode)}
+                disabled={loading}
+                className={`relative w-8 h-[18px] rounded-full transition-colors duration-200 ${proMode ? 'bg-accent' : 'bg-border'} disabled:opacity-50`}
+                aria-label="Pro-Mode umschalten"
+              >
+                <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform duration-200 ${proMode ? 'left-[16px]' : 'left-[2px]'}`} />
+              </button>
+              <span className={`text-[10px] font-mono ${proMode ? 'text-accent font-semibold' : 'text-text-muted'}`}>
+                PRO
               </span>
-            )}
-          </div>
-          */}
+              <span className="text-[9px] text-text-muted font-mono">
+                {proMode ? 'Opus 4.6 · präziser · ~3–5 Min' : 'Admin-Test'}
+              </span>
+            </div>
+          )}
         </>
       ) : (
         <>
