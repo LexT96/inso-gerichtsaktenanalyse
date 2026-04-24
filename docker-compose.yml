@@ -69,6 +69,7 @@ services:
         - VITE_AZURE_TENANT_ID=${VITE_AZURE_TENANT_ID:-}
         - VITE_AZURE_CLIENT_ID=${VITE_AZURE_CLIENT_ID:-}
         - VITE_APP_TITLE=${VITE_APP_TITLE:-Aktenanalyse}
+        - VITE_ENABLE_DEMO_FLOW=${VITE_ENABLE_DEMO_FLOW:-}
     expose:
       - "80"
     depends_on:
