@@ -24,6 +24,7 @@ import { extractAktiva } from '../utils/aktivaExtractor';
 import { analyzeAnfechtung } from '../utils/anfechtungsAnalyzer';
 import { renderPagesToJpeg } from '../utils/pageImageRenderer';
 import { enrichmentReview } from '../utils/enrichmentReview';
+import { buildMainPrompt, HANDWRITING_FIELDS } from '../utils/handwritingFieldRegistry';
 import { PDFDocument } from 'pdf-lib';
 import type { ExtractionResult } from '../types/extraction';
 
@@ -557,45 +558,7 @@ async function callHandwritingBatch(
   }
 }
 
-const HANDWRITING_PROMPT = `Du bist ein OCR-Spezialist für handschriftlich ausgefüllte deutsche Insolvenz-Fragebögen.
-
-AUFGABE: Lies JEDES handschriftlich ausgefüllte Feld in diesen Formularseiten. Die Formulare sind vorgedruckt mit Feldnamen, und der Antragsteller hat die Werte HANDSCHRIFTLICH eingetragen.
-
-Lies besonders sorgfältig:
-- Name, Vorname, Geburtsdatum
-- Straße/Hausnummer, PLZ, Ort (Privatanschrift UND Firmenanschrift)
-- Telefonnummer, E-Mail-Adresse
-- Name der Firma/des Geschäftsbetriebs und dessen Anschrift
-- Geschäftszweig/Branche
-- Anzahl Mitarbeiter (Azubis, Teilzeit, Aushilfen)
-- Steuerberater (Name und Anschrift)
-- Sozialversicherungsträger (Krankenkasse)
-- Vermieter/Verpächter und Mietbetrag
-- Mietrückstände
-- Lohnrückstände seit wann, SV-Rückstände seit wann
-- Gerichtsvollzieher
-- Angekreuzte Checkboxen (☒ = ja, ☐ = nein)
-- Beträge in EUR (auch handgeschriebene Zahlen)
-- Grundstücke: Lage, Eigentumsanteil, Verkehrswert
-- Sicherungsrechte: Gegenstand, Gläubiger, Betrag
-
-Antworte AUSSCHLIESSLICH mit validem JSON. Für jedes gefundene Feld:
-{
-  "telefon": {"wert": "06545 9121110", "quelle": "Seite X, Fragebogen Telekommunikation"},
-  "email": {"wert": "info@example.de", "quelle": "Seite X, Fragebogen E-mail"},
-  "betriebsstaette_adresse": {"wert": "Musterstr. 1, 12345 Stadt", "quelle": "Seite X, Anlage 2"},
-  "geschaeftszweig": {"wert": "Feinwerkmechanikermeister", "quelle": "Seite X, Anlage 2"},
-  "arbeitnehmer_anzahl": {"wert": 2, "quelle": "Seite X, Mitarbeiter"},
-  "betriebsrat": {"wert": false, "quelle": "Seite X, Betriebsrat nein angekreuzt"},
-  "finanzamt": {"wert": "Finanzamt Simmern-Zell", "quelle": "Seite X"},
-  "steuernummer": {"wert": "12/345/67890", "quelle": "Seite X"},
-  "steuerberater": {"wert": "Kneip-Daute, Friedrich-Back-Str. 21, 56288 Kastellaun", "quelle": "Seite X"},
-  "sozialversicherungstraeger": {"wert": "AOK, UKV Union Krankenversicherung AG", "quelle": "Seite X"},
-  "letzter_jahresabschluss": {"wert": "31.12.2023", "quelle": "Seite X"},
-  "bankverbindungen": {"wert": "Volksbank Rheinböllen eG, Sparkasse Mittelmosel", "quelle": "Seite X"}
-}
-
-Wenn ein Feld leer ist oder nicht lesbar: NICHT aufnehmen. Nur tatsächlich gelesene Werte.`;
+const HANDWRITING_PROMPT = buildMainPrompt(HANDWRITING_FIELDS);
 
 export async function extractHandwrittenFormFields(
   result: ExtractionResult,
