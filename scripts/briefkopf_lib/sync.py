@@ -10,11 +10,7 @@ _W = f"{{{NS_W}}}"
 
 
 BRIEFKOPF_SDT_TAGS = [
-    "briefkopf-empfaenger",
-    "briefkopf-sidebar",
-    "briefkopf-siegel-dekra",
-    "briefkopf-siegel-vid",
-    "briefkopf-sachbearbeiter",
+    "briefkopf-block",
 ]
 
 
@@ -51,18 +47,11 @@ def sync_sdts(target: DocxBundle, master: DocxBundle, tags: list[str]) -> None:
             if parent is not None:
                 parent.remove(existing)
 
-    # Separate tags into two groups by flow behavior:
-    # - "framed" SDTs (empfaenger, siegel-*, sachbearbeiter): content uses framePr
-    #   or drawings only, takes zero flow space. Place them at body top.
-    # - "flow" SDTs (sidebar): contains inline text like "per beA" that flows
-    #   inline. Place AFTER the spacers so the inline text lands below the
-    #   address window area — matches Gutachten template layout.
-    FLOW_AFTER_SPACERS = {"briefkopf-sidebar"}
-    framed_tags = [t for t in tags if t not in FLOW_AFTER_SPACERS]
-    flow_tags = [t for t in tags if t in FLOW_AFTER_SPACERS]
-
+    # Single 'briefkopf-block' SDT (whole Gutachten-style briefkopf preamble)
+    # placed at body top. Inserts all framed paragraphs, flow spacers, sidebar
+    # paragraph (with per beA inline), Ort+Datum line — all in correct order.
     had_any_insert = False
-    for position, tag in enumerate(framed_tags):
+    for position, tag in enumerate(tags):
         master_matches = find_sdts_by_tag(master_doc, tag)
         if not master_matches:
             raise RuntimeError(f"master missing SDT with tag '{tag}'")
@@ -71,37 +60,8 @@ def sync_sdts(target: DocxBundle, master: DocxBundle, tags: list[str]) -> None:
         target_body.insert(position, master_sdt)
         had_any_insert = True
 
-    # Spacers between framed cluster and flow cluster, to push body text down
-    # and place the flow SDT's inline text (per beA) below the address window.
-    _ensure_body_top_spacing(target_body, num_spacers=12)
-
-    # Now insert flow SDTs after the spacers (find where spacers end)
-    insert_at = 0
-    for child in target_body:
-        if child.tag == f"{_W}sdt":
-            insert_at += 1
-        elif child.tag == f"{_W}p":
-            # count empty paragraphs as spacer-region
-            has_text = any((t.text or "").strip() for t in child.iter(f"{_W}t"))
-            has_drawing = child.find(f".//{_W}drawing") is not None
-            if has_text or has_drawing:
-                break
-            insert_at += 1
-        else:
-            break
-
-    for offset, tag in enumerate(flow_tags):
-        master_matches = find_sdts_by_tag(master_doc, tag)
-        if not master_matches:
-            raise RuntimeError(f"master missing SDT with tag '{tag}'")
-        master_sdt = deepcopy(master_matches[0])
-        _remap_image_embeds(master_sdt, embed_remap)
-        target_body.insert(insert_at + offset, master_sdt)
-        had_any_insert = True
-
     if had_any_insert:
-        print(f"  Inserted {len(tags)} briefkopf SDTs "
-              f"({len(framed_tags)} framed top, {len(flow_tags)} flow after spacers)")
+        print(f"  Inserted {len(tags)} briefkopf SDT(s) at body top")
 
     target.write_part(
         "word/document.xml",
