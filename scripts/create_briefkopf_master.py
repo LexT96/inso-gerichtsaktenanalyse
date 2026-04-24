@@ -51,7 +51,7 @@ def main() -> None:
     body = doc.find(f"./{_W}body")
     assert body is not None, "document.xml has no body"
 
-    strip_sample_empfaenger_paragraphs(body)
+    wrap_empfaenger_block(body)
     wrap_briefkopf_floating_anchors(body)
     wrap_sachbearbeiter_block(body)
 
@@ -126,12 +126,12 @@ def _wrap_paragraph_in_sdt(anchor: etree._Element, tag: str) -> None:
     parent.insert(idx, sdt)
 
 
-def strip_sample_empfaenger_paragraphs(body: etree._Element) -> None:
-    """Remove the 'Amtsgericht Trier / Justizstraße 2-6 / 54290 Trier' block.
+def wrap_empfaenger_block(body: etree._Element) -> None:
+    """Wrap the recipient-address paragraphs ('Amtsgericht Trier / Justizstraße
+    2-6 / 54290 Trier') in a briefkopf-empfaenger SDT.
 
-    These are sample recipient lines — belong in each target template's body,
-    not in the master. We identify them as all paragraphs before the first one
-    containing the Absenderzeile ("Prof. Dr. Dr. Thomas B. Schmidt ...").
+    The block spans from the first body paragraph up to (but not including)
+    the Absenderzeile ('Prof. Dr. Dr. Thomas B. Schmidt ...').
     """
     paragraphs = list(body.findall(f"./{_W}p"))
     absender_idx = None
@@ -140,10 +140,22 @@ def strip_sample_empfaenger_paragraphs(body: etree._Element) -> None:
         if "Prof. Dr. Dr. Thomas B. Schmidt" in text:
             absender_idx = i
             break
-    if absender_idx is None:
+    if absender_idx is None or absender_idx == 0:
         return
-    for p in paragraphs[:absender_idx]:
+
+    target_range = paragraphs[:absender_idx]
+    insert_idx = list(body).index(target_range[0])
+
+    sdt = etree.Element(f"{_W}sdt")
+    sdt_pr = etree.SubElement(sdt, f"{_W}sdtPr")
+    tag_el = etree.SubElement(sdt_pr, f"{_W}tag")
+    tag_el.set(f"{_W}val", "briefkopf-empfaenger")
+    sdt_content = etree.SubElement(sdt, f"{_W}sdtContent")
+
+    for p in target_range:
         body.remove(p)
+        sdt_content.append(p)
+    body.insert(insert_idx, sdt)
 
 
 def wrap_sachbearbeiter_block(body: etree._Element) -> None:

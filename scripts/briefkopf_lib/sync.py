@@ -10,6 +10,7 @@ _W = f"{{{NS_W}}}"
 
 
 BRIEFKOPF_SDT_TAGS = [
+    "briefkopf-empfaenger",
     "briefkopf-sidebar",
     "briefkopf-siegel-dekra",
     "briefkopf-siegel-vid",
