@@ -99,7 +99,10 @@ describe('extractHandwrittenFormFields image-batched', () => {
     );
 
     // 5 pages -> chunk(_, 4) -> two batches: [0,1,2,3] and [4]
-    // Both batches succeed; first returns telefon, second returns email
+    // Both batches succeed; first returns telefon, second returns email.
+    // Calls 3+ come from the gap-fill pass probing registry fields that are
+    // absent from the minimal schuldner fixture; they return empty JSON so
+    // no merge happens.
     let callCount = 0;
     (createAnthropicMessage as ReturnType<typeof vi.fn>).mockImplementation(async () => {
       callCount++;
@@ -115,7 +118,12 @@ describe('extractHandwrittenFormFields image-batched', () => {
           content: [{ type: 'text', text: '{"email":{"wert":"info@example.de","quelle":"Seite 5"}}' }],
         };
       }
-      throw new Error('unexpected batch');
+      // Gap-fill probes for registry fields not present in the minimal fixture.
+      // Return empty JSON so no field gets merged.
+      return {
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: '{}' }],
+      };
     });
 
     // Minimal Schuldner fixture — only the fields touched by the test need to exist.
@@ -132,7 +140,9 @@ describe('extractHandwrittenFormFields image-batched', () => {
 
     await extractHandwrittenFormFields(result as unknown as ExtractionResult, pdfBuffer, pageTexts);
 
-    expect(callCount).toBe(2);
+    // 2 main-pass batches + N gap-fill probes for registry fields absent from the
+    // minimal fixture (those return {} so nothing is merged).
+    expect(callCount).toBeGreaterThanOrEqual(2);
     expect(result.schuldner.telefon.wert).toBe('06545 9121110');
     expect(result.schuldner.email.wert).toBe('info@example.de');
   });
