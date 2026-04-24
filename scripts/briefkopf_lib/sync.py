@@ -44,24 +44,66 @@ def sync_sdts(target: DocxBundle, master: DocxBundle, tags: list[str]) -> None:
     # Build image embed remap (master rId → new target rId), ensure target rels
     embed_remap = _ensure_sdt_image_rels(target, master, master_doc, tags)
 
+    # First: remove any existing briefkopf SDTs from target (to re-insert cleanly at top)
+    for tag in tags:
+        for existing in find_sdts_by_tag(target_doc, tag):
+            parent = existing.getparent()
+            if parent is not None:
+                parent.remove(existing)
+
+    # Insert all briefkopf SDTs in order at body position 0, 1, 2, ...
+    had_any_insert = False
     for position, tag in enumerate(tags):
         master_matches = find_sdts_by_tag(master_doc, tag)
         if not master_matches:
             raise RuntimeError(f"master missing SDT with tag '{tag}'")
         master_sdt = deepcopy(master_matches[0])
         _remap_image_embeds(master_sdt, embed_remap)
+        target_body.insert(position, master_sdt)
+        had_any_insert = True
+    if had_any_insert:
+        print(f"  Inserted {len(tags)} briefkopf SDTs at body top")
 
-        target_matches = find_sdts_by_tag(target_doc, tag)
-        if target_matches:
-            replace_sdt(target_matches[0], master_sdt)
-        else:
-            target_body.insert(position, master_sdt)
-            print(f"  INSERT: new SDT '{tag}' at body position {position}")
+    # Push body text down below the framed empfaenger/sachbearbeiter blocks.
+    # The empfaenger block with framePr has zero flow height; without spacing
+    # the first body paragraph would render at y=0, overlapping the header.
+    _ensure_body_top_spacing(target_body, num_spacers=12)
 
     target.write_part(
         "word/document.xml",
         etree.tostring(target_doc, xml_declaration=True, encoding="UTF-8", standalone=True),
     )
+
+
+def _ensure_body_top_spacing(body: etree._Element, num_spacers: int) -> None:
+    """Insert `num_spacers` empty <w:p/> right after the leading SDT block,
+    so the first non-SDT body paragraph starts below the address window
+    area rendered by the framed briefkopf-empfaenger block.
+
+    Idempotent: drops any existing empty paragraphs in the same position
+    before inserting, so repeat syncs don't pile up spacers.
+    """
+    first_non_sdt = 0
+    for child in body:
+        if child.tag == f"{_W}sdt":
+            first_non_sdt += 1
+        else:
+            break
+
+    # Drop existing empty paragraphs directly after the SDT cluster
+    while first_non_sdt < len(body):
+        child = body[first_non_sdt]
+        if child.tag != f"{_W}p":
+            break
+        has_text = any((t.text or "").strip() for t in child.iter(f"{_W}t"))
+        has_drawing = child.find(f".//{_W}drawing") is not None
+        if has_text or has_drawing:
+            break
+        body.remove(child)
+
+    for i in range(num_spacers):
+        p = etree.Element(f"{_W}p")
+        body.insert(first_non_sdt + i, p)
 
 
 _NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
