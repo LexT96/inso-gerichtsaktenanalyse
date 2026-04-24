@@ -1,80 +1,692 @@
 {
   "verfahrensdaten": {
-    "aktenzeichen": {"wert": "1 IN 123/25", "quelle": "Seite 1, Beschluss"},
-    "gericht": {"wert": "Amtsgericht Musterstadt", "quelle": "Seite 1, Beschluss"},
-    "richter": {"wert": "RA Dr. Schmidt", "quelle": "Seite 1, Beschluss"},
-    "antragsdatum": {"wert": "15.11.2025", "quelle": "Seite 2, Insolvenzantrag"},
-    "beschlussdatum": {"wert": "18.12.2025", "quelle": "Seite 1, Beschluss"},
-    "antragsart": {"wert": "Antrag auf Eröffnung", "quelle": "Seite 2, Antrag"},
-    "eroeffnungsgrund": {"wert": "Zahlungsunfähigkeit", "quelle": "Seite 2, Antrag"},
-    "zustellungsdatum_schuldner": {"wert": "20.12.2025", "quelle": "Seite 1, Zustellungsnachweis"}
+    "aktenzeichen": {
+      "wert": "35 IN 42/26",
+      "quelle": "Seite 1, Gerichtsakte Demo (synthetisch)",
+      "verifiziert": true
+    },
+    "gericht": {
+      "wert": "Amtsgericht Trier",
+      "quelle": "Seite 1, Anschreiben",
+      "verifiziert": true
+    },
+    "gericht_adresse": {
+      "wert": "Justizstraße 2",
+      "quelle": "Seite 1, Anschreiben",
+      "verifiziert": true
+    },
+    "gericht_plz_ort": {
+      "wert": "54290 Trier",
+      "quelle": "Seite 1, Anschreiben",
+      "verifiziert": true
+    },
+    "richter": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "antragsdatum": {
+      "wert": "30.03.2026",
+      "quelle": "Seite 1, Anschreiben",
+      "verifiziert": true
+    },
+    "beschlussdatum": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "antragsart": {
+      "wert": "Regelinsolvenz (ehemals selbständige natürliche Person)",
+      "quelle": "Seite 2, Eröffnungsantrag",
+      "verifiziert": true
+    },
+    "eroeffnungsgrund": {
+      "wert": "Zahlungsunfähigkeit",
+      "quelle": "Seite 2, Fragebogen 3.2",
+      "verifiziert": true
+    },
+    "zustellungsdatum_schuldner": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "internationaler_bezug": {
+      "wert": false,
+      "quelle": "Seite 1"
+    },
+    "eigenverwaltung": {
+      "wert": false,
+      "quelle": "Seite 2"
+    }
   },
   "schuldner": {
-    "name": {"wert": "Muster GmbH", "quelle": "Seite 1, Beschluss"},
-    "vorname": {"wert": "", "quelle": ""},
-    "geburtsdatum": {"wert": "", "quelle": ""},
-    "geburtsort": {"wert": "", "quelle": ""},
-    "geburtsland": {"wert": "", "quelle": ""},
-    "staatsangehoerigkeit": {"wert": "", "quelle": ""},
-    "familienstand": {"wert": "", "quelle": ""},
-    "geschlecht": {"wert": "", "quelle": ""},
-    "aktuelle_adresse": {"wert": "Musterstraße 1, 12345 Musterstadt", "quelle": "Seite 2, Antrag"},
+    "name": {
+      "wert": "Falkenrath",
+      "quelle": "Seite 1, Stammdatenübersicht",
+      "verifiziert": true
+    },
+    "vorname": {
+      "wert": "Nora",
+      "quelle": "Seite 1, Stammdatenübersicht",
+      "verifiziert": true
+    },
+    "geburtsdatum": {
+      "wert": "04.09.1986",
+      "quelle": "Seite 1, Stammdatenübersicht",
+      "verifiziert": true
+    },
+    "geburtsort": {
+      "wert": "Bitburg",
+      "quelle": "Seite 1, Stammdatenübersicht",
+      "verifiziert": true
+    },
+    "geburtsland": {
+      "wert": "Deutschland",
+      "quelle": "Seite 1",
+      "verifiziert": true
+    },
+    "staatsangehoerigkeit": {
+      "wert": "deutsch",
+      "quelle": "Seite 2, Fragebogen 3.1",
+      "verifiziert": true
+    },
+    "familienstand": {
+      "wert": "geschieden",
+      "quelle": "Seite 2, Fragebogen 3.1",
+      "verifiziert": true
+    },
+    "geschlecht": {
+      "wert": "weiblich",
+      "quelle": "Seite 1, Schuldnerin",
+      "verifiziert": true
+    },
+    "aktuelle_adresse": {
+      "wert": "Amselpfad 14, 54317 Auenfels",
+      "quelle": "Seite 1, Stammdatenübersicht",
+      "verifiziert": true
+    },
     "fruehere_adressen": [],
-    "firma": {"wert": "Muster GmbH", "quelle": "Seite 1, Beschluss"},
-    "rechtsform": {"wert": "GmbH", "quelle": "Seite 2, Handelsregisterauszug"},
-    "betriebsstaette_adresse": {"wert": "Musterstraße 1, 12345 Musterstadt", "quelle": "Seite 2, Gewerbeanmeldung"},
-    "handelsregisternummer": {"wert": "HRB 12345", "quelle": "Seite 2, Handelsregisterauszug"},
-    "kinder": []
+    "firma": {
+      "wert": "Nordwerk CNC & Technik",
+      "quelle": "Seite 1, Stammdatenübersicht",
+      "verifiziert": true
+    },
+    "rechtsform": {
+      "wert": "Einzelunternehmen (ehemals selbständig)",
+      "quelle": "Seite 1, Stammdatenübersicht",
+      "verifiziert": true
+    },
+    "betriebsstaette_adresse": {
+      "wert": "Industriestraße 7, 54317 Auenfels",
+      "quelle": "Seite 1, Stammdatenübersicht",
+      "verifiziert": true
+    },
+    "handelsregisternummer": {
+      "wert": "keine Eintragung",
+      "quelle": "Seite 2, Fragebogen 3.3",
+      "verifiziert": true
+    },
+    "telefon": {
+      "wert": "0651 0002814",
+      "quelle": "Seite 1, Anschreiben",
+      "verifiziert": true
+    },
+    "email": {
+      "wert": "nora.falkenrath@demoakte.invalid",
+      "quelle": "Seite 1, Anschreiben",
+      "verifiziert": true
+    },
+    "geschaeftszweig": {
+      "wert": "CNC-Fertigung, Kleinserien, Reparatur- und Nacharbeitsaufträge",
+      "quelle": "Seite 3, Ergänzende betriebliche Angaben",
+      "verifiziert": true
+    },
+    "finanzamt": {
+      "wert": "Finanzamt Trier",
+      "quelle": "Seite 3, Gläubigerverzeichnis",
+      "verifiziert": true
+    },
+    "kinder": [],
+    "unterhaltspflicht_personen": {
+      "wert": "1 Kind",
+      "quelle": "Seite 2, Fragebogen 3.1",
+      "verifiziert": true
+    },
+    "beschaeftigung": {
+      "taetigkeit": {
+        "wert": "Feinwerkmechanikermeisterin / CNC-Fertigung",
+        "quelle": "Seite 2, Fragebogen 3.1",
+        "verifiziert": true
+      },
+      "status": {
+        "wert": "ehemals selbständig, Betrieb eingestellt zum 31.01.2026",
+        "quelle": "Seite 2, Fragebogen 3.1",
+        "verifiziert": true
+      }
+    },
+    "steuerberater": {
+      "wert": "Steuerberatung Harthausen PartG mbB, Am Markt 12, 54290 Trier",
+      "quelle": "Seite 3, Gläubigerverzeichnis",
+      "verifiziert": true
+    }
   },
   "antragsteller": {
-    "name": {"wert": "Handelskrankenkasse", "quelle": "Seite 2, Antragsteller"},
-    "adresse": {"wert": "HKV-Platz 1, 20099 Hamburg", "quelle": "Seite 2, Antragsteller"},
-    "ansprechpartner": {"wert": "Frau Müller", "quelle": "Seite 2, Antragsteller"},
-    "telefon": {"wert": "040 123456", "quelle": "Seite 2, Antragsteller"},
-    "fax": {"wert": "", "quelle": ""},
-    "email": {"wert": "insolvenz@hkv.de", "quelle": "Seite 2, Antragsteller"},
-    "betriebsnummer": {"wert": "123456789", "quelle": "Seite 2, Antragsteller"},
-    "bankverbindung_iban": {"wert": "DE89 3704 0044 0532 0130 00", "quelle": "Seite 2, Antragsteller"},
-    "bankverbindung_bic": {"wert": "COBADEFFXXX", "quelle": "Seite 2, Antragsteller"}
+    "name": {
+      "wert": "Nora Falkenrath",
+      "quelle": "Seite 1, Anschreiben",
+      "verifiziert": true
+    },
+    "adresse": {
+      "wert": "Amselpfad 14, 54317 Auenfels",
+      "quelle": "Seite 1, Anschreiben",
+      "verifiziert": true
+    },
+    "ansprechpartner": {
+      "wert": "Rechtsanwältin Dr. Lina Sommer, Kanzlei Moselblick Insolvenzrecht",
+      "quelle": "Seite 2, Vertretung",
+      "verifiziert": true
+    },
+    "telefon": {
+      "wert": "0651 0002814",
+      "quelle": "Seite 1",
+      "verifiziert": true
+    },
+    "fax": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "email": {
+      "wert": "post@moselblick-insolvenz.invalid",
+      "quelle": "Seite 2, Vertretung",
+      "verifiziert": true
+    },
+    "betriebsnummer": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "bankverbindung_iban": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "bankverbindung_bic": {
+      "wert": null,
+      "quelle": "Seite 1"
+    }
   },
   "forderungen": {
-    "hauptforderung_beitraege": {"wert": 45678.5, "quelle": "Seite 2, Forderungsaufstellung"},
-    "saeumniszuschlaege": {"wert": 1234.56, "quelle": "Seite 2, Forderungsaufstellung"},
-    "mahngebuehren": {"wert": 89, "quelle": "Seite 2, Forderungsaufstellung"},
-    "vollstreckungskosten": {"wert": 0, "quelle": ""},
-    "antragskosten": {"wert": 500, "quelle": "Seite 2, Forderungsaufstellung"},
-    "gesamtforderung": {"wert": 47502.06, "quelle": "Seite 2, Forderungsaufstellung"},
-    "zeitraum_von": {"wert": "01.01.2024", "quelle": "Seite 2, Forderungsaufstellung"},
-    "zeitraum_bis": {"wert": "31.12.2025", "quelle": "Seite 2, Forderungsaufstellung"},
-    "laufende_monatliche_beitraege": {"wert": 3500, "quelle": "Seite 2, Forderungsaufstellung"},
-    "betroffene_arbeitnehmer": [
-      {"anzahl": 12, "typ": "Arbeitnehmer insgesamt", "quelle": "Seite 2, Angaben zu Arbeitnehmerverhältnissen"},
-      {"anzahl": 2, "typ": "Arbeitnehmer mit Beendigung", "quelle": "Seite 2, Angaben zu Arbeitnehmerverhältnissen"}
+    "hauptforderung_beitraege": {
+      "wert": "267.352,92 EUR",
+      "quelle": "Seite 3, Gesamtforderung",
+      "verifiziert": true
+    },
+    "saeumniszuschlaege": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "mahngebuehren": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "vollstreckungskosten": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "antragskosten": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "gesamtforderung": {
+      "wert": "267.352,92 EUR",
+      "quelle": "Seite 3, Gesamtforderung",
+      "verifiziert": true
+    },
+    "zeitraum_von": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "zeitraum_bis": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "laufende_monatliche_beitraege": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "betroffene_arbeitnehmer": [],
+    "anzahl_glaeubiger": {
+      "wert": "12",
+      "quelle": "Seite 2, Fragebogen 3.2",
+      "verifiziert": true
+    }
+  },
+  "einzelforderungen": [
+    {
+      "glaeubiger": "Mosel Maschinenleasing GmbH",
+      "adresse": "Königsbacher Straße 21, 56068 Koblenz",
+      "grund": "Leasingraten CNC-Fräse DMU 50",
+      "betrag": "64.800,00 EUR",
+      "sicherheit": {
+        "absonderungsberechtigt": true,
+        "art": "Sicherungseigentum",
+        "geschaetzter_wert": "28.000,00 EUR"
+      },
+      "titel": "offen",
+      "quelle": "Seite 3, Gläubigerverzeichnis Nr. 1"
+    },
+    {
+      "glaeubiger": "Volksbank Mittelmosel eG",
+      "adresse": "Balduinstraße 4, 54470 Bernkastel-Kues",
+      "grund": "Kontokorrentkredit / Betriebsmittellinie",
+      "betrag": "54.250,00 EUR",
+      "sicherheit": {
+        "absonderungsberechtigt": false
+      },
+      "titel": "offen",
+      "quelle": "Seite 3, Gläubigerverzeichnis Nr. 2"
+    },
+    {
+      "glaeubiger": "Finanzamt Trier",
+      "adresse": "Güterstraße 12, 54295 Trier",
+      "grund": "Umsatzsteuer und Lohnsteuer 2025/2026",
+      "betrag": "38.420,77 EUR",
+      "sicherheit": {
+        "absonderungsberechtigt": false
+      },
+      "titel": "offen",
+      "quelle": "Seite 3, Gläubigerverzeichnis Nr. 3"
+    },
+    {
+      "glaeubiger": "AOK Rheinland-Pfalz/Saarland",
+      "adresse": "Virchowstraße 30, 67304 Eisenberg",
+      "grund": "Sozialversicherungsbeiträge",
+      "betrag": "18.905,34 EUR",
+      "sicherheit": {
+        "absonderungsberechtigt": false
+      },
+      "titel": "offen",
+      "quelle": "Seite 3, Gläubigerverzeichnis Nr. 4"
+    },
+    {
+      "glaeubiger": "Industriepark Auenfels GmbH",
+      "adresse": "Werkstraße 2, 54317 Auenfels",
+      "grund": "Mietrückstände Werkhalle und Büro",
+      "betrag": "21.000,00 EUR",
+      "sicherheit": {
+        "absonderungsberechtigt": true,
+        "art": "Vermieterpfandrecht (teilweise)"
+      },
+      "titel": "offen",
+      "quelle": "Seite 3, Gläubigerverzeichnis Nr. 5"
+    },
+    {
+      "glaeubiger": "Metallhandel Rhein-Mosel KG",
+      "adresse": "Hafenstraße 11, 56070 Koblenz",
+      "grund": "Materiallieferungen Aluminium und Stahl",
+      "betrag": "27.684,90 EUR",
+      "sicherheit": {
+        "absonderungsberechtigt": false
+      },
+      "titel": "offen",
+      "quelle": "Seite 3, Gläubigerverzeichnis Nr. 6"
+    },
+    {
+      "glaeubiger": "Stadtwerke Eifelnetz GmbH",
+      "adresse": "Energieallee 3, 54550 Hillesheim",
+      "grund": "Strom- und Gaslieferungen",
+      "betrag": "6.412,18 EUR",
+      "sicherheit": {
+        "absonderungsberechtigt": false
+      },
+      "titel": "offen",
+      "quelle": "Seite 3, Gläubigerverzeichnis Nr. 7"
+    },
+    {
+      "glaeubiger": "Werkzeugservice West GmbH",
+      "adresse": "Boschring 5, 54292 Trier",
+      "grund": "Werkzeugaufbereitung und Ersatzteile",
+      "betrag": "7.342,11 EUR",
+      "sicherheit": {
+        "absonderungsberechtigt": false
+      },
+      "titel": "offen",
+      "quelle": "Seite 3, Gläubigerverzeichnis Nr. 8"
+    },
+    {
+      "glaeubiger": "Telekom Deutschland GmbH Geschäftskunden",
+      "adresse": "Landgrabenweg 151, 53227 Bonn",
+      "grund": "Telefonie / Internet / Mobilfunk",
+      "betrag": "1.126,44 EUR",
+      "sicherheit": {
+        "absonderungsberechtigt": false
+      },
+      "titel": "offen",
+      "quelle": "Seite 3, Gläubigerverzeichnis Nr. 9"
+    },
+    {
+      "glaeubiger": "Steuerberatung Harthausen PartG mbB",
+      "adresse": "Am Markt 12, 54290 Trier",
+      "grund": "Buchhaltung und Jahresabschlussvorbereitung",
+      "betrag": "3.910,55 EUR",
+      "sicherheit": {
+        "absonderungsberechtigt": false
+      },
+      "titel": "offen",
+      "quelle": "Seite 3, Gläubigerverzeichnis Nr. 10"
+    },
+    {
+      "glaeubiger": "Drucklufttechnik Laux GmbH",
+      "adresse": "Industriestraße 9, 54516 Wittlich",
+      "grund": "Wartung Kompressor und Leitungsnetz",
+      "betrag": "4.850,63 EUR",
+      "sicherheit": {
+        "absonderungsberechtigt": false
+      },
+      "titel": "offen",
+      "quelle": "Seite 3, Gläubigerverzeichnis Nr. 11"
+    },
+    {
+      "glaeubiger": "Kfz-Leasing Südwest GmbH",
+      "adresse": "Zur Plattform 8, 66115 Saarbrücken",
+      "grund": "Leasing Ford Transit",
+      "betrag": "18.650,00 EUR",
+      "sicherheit": {
+        "absonderungsberechtigt": true,
+        "art": "Sicherungseigentum"
+      },
+      "titel": "offen",
+      "quelle": "Seite 3, Gläubigerverzeichnis Nr. 12"
+    }
+  ],
+  "aktiva": {
+    "gesamtwert": {
+      "wert": "70.595,30 EUR",
+      "quelle": "Seite 4, Summe Aktiva",
+      "verifiziert": true
+    },
+    "freie_masse": {
+      "wert": "20.445,30 EUR",
+      "quelle": "Seite 4, Frei verwertbar",
+      "verifiziert": true
+    },
+    "positionen": [
+      {
+        "beschreibung": "Bankguthaben Geschäftskonto per 28.03.2026",
+        "kategorie": "Bankguthaben",
+        "wert": "1.245,30 EUR",
+        "freie_masse": "1.245,30 EUR",
+        "quelle": "Seite 3, Vermögensübersicht"
+      },
+      {
+        "beschreibung": "Offene Kundenforderungen",
+        "kategorie": "Forderungen",
+        "wert": "12.450,00 EUR",
+        "freie_masse": "6.200,00 EUR",
+        "anmerkung": "Durchsetzbarkeit unsicher",
+        "quelle": "Seite 3, Vermögensübersicht"
+      },
+      {
+        "beschreibung": "Lagerbestand Aluminium, Kleinmaterial, Normteile",
+        "kategorie": "Vorräte",
+        "wert": "6.200,00 EUR",
+        "freie_masse": "6.200,00 EUR",
+        "quelle": "Seite 3, Vermögensübersicht"
+      },
+      {
+        "beschreibung": "CNC-Fräse DMU 50, Baujahr 2018",
+        "kategorie": "Maschine",
+        "wert": "28.000,00 EUR",
+        "freie_masse": "0,00 EUR",
+        "absonderung": "Sicherungseigentum Mosel Maschinenleasing GmbH",
+        "quelle": "Seite 3, Vermögensübersicht"
+      },
+      {
+        "beschreibung": "Drehmaschine Weiler E35, Baujahr 2014",
+        "kategorie": "Maschine",
+        "wert": "8.500,00 EUR",
+        "freie_masse": "1.500,00 EUR",
+        "absonderung": "nachrangige Sicherungsabrede",
+        "quelle": "Seite 3, Vermögensübersicht"
+      },
+      {
+        "beschreibung": "Ford Transit Transportfahrzeug, EZ 2016",
+        "kategorie": "Fahrzeug",
+        "wert": "8.900,00 EUR",
+        "freie_masse": "0,00 EUR",
+        "absonderung": "Leasing Kfz-Leasing Südwest GmbH",
+        "quelle": "Seite 3, Vermögensübersicht"
+      },
+      {
+        "beschreibung": "Büroausstattung (PC, Drucker, Schreibtische)",
+        "kategorie": "Büroausstattung",
+        "wert": "800,00 EUR",
+        "freie_masse": "800,00 EUR",
+        "quelle": "Seite 4, Vermögensübersicht"
+      },
+      {
+        "beschreibung": "Werkzeuge / Handmaschinen / Messmittel",
+        "kategorie": "Werkstattausstattung",
+        "wert": "4.500,00 EUR",
+        "freie_masse": "4.500,00 EUR",
+        "quelle": "Seite 4, Vermögensübersicht"
+      }
     ]
   },
+  "anfechtung": {
+    "anfechtungspotenzial": {
+      "wert": "niedrig",
+      "quelle": "Seite 4, Einschätzung",
+      "verifiziert": true
+    },
+    "vorgaenge": []
+  },
   "gutachterbestellung": {
-    "gutachter_name": {"wert": "", "quelle": ""},
-    "gutachter_kanzlei": {"wert": "", "quelle": ""},
-    "gutachter_adresse": {"wert": "", "quelle": ""},
-    "gutachter_telefon": {"wert": "", "quelle": ""},
-    "gutachter_email": {"wert": "", "quelle": ""},
-    "abgabefrist": {"wert": "", "quelle": ""},
+    "gutachter_name": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "gutachter_kanzlei": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "gutachter_adresse": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "gutachter_telefon": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "gutachter_email": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
+    "abgabefrist": {
+      "wert": null,
+      "quelle": "Seite 1"
+    },
     "befugnisse": []
   },
   "ermittlungsergebnisse": {
-    "grundbuch": {"ergebnis": {"wert": "", "quelle": ""}, "grundbesitz_vorhanden": {"wert": null, "quelle": ""}, "datum": {"wert": "", "quelle": ""}},
-    "gerichtsvollzieher": {"name": {"wert": "", "quelle": ""}, "betriebsstaette_bekannt": {"wert": null, "quelle": ""}, "vollstreckungen": {"wert": "", "quelle": ""}, "masse_deckend": {"wert": null, "quelle": ""}, "vermoegensauskunft_abgegeben": {"wert": null, "quelle": ""}, "haftbefehle": {"wert": null, "quelle": ""}, "datum": {"wert": "", "quelle": ""}},
-    "vollstreckungsportal": {"schuldnerverzeichnis_eintrag": {"wert": null, "quelle": ""}, "vermoegensverzeichnis_eintrag": {"wert": null, "quelle": ""}},
-    "meldeauskunft": {"meldestatus": {"wert": "", "quelle": ""}, "datum": {"wert": "", "quelle": ""}}
+    "grundbuch": {
+      "ergebnis": {
+        "wert": "kein Grundbesitz",
+        "quelle": "Seite 3, Vermögensübersicht",
+        "verifiziert": true
+      },
+      "grundbesitz_vorhanden": {
+        "wert": false,
+        "quelle": "Seite 3"
+      },
+      "datum": {
+        "wert": null,
+        "quelle": "Seite 1"
+      }
+    },
+    "gerichtsvollzieher": {
+      "name": {
+        "wert": null,
+        "quelle": "Seite 1"
+      },
+      "betriebsstaette_bekannt": {
+        "wert": null,
+        "quelle": "Seite 1"
+      },
+      "vollstreckungen": {
+        "wert": null,
+        "quelle": "Seite 1"
+      },
+      "masse_deckend": {
+        "wert": null,
+        "quelle": "Seite 1"
+      },
+      "vermoegensauskunft_abgegeben": {
+        "wert": null,
+        "quelle": "Seite 1"
+      },
+      "haftbefehle": {
+        "wert": null,
+        "quelle": "Seite 1"
+      },
+      "datum": {
+        "wert": null,
+        "quelle": "Seite 1"
+      }
+    },
+    "vollstreckungsportal": {
+      "schuldnerverzeichnis_eintrag": {
+        "wert": null,
+        "quelle": "Seite 1"
+      },
+      "vermoegensverzeichnis_eintrag": {
+        "wert": null,
+        "quelle": "Seite 1"
+      }
+    },
+    "meldeauskunft": {
+      "meldestatus": {
+        "wert": "gemeldet unter Amselpfad 14, 54317 Auenfels",
+        "quelle": "Seite 2, Fragebogen 3.1",
+        "verifiziert": true
+      },
+      "datum": {
+        "wert": null,
+        "quelle": "Seite 1"
+      }
+    }
   },
-  "fristen": [],
+  "fristen": [
+    {
+      "bezeichnung": "Abgabe Gutachten",
+      "frist": "offen",
+      "quelle": "Seite 1"
+    }
+  ],
   "standardanschreiben": [
-    {"typ": "Bankenauskunft", "empfaenger": "Banken des Schuldners", "status": "fehlt", "begruendung": "Bankverbindungen nicht konkret bekannt", "fehlende_daten": ["Konkrete Banken mit Adresse"]},
-    {"typ": "Steuerberater-Kontakt", "empfaenger": "Dr. Schmitz Steuerberater", "status": "bereit", "begruendung": "Steuerberater ist bekannt", "fehlende_daten": []}
+    {
+      "typ": "Bankenanfrage",
+      "empfaenger": "Volksbank Mittelmosel eG",
+      "status": "bereit",
+      "begruendung": "Gläubiger Nr. 2 — Kontokorrent",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "Anfrage_ans_Finanzamt",
+      "empfaenger": "Finanzamt Trier",
+      "status": "bereit",
+      "begruendung": "Gläubiger Nr. 3 — USt/LSt Rückstände",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "Gewerbeanfrage",
+      "empfaenger": "Gewerbeamt Auenfels",
+      "status": "bereit",
+      "begruendung": "ehemals selbständig tätig",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "Halteranfrage_Zulassungsstelle",
+      "empfaenger": "Zulassungsstelle",
+      "status": "bereit",
+      "begruendung": "Ford Transit (Leasing)",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "Muster_Kontaktaufnahme_Steuerberater",
+      "empfaenger": "Steuerberatung Harthausen",
+      "status": "bereit",
+      "begruendung": "laufende Buchhaltung",
+      "fehlende_daten": []
+    },
+    {
+      "typ": "Muster_Versicherungsanfrage",
+      "empfaenger": "nicht bekannt",
+      "status": "fehlt",
+      "begruendung": "keine Versicherung genannt",
+      "fehlende_daten": [
+        "versicherung_name"
+      ]
+    }
   ],
-  "fehlende_informationen": [],
+  "fehlende_informationen": [
+    "Beschlussdatum des Insolvenzgerichts",
+    "Name des vorläufigen Insolvenzverwalters",
+    "IBAN Geschäftskonto Volksbank Mittelmosel"
+  ],
   "zusammenfassung": [
-    {"wert": "Demo-Extraktion zum Testen der PDF-Vorschau und Quellennavigation.", "quelle": "Seite 1"}
+    {
+      "wert": "Regelinsolvenz einer ehemals selbständigen natürlichen Person (Nora Falkenrath).",
+      "quelle": "Seite 1, Einleitung",
+      "verifiziert": true
+    },
+    {
+      "wert": "Einzelunternehmen 'Nordwerk CNC & Technik' bis 31.01.2026, danach Betrieb eingestellt.",
+      "quelle": "Seite 2, Geschäftsbetrieb",
+      "verifiziert": true
+    },
+    {
+      "wert": "Insolvenzgrund Zahlungsunfähigkeit — Auftragsrückgang, gestiegene Kosten, Maschinenausfall Q4/2025.",
+      "quelle": "Seite 2, Fragebogen 3.2",
+      "verifiziert": true
+    },
+    {
+      "wert": "12 Gläubiger, Gesamtforderung EUR 267.352,92.",
+      "quelle": "Seite 3, Gläubigerverzeichnis",
+      "verifiziert": true
+    },
+    {
+      "wert": "Aktiva EUR 70.595,30 brutto, davon EUR 20.445,30 frei verwertbar.",
+      "quelle": "Seite 4, Vermögensübersicht",
+      "verifiziert": true
+    },
+    {
+      "wert": "Verfahrenskostenstundung und Restschuldbefreiung beantragt.",
+      "quelle": "Seite 2, II./III.",
+      "verifiziert": true
+    }
   ],
-  "risiken_hinweise": []
+  "risiken_hinweise": [
+    {
+      "wert": "Mehrere Vermögenspositionen sind durch Sicherungseigentum belastet (CNC-Fräse, Ford Transit).",
+      "quelle": "Seite 4, Einschätzung",
+      "verifiziert": true
+    },
+    {
+      "wert": "Durchsetzbarkeit offener Kundenforderungen unsicher.",
+      "quelle": "Seite 3, Vermögensübersicht",
+      "verifiziert": true
+    }
+  ],
+  "insolvenzanalyse": {
+    "arbeitnehmer_ehemalig": {
+      "wert": "3 zuletzt beschäftigte Arbeitnehmer, seit 01.02.2026 keine",
+      "quelle": "Seite 2, Fragebogen 3.2",
+      "verifiziert": true
+    },
+    "lohnrueckstaende": {
+      "wert": "6.480,00 EUR (Januar 2026)",
+      "quelle": "Seite 2, Fragebogen 3.2",
+      "verifiziert": true
+    },
+    "groessenklasse_hgb": {
+      "wert": null,
+      "quelle": "Seite 1"
+    }
+  }
 }
