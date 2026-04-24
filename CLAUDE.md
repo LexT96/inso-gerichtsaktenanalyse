@@ -187,11 +187,87 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 
 ## Environment
 
-Requires `.env` at project root with `ANTHROPIC_API_KEY`, `JWT_SECRET` (min 32 chars), `DEFAULT_ADMIN_PASSWORD`, `DB_ENCRYPTION_KEY` (min 32 chars). Optional: `EXTRACTION_MODEL` (default: `claude-sonnet-4-6`), `UTILITY_MODEL` (default: `claude-haiku-4-5-20251001`), `ANTHROPIC_BASE_URL` (for Langdock EU proxy: `https://api.langdock.com/anthropic/eu`), `AZURE_DOC_INTEL_ENDPOINT` + `AZURE_DOC_INTEL_KEY` (enables OCR for scanned PDFs). See `.env.example` for all variables.
+Requires `.env` at project root with `ANTHROPIC_API_KEY`, `JWT_SECRET` (min 32 chars), `DEFAULT_ADMIN_PASSWORD`, `DB_ENCRYPTION_KEY` (min 32 chars). Optional: `EXTRACTION_MODEL` (default: `claude-sonnet-4-6`), `UTILITY_MODEL` (default: `claude-haiku-4-5-20251001`), `ANTHROPIC_BASE_URL` (for Langdock EU proxy: `https://api.langdock.com/anthropic/eu`), `AZURE_DOC_INTEL_ENDPOINT` + `AZURE_DOC_INTEL_KEY` (enables OCR for scanned PDFs), `VITE_APP_TITLE` (browser tab title, default `Aktenanalyse`; demo-Server setzt `Demo Aktenanalyse`). See `.env.example` for all variables.
 
 **Production (Langdock EU)**: `ANTHROPIC_BASE_URL=https://api.langdock.com/anthropic/eu`, `EXTRACTION_MODEL=claude-sonnet-4-6-default`, `UTILITY_MODEL=claude-sonnet-4-6-default`. All data stays in EU. 200K TPM per model.
 
-**Benchmark CLI**: `npm run benchmark -- path/to/pdf`, `npm run benchmark:list`, `npm run benchmark:compare -- 1,2`. Results in `data/benchmarks.db`.
+## Deployment & Branching
+
+Details in `docs/pipeline.md`.
+
+**Branches:**
+
+| Branch | Default? | Auto-Deploy | Container-Prefix |
+|--------|----------|-------------|------------------|
+| `dev`  | yes      | —           | — (nur CI)       |
+| `main` | —        | prod → `aktenanalyse.klareprozesse.de` | `tbs-aktenanalyse-*` |
+| `demo` | —        | demo → `https://46-224-7-60.sslip.io`  | `app-*`              |
+
+Feature-Branches zweigen von `dev` ab, PR → `dev`. Prod-Release: PR `dev → main` (squash). Demo-Update: GH Actions "Promote main → demo" (merge, behält demo-only `kanzlei.json` + `gutachtenvorlagen/`).
+
+`main` und `demo` sind protected — required CI (`backend` + `frontend`), kein Force-Push.
+
+**Server-Layout (identisch für prod + demo):**
+
+- Git-Clone auf Server (prod: `/opt/tbs-aktenanalyse`, demo: `/opt/app`), tracked den jeweiligen Branch
+- `.env` auf Server liegt außerhalb von git (Secrets + demo setzt `VITE_APP_TITLE=Demo Aktenanalyse`)
+- SQLite in Docker Named Volume (`{tbs-aktenanalyse,app}_db-data`) überlebt Redeploys
+- Caddy (Reverse Proxy + Let's Encrypt prod / self-signed demo) → frontend (nginx) + backend (Node)
+
+**Workflows** in `.github/workflows/`:
+
+- `ci.yml` — PRs + pushes nach dev/demo/main: Backend `tsc + vitest`, Frontend `tsc -b + vite build`. Backend-Tests nutzen dummy env vars (config.ts validiert min. 32 Zeichen für JWT/DB-Keys).
+- `deploy-demo.yml` / `deploy-prod.yml` — auf push in den jeweiligen Branch: SSH zu VM, `git reset --hard origin/<branch>` + `docker compose up -d --build`. Pfad via `{DEMO,PROD}_DEPLOY_PATH` Secret konfigurierbar, Default `/opt/app`. Prod zusätzlich geguarded durch Repo-Variable `PROD_ENABLED=true`.
+- `promote-main-to-demo.yml` — manuell (workflow_dispatch): merged `main` in `demo` (oder rebase), erhält demo-only Commits. Bei Konflikten (z.B. `gutachtenvorlagen/`) → manuell lokal lösen.
+
+**GH Secrets** (pro Environment): `<ENV>_SSH_KEY`, `<ENV>_HOST`, `<ENV>_USER`, optional `<ENV>_DEPLOY_PATH`. Deploy-Keys sind ed25519, pubkey in `/root/.ssh/authorized_keys` mit Comment `github-actions-deploy-<env>@klareprozesse`.
+
+## Benchmarks
+
+`data/benchmarks.db` (SQLite) speichert Extraktion-Runs für Modellvergleiche. Schema in `backend/src/services/benchmarkService.ts`.
+
+```bash
+npm run benchmark -- path/to/akte.pdf                           # Run + save
+npm run benchmark -- path/to/akte.pdf --notes="sonnet 4.6 EU"   # mit Notiz
+npm run benchmark:list                                          # alle Runs
+npm run benchmark:list -- --doc=<sha256>                        # pro PDF
+npm run benchmark:compare -- 1,2                                # Diff Feld-für-Feld
+```
+
+Document-Dedup via SHA-256 PDF-Hash → gleiche PDF, verschiedene Runs bleiben gruppiert. Provider-Info (`EXTRACTION_PROVIDER`, `EXTRACTION_MODEL`, Langdock vs direct Anthropic) wird per Run gespeichert.
+
+**Prompt-Tuning** (optional): `promptfooconfig.yaml` im Repo-Root, Test-DB `data/insolvenz-promptfoo-test.db`.
+
+## Stack-Überblick
+
+**Backend** (Node 20, TypeScript, Express 4):
+- HTTP: `express`, `cors`, `cookie-parser`, `helmet`, `express-rate-limit`, Multer für PDF-Uploads
+- DB: `better-sqlite3` (SQLite + WAL), verschlüsselt via HKDF-abgeleitetem Schlüssel aus `DB_ENCRYPTION_KEY`
+- Auth: `jsonwebtoken` + `bcrypt` (lokal), `jwks-rsa` (optional Azure AD SSO)
+- LLM: `@anthropic-ai/sdk` (+ `@anthropic-ai/vertex-sdk` für GCP), `openai` (Provider-Switch via `EXTRACTION_PROVIDER=openai`, z.B. GPT-5.4)
+- PDF-Text: `pdf-parse` (schnelle Text-Extraktion), `pdf-lib` (Manipulation z.B. mini-PDFs für Stage 2b/3c)
+- PDF-Rendering + OCR-Layer: `pymupdf` via Python-Subprocess (Seiten → JPEG für Vision-Calls, invisible Text-Overlay auf gescannten PDFs via word-polygons)
+- OCR: Azure Document Intelligence `prebuilt-layout`, angesprochen via raw `fetch` (kein SDK), Response-Cache per SHA-256 PDF-Hash in `data/ocr-cache/`
+- DOCX: `docxtemplater` + `pizzip` (XML-Replacement mit zwei Pässen: per-`<w:t>` zuerst, dann flatten-fallback)
+- Utility: `zod` (Schema-Validierung, inkl. `sourcedBooleanSchema`), `zod-to-json-schema`, `jsonrepair` (für truncated Claude-Output), `uuid`, `winston` + `winston-daily-rotate-file` (BRAO-konform, loggt nie PDF-Inhalt)
+- Test: `vitest` (109 Tests), Helper: `tsx` (watch-dev + CLI-Skripte)
+
+**Frontend** (React 18, TypeScript, Vite 6):
+- Routing: `react-router-dom` 7, API: `axios`
+- Styling: Tailwind CSS 3 (mit `postcss` + `autoprefixer`), Geist Mono + DM Sans
+- PDF-Viewer: `react-pdf` (pdf.js) mit paragraph-level Highlighting, `mark.js` für Text-Suche
+- SSO: `@azure/msal-browser` + `@azure/msal-react` (optional, aktiv wenn `VITE_AZURE_TENANT_ID` gesetzt)
+
+**Infra / Dev:**
+- Docker + docker-compose: `docker-compose.yml` (prod mit Caddy/TLS), `docker-compose.prod-ip.yml` (prod ohne Domain), `docker-compose.dev.yml` (hot-reload)
+- Caddy 2 (Reverse Proxy + auto Let's Encrypt bei gesetztem `DOMAIN_NAME`)
+- Terraform (`hcloud` provider) für Hetzner-Provisionierung, `terraform/` im Repo
+- GitHub Actions CI/CD (siehe Deployment & Branching)
+
+**Python-Helfer:**
+- `pymupdf` (Runtime: Rendering + OCR-Text-Layer-Overlay)
+- `python-docx` (Scripts: Template-Rebuild aus realen Gutachten, `scripts/rebuild-templates.py`)
+- Scripts auch: `scripts/convert-letter-pdfs.py` (Muster-PDFs → DOCX via Claude Vision), `scripts/update-briefkopf.py` (Kanzlei-Daten-Sync)
 
 ## Ports
 
