@@ -43,3 +43,44 @@ def sync_sdts(target: DocxBundle, master: DocxBundle, tags: list[str]) -> None:
         "word/document.xml",
         etree.tostring(target_doc, xml_declaration=True, encoding="UTF-8", standalone=True),
     )
+
+
+HEADER_FOOTER_PARTS = ["header1.xml", "header2.xml", "footer1.xml", "footer2.xml"]
+
+
+def sync_header_footer(target: DocxBundle, master: DocxBundle) -> None:
+    """Copy header1/2 + footer1/2 XMLs and their rels from master."""
+    for base in HEADER_FOOTER_PARTS:
+        part = f"word/{base}"
+        rels = f"word/_rels/{base}.rels"
+        if target.has_part(part):
+            target.delete_part(part)
+        if target.has_part(rels):
+            target.delete_part(rels)
+        if master.has_part(part):
+            target.write_part(part, master.read_part(part))
+        if master.has_part(rels):
+            target.write_part(rels, master.read_part(rels))
+
+
+def sync_media(target: DocxBundle, master: DocxBundle) -> None:
+    """Import master's media under briefkopf_-prefixed names; patch header/footer rels."""
+    master_media_names = [
+        name for name in master.list_parts() if name.startswith("word/media/")
+    ]
+    name_map: dict[str, str] = {}
+
+    for old in master_media_names:
+        basename = old.split("/")[-1]
+        new_name = f"word/media/briefkopf_{basename}"
+        name_map[f"media/{basename}"] = f"media/briefkopf_{basename}"
+        target.write_part(new_name, master.read_part(old))
+
+    for base in HEADER_FOOTER_PARTS:
+        rels_part = f"word/_rels/{base}.rels"
+        if not target.has_part(rels_part):
+            continue
+        rels_xml = target.read_part(rels_part).decode("utf-8")
+        for old, new in name_map.items():
+            rels_xml = rels_xml.replace(f'Target="{old}"', f'Target="{new}"')
+        target.write_part(rels_part, rels_xml.encode("utf-8"))
