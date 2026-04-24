@@ -24,6 +24,7 @@ import { apiClient } from '../api/client';
 import { useExtraction } from '../hooks/useExtraction';
 import { ExtractionProvider } from '../contexts/ExtractionContext';
 import { HistoryPanel } from '../components/dashboard/HistoryPanel';
+import { useAuth } from '../hooks/useAuth';
 import type { ExtractionResult } from '../types/extraction';
 // Shared stats computation — single source of truth with backend
 import { computeExtractionStats, type FieldDetail } from '@shared/utils/computeStats';
@@ -35,6 +36,8 @@ function computeStats(result: ExtractionResult) {
 
 
 export function DashboardPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [file, setFile] = useState<File | null>(null);
   const [tab, setTab] = useState('overview');
   const [proMode, setProMode] = useState(false);
@@ -326,6 +329,7 @@ export function DashboardPage() {
                 loading={loading}
                 proMode={proMode}
                 onProModeChange={setProMode}
+                isAdmin={isAdmin}
               />
               <HistoryPanel
                 onSelect={handleHistorySelect}

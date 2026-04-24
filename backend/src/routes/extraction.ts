@@ -73,8 +73,16 @@ router.post(
     try {
       sendProgress('PDF empfangen — Verarbeitung startet…', 5);
 
-      // Pro mode: use Opus for higher accuracy (user-selectable)
-      const proMode = req.query.pro === '1' || req.query.pro === 'true';
+      // Pro mode: use Opus for higher accuracy. Admin-only.
+      const proRequested = req.query.pro === '1' || req.query.pro === 'true';
+      const isAdmin = req.user?.role === 'admin';
+      const proMode = proRequested && isAdmin;
+      if (proRequested && !isAdmin) {
+        logger.warn('Pro mode requested by non-admin — ignored', {
+          userId: req.user?.userId,
+          role: req.user?.role,
+        });
+      }
       // Langdock requires -default suffix on model names
       const opusModel = config.ANTHROPIC_BASE_URL?.includes('langdock') ? 'claude-opus-4-6-default' : 'claude-opus-4-6';
       const modelOverride = proMode ? opusModel : undefined;
