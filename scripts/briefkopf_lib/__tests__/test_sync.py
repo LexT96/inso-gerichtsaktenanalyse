@@ -141,3 +141,81 @@ def test_sync_media_renames_master_images(tmp_path: Path) -> None:
     assert reread.read_part("word/media/briefkopf_image4.emf") == b"MASTER-IMAGE-BYTES"
     rels = reread.read_part("word/_rels/header1.xml.rels").decode()
     assert 'Target="media/briefkopf_image4.emf"' in rels
+
+
+def test_ensure_section_properties_adds_titlePg_and_refs() -> None:
+    from scripts.briefkopf_lib.sync import ensure_section_properties
+
+    doc_xml = (
+        '<?xml version="1.0"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        "<w:body>"
+        "<w:p/>"
+        '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>'
+        "</w:body>"
+        "</w:document>"
+    )
+    doc = etree.fromstring(doc_xml)
+    ensure_section_properties(doc, {
+        "first-header": "rId100",
+        "first-footer": "rId101",
+        "default-header": "rId102",
+        "default-footer": "rId103",
+    })
+    out = etree.tostring(doc, encoding="unicode")
+    assert "titlePg" in out
+    assert 'w:type="first"' in out
+    assert 'w:type="default"' in out
+    assert 'r:id="rId100"' in out
+    assert 'r:id="rId103"' in out
+
+
+def test_patch_content_types_adds_header_footer_overrides(tmp_path: Path) -> None:
+    from scripts.briefkopf_lib.sync import patch_content_types
+
+    path = tmp_path / "t.docx"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr(
+            "[Content_Types].xml",
+            '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            "</Types>",
+        )
+        z.writestr("_rels/.rels", "<x/>")
+        z.writestr("word/document.xml", "<x/>")
+
+    target = DocxBundle.read(path)
+    patch_content_types(target)
+    ct = target.read_part("[Content_Types].xml").decode("utf-8")
+    assert '/word/header1.xml' in ct
+    assert '/word/header2.xml' in ct
+    assert '/word/footer1.xml' in ct
+    assert '/word/footer2.xml' in ct
+    patch_content_types(target)
+    ct2 = target.read_part("[Content_Types].xml").decode("utf-8")
+    assert ct2.count('/word/header1.xml') == 1
+
+
+def test_patch_document_rels_adds_header_footer_relationships(tmp_path: Path) -> None:
+    from scripts.briefkopf_lib.sync import patch_document_rels
+
+    path = tmp_path / "t.docx"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("[Content_Types].xml", "<x/>")
+        z.writestr("_rels/.rels", "<x/>")
+        z.writestr("word/document.xml", "<x/>")
+        z.writestr(
+            "word/_rels/document.xml.rels",
+            '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+            "</Relationships>",
+        )
+
+    target = DocxBundle.read(path)
+    rid_map = patch_document_rels(target)
+    assert set(rid_map) == {"first-header", "first-footer", "default-header", "default-footer"}
+    rels = target.read_part("word/_rels/document.xml.rels").decode("utf-8")
+    assert 'Target="header1.xml"' in rels
+    assert 'Target="footer2.xml"' in rels
+    assert 'Target="styles.xml"' in rels
