@@ -24,15 +24,19 @@ jobs:
           SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
           SSH_HOST: ${{ secrets.PROD_HOST }}
           SSH_USER: ${{ secrets.PROD_USER }}
+          DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
         run: |
           set -euo pipefail
+          : "${DEPLOY_PATH:=/opt/app}"
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -s' <<'REMOTE'
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
+              "$SSH_USER@$SSH_HOST" \
+              "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
           set -euo pipefail
-          cd /opt/app
+          cd "$DEPLOY_PATH"
           git fetch --prune origin
           git reset --hard origin/main
           docker compose up -d --build
