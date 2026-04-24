@@ -72,3 +72,72 @@ def test_sync_sdts_raises_when_master_missing_tag(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="missing SDT"):
         sync_sdts(target, master, tags=["briefkopf-nonexistent"])
+
+
+def test_sync_header_footer_copies_parts_from_master(tmp_path: Path) -> None:
+    master_path = tmp_path / "master.docx"
+    target_path = tmp_path / "target.docx"
+
+    with zipfile.ZipFile(master_path, "w") as z:
+        z.writestr("[Content_Types].xml", "<x/>")
+        z.writestr("_rels/.rels", "<x/>")
+        z.writestr("word/document.xml", "<x/>")
+        z.writestr("word/header1.xml", "<header>from master</header>")
+        z.writestr("word/_rels/header1.xml.rels", "<x/>")
+        z.writestr("word/footer1.xml", "<footer>from master</footer>")
+        z.writestr("word/_rels/footer1.xml.rels", "<x/>")
+
+    with zipfile.ZipFile(target_path, "w") as z:
+        z.writestr("[Content_Types].xml", "<x/>")
+        z.writestr("_rels/.rels", "<x/>")
+        z.writestr("word/document.xml", "<x/>")
+
+    from scripts.briefkopf_lib.sync import sync_header_footer
+
+    target = DocxBundle.read(target_path)
+    master = DocxBundle.read(master_path)
+    sync_header_footer(target, master)
+    target.save(target_path)
+
+    reread = DocxBundle.read(target_path)
+    assert reread.read_part("word/header1.xml").decode() == "<header>from master</header>"
+    assert reread.read_part("word/footer1.xml").decode() == "<footer>from master</footer>"
+
+
+def test_sync_media_renames_master_images(tmp_path: Path) -> None:
+    master_path = tmp_path / "master.docx"
+    target_path = tmp_path / "target.docx"
+
+    master_header_rels = (
+        '<?xml version="1.0"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image4.emf"/>'
+        "</Relationships>"
+    )
+    with zipfile.ZipFile(master_path, "w") as z:
+        z.writestr("[Content_Types].xml", "<x/>")
+        z.writestr("_rels/.rels", "<x/>")
+        z.writestr("word/document.xml", "<x/>")
+        z.writestr("word/header1.xml", "<h/>")
+        z.writestr("word/_rels/header1.xml.rels", master_header_rels)
+        z.writestr("word/media/image4.emf", b"MASTER-IMAGE-BYTES")
+
+    with zipfile.ZipFile(target_path, "w") as z:
+        z.writestr("[Content_Types].xml", "<x/>")
+        z.writestr("_rels/.rels", "<x/>")
+        z.writestr("word/document.xml", "<x/>")
+        z.writestr("word/media/image4.emf", b"TARGET-OWN-IMAGE")
+
+    from scripts.briefkopf_lib.sync import sync_header_footer, sync_media
+
+    target = DocxBundle.read(target_path)
+    master = DocxBundle.read(master_path)
+    sync_header_footer(target, master)
+    sync_media(target, master)
+    target.save(target_path)
+
+    reread = DocxBundle.read(target_path)
+    assert reread.read_part("word/media/image4.emf") == b"TARGET-OWN-IMAGE"
+    assert reread.read_part("word/media/briefkopf_image4.emf") == b"MASTER-IMAGE-BYTES"
+    rels = reread.read_part("word/_rels/header1.xml.rels").decode()
+    assert 'Target="media/briefkopf_image4.emf"' in rels
