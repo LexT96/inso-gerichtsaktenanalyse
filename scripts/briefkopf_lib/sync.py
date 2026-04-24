@@ -24,6 +24,10 @@ def sync_sdts(target: DocxBundle, master: DocxBundle, tags: list[str]) -> None:
     of the body (in order defined by `tags`). This makes first-time sync on
     previously-unprepared templates work without a separate prepare step.
 
+    Image references (r:embed) inside the copied SDTs are remapped to fresh
+    non-conflicting rIds in the target's document.xml.rels, so the DEKRA/VID
+    siegel images render correctly.
+
     Raises RuntimeError if master is missing a tag.
     """
     from copy import deepcopy
@@ -36,24 +40,116 @@ def sync_sdts(target: DocxBundle, master: DocxBundle, tags: list[str]) -> None:
     target_body = target_doc.find(f"./{_W}body")
     assert target_body is not None, "target document has no body"
 
+    # Build image embed remap (master rId → new target rId), ensure target rels
+    embed_remap = _ensure_sdt_image_rels(target, master, master_doc, tags)
+
     for position, tag in enumerate(tags):
         master_matches = find_sdts_by_tag(master_doc, tag)
         if not master_matches:
             raise RuntimeError(f"master missing SDT with tag '{tag}'")
-        master_sdt = master_matches[0]
+        master_sdt = deepcopy(master_matches[0])
+        _remap_image_embeds(master_sdt, embed_remap)
 
         target_matches = find_sdts_by_tag(target_doc, tag)
         if target_matches:
             replace_sdt(target_matches[0], master_sdt)
         else:
-            # Insert a copy from master at the intended position in body
-            target_body.insert(position, deepcopy(master_sdt))
+            target_body.insert(position, master_sdt)
             print(f"  INSERT: new SDT '{tag}' at body position {position}")
 
     target.write_part(
         "word/document.xml",
         etree.tostring(target_doc, xml_declaration=True, encoding="UTF-8", standalone=True),
     )
+
+
+_NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_R_ATTR = f"{{{_NS_R}}}embed"
+_A_BLIP = "{http://schemas.openxmlformats.org/drawingml/2006/main}blip"
+_IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+
+
+def _ensure_sdt_image_rels(
+    target: DocxBundle,
+    master: DocxBundle,
+    master_doc: etree._Element,
+    tags: list[str],
+) -> dict[str, str]:
+    """For each image r:embed used within master's briefkopf SDTs, add a relationship
+    in target's document.xml.rels pointing to the (already imported) renamed media
+    file. Returns a dict mapping master rId → target rId."""
+    import re
+
+    # Which image rIds do the master SDTs use?
+    master_embeds: set[str] = set()
+    for tag in tags:
+        for sdt in find_sdts_by_tag(master_doc, tag):
+            for blip in sdt.iter(_A_BLIP):
+                rid = blip.get(_R_ATTR)
+                if rid:
+                    master_embeds.add(rid)
+
+    if not master_embeds:
+        return {}
+
+    # Map master rId → media target (e.g., "media/image1.png")
+    master_rels_xml = master.read_part("word/_rels/document.xml.rels").decode("utf-8")
+    master_rid_to_target: dict[str, str] = {}
+    for m in re.finditer(
+        r'<Relationship\s+Id="([^"]+)"\s+Type="[^"]*relationships/image"\s+Target="([^"]+)"',
+        master_rels_xml,
+    ):
+        master_rid_to_target[m.group(1)] = m.group(2)
+
+    # Load target rels (or bootstrap empty)
+    target_rels_path = "word/_rels/document.xml.rels"
+    if target.has_part(target_rels_path):
+        target_rels_xml = target.read_part(target_rels_path).decode("utf-8")
+    else:
+        target_rels_xml = (
+            '<?xml version="1.0"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            "</Relationships>"
+        )
+
+    existing_ids = {m.group(1) for m in re.finditer(r'Id="([^"]+)"', target_rels_xml)}
+
+    def _next_id() -> str:
+        i = 500
+        while f"rId{i}" in existing_ids:
+            i += 1
+        existing_ids.add(f"rId{i}")
+        return f"rId{i}"
+
+    remap: dict[str, str] = {}
+    for master_rid in sorted(master_embeds):
+        master_target = master_rid_to_target.get(master_rid)
+        if master_target is None:
+            print(f"  WARN: master SDT references {master_rid} but no image relationship found")
+            continue
+        # Rename to briefkopf_ prefix (consistent with sync_media)
+        basename = master_target.split("/")[-1]
+        new_target = f"media/briefkopf_{basename}"
+        new_rid = _next_id()
+        rel_entry = (
+            f'<Relationship Id="{new_rid}" '
+            f'Type="{_IMAGE_REL_TYPE}" Target="{new_target}"/>'
+        )
+        target_rels_xml = target_rels_xml.replace(
+            "</Relationships>", rel_entry + "</Relationships>"
+        )
+        remap[master_rid] = new_rid
+
+    target.write_part(target_rels_path, target_rels_xml.encode("utf-8"))
+    return remap
+
+
+def _remap_image_embeds(element: etree._Element, remap: dict[str, str]) -> None:
+    """Rewrite r:embed attributes on <a:blip> inside `element` using the remap."""
+    for blip in element.iter(_A_BLIP):
+        old = blip.get(_R_ATTR)
+        if old and old in remap:
+            blip.set(_R_ATTR, remap[old])
 
 
 HEADER_FOOTER_PARTS = ["header1.xml", "header2.xml", "footer1.xml", "footer2.xml"]
