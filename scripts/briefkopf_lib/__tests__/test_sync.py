@@ -74,6 +74,37 @@ def test_sync_sdts_raises_when_master_missing_tag(tmp_path: Path) -> None:
         sync_sdts(target, master, tags=["briefkopf-nonexistent"])
 
 
+def test_sync_sdts_inserts_when_target_missing(tmp_path: Path) -> None:
+    """Target without any briefkopf SDT should get one inserted from master."""
+    master_path = tmp_path / "master.docx"
+    target_path = tmp_path / "target.docx"
+    _make_docx_with_sdts(master_path, sidebar_text="MASTER SIDEBAR", body_text="ignored")
+
+    # Target has NO SDTs at all, just plain body paragraph
+    doc_no_sdt = (
+        '<?xml version="1.0"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:body>"
+        "<w:p><w:r><w:t>ORIGINAL BODY</w:t></w:r></w:p>"
+        "</w:body>"
+        "</w:document>"
+    )
+    with zipfile.ZipFile(target_path, "w") as z:
+        z.writestr("[Content_Types].xml", "<x/>")
+        z.writestr("_rels/.rels", "<x/>")
+        z.writestr("word/document.xml", doc_no_sdt)
+
+    master = DocxBundle.read(master_path)
+    target = DocxBundle.read(target_path)
+    sync_sdts(target, master, tags=["briefkopf-sidebar"])
+
+    target.save(target_path)
+    reread = DocxBundle.read(target_path)
+    xml = reread.read_part("word/document.xml").decode()
+    assert "MASTER SIDEBAR" in xml
+    assert "ORIGINAL BODY" in xml
+
+
 def test_sync_header_footer_copies_parts_from_master(tmp_path: Path) -> None:
     master_path = tmp_path / "master.docx"
     target_path = tmp_path / "target.docx"

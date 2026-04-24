@@ -20,24 +20,35 @@ BRIEFKOPF_SDT_TAGS = [
 def sync_sdts(target: DocxBundle, master: DocxBundle, tags: list[str]) -> None:
     """Replace each SDT in target's document.xml with the matching one from master.
 
-    Raises RuntimeError if master is missing a tag. Logs warning if target is missing.
+    If target has no SDT with a given tag, insert a copy from master at the start
+    of the body (in order defined by `tags`). This makes first-time sync on
+    previously-unprepared templates work without a separate prepare step.
+
+    Raises RuntimeError if master is missing a tag.
     """
+    from copy import deepcopy
+
     target_xml = target.read_part("word/document.xml")
     master_xml = master.read_part("word/document.xml")
     target_doc = etree.fromstring(target_xml)
     master_doc = etree.fromstring(master_xml)
 
-    for tag in tags:
+    target_body = target_doc.find(f"./{_W}body")
+    assert target_body is not None, "target document has no body"
+
+    for position, tag in enumerate(tags):
         master_matches = find_sdts_by_tag(master_doc, tag)
         if not master_matches:
             raise RuntimeError(f"master missing SDT with tag '{tag}'")
         master_sdt = master_matches[0]
 
         target_matches = find_sdts_by_tag(target_doc, tag)
-        if not target_matches:
-            print(f"  WARN: target has no SDT with tag '{tag}' — skipping")
-            continue
-        replace_sdt(target_matches[0], master_sdt)
+        if target_matches:
+            replace_sdt(target_matches[0], master_sdt)
+        else:
+            # Insert a copy from master at the intended position in body
+            target_body.insert(position, deepcopy(master_sdt))
+            print(f"  INSERT: new SDT '{tag}' at body position {position}")
 
     target.write_part(
         "word/document.xml",
