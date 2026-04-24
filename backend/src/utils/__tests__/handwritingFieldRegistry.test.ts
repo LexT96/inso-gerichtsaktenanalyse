@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { HANDWRITING_FIELDS, getCriticalFields } from '../handwritingFieldRegistry';
+import { HANDWRITING_FIELDS, getCriticalFields, buildMainPrompt, buildProbePrompt } from '../handwritingFieldRegistry';
 
 describe('HANDWRITING_FIELDS registry', () => {
   it('has at least 20 field entries', () => {
@@ -37,5 +37,61 @@ describe('HANDWRITING_FIELDS registry', () => {
     expect(critical).toContain('steuerberater');
     expect(critical).toContain('finanzamt');
     expect(critical).toContain('firma');
+  });
+});
+
+describe('buildMainPrompt', () => {
+  it('mentions every registry field key in the JSON schema example', () => {
+    const prompt = buildMainPrompt(HANDWRITING_FIELDS);
+    for (const f of HANDWRITING_FIELDS) {
+      expect(prompt).toContain(f.key);
+    }
+  });
+
+  it('contains the shared OCR-specialist framing', () => {
+    const prompt = buildMainPrompt(HANDWRITING_FIELDS);
+    expect(prompt).toContain('OCR-Spezialist');
+    expect(prompt).toContain('Fragebögen');
+  });
+
+  it('instructs Claude to omit empty/unreadable fields', () => {
+    const prompt = buildMainPrompt(HANDWRITING_FIELDS);
+    expect(prompt).toMatch(/NICHT aufnehmen/i);
+  });
+});
+
+describe('buildProbePrompt', () => {
+  it('produces a single-field prompt for a specific registry entry', () => {
+    const field = getCriticalFields().find(f => f.key === 'betriebsstaette_adresse')!;
+    const prompt = buildProbePrompt(field);
+    expect(prompt).toContain('betriebsstaette_adresse');
+    expect(prompt).toContain('Betriebsstätte');
+    expect(prompt).toContain('Anschrift der Firma');
+  });
+
+  it('includes edgeCases in the prompt when present', () => {
+    const field = getCriticalFields().find(f => f.key === 'betriebsstaette_adresse')!;
+    const prompt = buildProbePrompt(field);
+    expect(prompt).toContain('identisch mit Privatanschrift');
+  });
+
+  it('includes negativeAnchors when present', () => {
+    const field = HANDWRITING_FIELDS.find(f => f.key === 'telefon')!;
+    const prompt = buildProbePrompt(field);
+    expect(prompt).toContain('Fax');
+  });
+
+  it('does NOT mention other field keys (focused prompt)', () => {
+    const field = getCriticalFields().find(f => f.key === 'email')!;
+    const prompt = buildProbePrompt(field);
+    expect(prompt).not.toContain('betriebsstaette_adresse');
+    expect(prompt).not.toContain('steuerberater');
+  });
+
+  it('requests JSON with wert + quelle', () => {
+    const field = getCriticalFields().find(f => f.key === 'email')!;
+    const prompt = buildProbePrompt(field);
+    expect(prompt).toContain('wert');
+    expect(prompt).toContain('quelle');
   });
 });

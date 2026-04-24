@@ -172,3 +172,75 @@ export const HANDWRITING_FIELDS: HandwritingFieldDef[] = [
 export function getCriticalFields(): HandwritingFieldDef[] {
   return HANDWRITING_FIELDS.filter(f => f.criticality === 'critical');
 }
+
+/**
+ * Build the multi-field handwriting prompt — same shape as the legacy inline
+ * HANDWRITING_PROMPT constant, but generated from the registry so adding a new
+ * field in one place updates everything.
+ */
+export function buildMainPrompt(registry: HandwritingFieldDef[]): string {
+  const fieldBullets = registry.map(f => {
+    const negSuffix = f.negativeAnchors && f.negativeAnchors.length > 0
+      ? ` (NICHT mit: ${f.negativeAnchors.join(', ')})`
+      : '';
+    return `- ${f.label}: ${f.anchors.slice(0, 4).join(' / ')}${negSuffix}`;
+  }).join('\n');
+
+  const schemaExample = registry.map(f => {
+    const exampleVal = f.key === 'arbeitnehmer_anzahl' ? '2'
+      : f.key === 'betriebsrat' ? 'false'
+      : '"…"';
+    return `  "${f.key}": {"wert": ${exampleVal}, "quelle": "Seite X, ${f.label}"}`;
+  }).join(',\n');
+
+  return `Du bist ein OCR-Spezialist für handschriftlich ausgefüllte deutsche Insolvenz-Fragebögen.
+
+AUFGABE: Lies JEDES handschriftlich ausgefüllte Feld in diesen Formularseiten. Die Formulare sind vorgedruckt mit Feldnamen, und der Antragsteller hat die Werte HANDSCHRIFTLICH eingetragen.
+
+Lies besonders sorgfältig:
+${fieldBullets}
+- Angekreuzte Checkboxen (☒ = ja, ☐ = nein)
+- Beträge in EUR (auch handgeschriebene Zahlen)
+
+Antworte AUSSCHLIESSLICH mit validem JSON. Für jedes gefundene Feld:
+{
+${schemaExample}
+}
+
+Wenn ein Feld leer ist oder nicht lesbar: NICHT aufnehmen. Nur tatsächlich gelesene Werte.`;
+}
+
+/**
+ * Build a focused single-field prompt for the gap-fill pass. The prompt asks
+ * ONLY about one target field, using the field's anchors, negativeAnchors, and
+ * edgeCases from the registry. This is what makes the probe find values the
+ * multi-field prompt missed due to attention dilution.
+ */
+export function buildProbePrompt(field: HandwritingFieldDef): string {
+  const anchorLine = field.anchors.join(', ');
+  const negLine = field.negativeAnchors && field.negativeAnchors.length > 0
+    ? `\nNICHT verwechseln mit: ${field.negativeAnchors.join(', ')}.`
+    : '';
+  const edgeLines = field.edgeCases && field.edgeCases.length > 0
+    ? `\n\nBesondere Regeln:\n- ${field.edgeCases.join('\n- ')}`
+    : '';
+  const anlageLine = field.anlageHints && field.anlageHints.length > 0
+    ? `\nTypisch zu finden in: ${field.anlageHints.join(', ')}.`
+    : '';
+
+  return `Du schaust auf Seiten eines deutschen Insolvenz-Fragebogens. Viele Felder sind HANDSCHRIFTLICH ausgefüllt.
+
+Fokussiere dich ausschließlich auf ein Feld: ${field.label}.
+
+Häufige Feldbeschriftungen: ${anchorLine}.${negLine}${anlageLine}${edgeLines}
+
+Antworte AUSSCHLIESSLICH mit JSON (keine Erklärung, keine Backticks):
+
+{
+  "${field.key}": {
+    "wert": "<gefundener Wert>" oder null,
+    "quelle": "Seite X, <kurze Beschreibung des Formularfelds>" oder null
+  }
+}`;
+}
+
