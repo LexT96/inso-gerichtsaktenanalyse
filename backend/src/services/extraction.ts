@@ -24,6 +24,8 @@ import { extractAktiva } from '../utils/aktivaExtractor';
 import { analyzeAnfechtung } from '../utils/anfechtungsAnalyzer';
 import { renderPagesToJpeg } from '../utils/pageImageRenderer';
 import { enrichmentReview } from '../utils/enrichmentReview';
+import { buildMainPrompt, HANDWRITING_FIELDS } from '../utils/handwritingFieldRegistry';
+import { runHandwritingGapFill } from './handwritingGapFill';
 import { PDFDocument } from 'pdf-lib';
 import type { ExtractionResult } from '../types/extraction';
 
@@ -557,45 +559,7 @@ async function callHandwritingBatch(
   }
 }
 
-const HANDWRITING_PROMPT = `Du bist ein OCR-Spezialist für handschriftlich ausgefüllte deutsche Insolvenz-Fragebögen.
-
-AUFGABE: Lies JEDES handschriftlich ausgefüllte Feld in diesen Formularseiten. Die Formulare sind vorgedruckt mit Feldnamen, und der Antragsteller hat die Werte HANDSCHRIFTLICH eingetragen.
-
-Lies besonders sorgfältig:
-- Name, Vorname, Geburtsdatum
-- Straße/Hausnummer, PLZ, Ort (Privatanschrift UND Firmenanschrift)
-- Telefonnummer, E-Mail-Adresse
-- Name der Firma/des Geschäftsbetriebs und dessen Anschrift
-- Geschäftszweig/Branche
-- Anzahl Mitarbeiter (Azubis, Teilzeit, Aushilfen)
-- Steuerberater (Name und Anschrift)
-- Sozialversicherungsträger (Krankenkasse)
-- Vermieter/Verpächter und Mietbetrag
-- Mietrückstände
-- Lohnrückstände seit wann, SV-Rückstände seit wann
-- Gerichtsvollzieher
-- Angekreuzte Checkboxen (☒ = ja, ☐ = nein)
-- Beträge in EUR (auch handgeschriebene Zahlen)
-- Grundstücke: Lage, Eigentumsanteil, Verkehrswert
-- Sicherungsrechte: Gegenstand, Gläubiger, Betrag
-
-Antworte AUSSCHLIESSLICH mit validem JSON. Für jedes gefundene Feld:
-{
-  "telefon": {"wert": "06545 9121110", "quelle": "Seite X, Fragebogen Telekommunikation"},
-  "email": {"wert": "info@example.de", "quelle": "Seite X, Fragebogen E-mail"},
-  "betriebsstaette_adresse": {"wert": "Musterstr. 1, 12345 Stadt", "quelle": "Seite X, Anlage 2"},
-  "geschaeftszweig": {"wert": "Feinwerkmechanikermeister", "quelle": "Seite X, Anlage 2"},
-  "arbeitnehmer_anzahl": {"wert": 2, "quelle": "Seite X, Mitarbeiter"},
-  "betriebsrat": {"wert": false, "quelle": "Seite X, Betriebsrat nein angekreuzt"},
-  "finanzamt": {"wert": "Finanzamt Simmern-Zell", "quelle": "Seite X"},
-  "steuernummer": {"wert": "12/345/67890", "quelle": "Seite X"},
-  "steuerberater": {"wert": "Kneip-Daute, Friedrich-Back-Str. 21, 56288 Kastellaun", "quelle": "Seite X"},
-  "sozialversicherungstraeger": {"wert": "AOK, UKV Union Krankenversicherung AG", "quelle": "Seite X"},
-  "letzter_jahresabschluss": {"wert": "31.12.2023", "quelle": "Seite X"},
-  "bankverbindungen": {"wert": "Volksbank Rheinböllen eG, Sparkasse Mittelmosel", "quelle": "Seite X"}
-}
-
-Wenn ein Feld leer ist oder nicht lesbar: NICHT aufnehmen. Nur tatsächlich gelesene Werte.`;
+const HANDWRITING_PROMPT = buildMainPrompt(HANDWRITING_FIELDS);
 
 export async function extractHandwrittenFormFields(
   result: ExtractionResult,
@@ -619,6 +583,10 @@ export async function extractHandwrittenFormFields(
   const handwritingModel = config.EXTRACTION_MODEL;
   const pageMapping = formPages.map((p, i) => `PDF-Seite ${i + 1} = Originalseite ${p + 1}`).join(', ');
   const promptSuffix = `\n\nSeitenzuordnung: ${pageMapping}\nBitte verwende die Originalseitennummern in der quelle.`;
+
+  // Rendered Fragebogen images — populated by the image-batched branch,
+  // reused by the gap-fill pass below (stays null for native-pdf / text modes)
+  let imagesByPage: Map<number, string> | null = null;
 
   // Three-way branch: native-pdf (best, direct Anthropic), image-batched
   // (Langdock-compatible), or text-mode fallback (last-resort if no PDF)
@@ -669,19 +637,20 @@ export async function extractHandwrittenFormFields(
   } else if (pdfBuffer) {
     modeUsed = 'image-batched';
     // Langdock-compatible path: render Fragebogen pages as JPEGs and batch them
-    const imagesByPage = renderPagesToJpeg(pdfBuffer, formPages, 150);
-    const renderedPages = formPages.filter(p => imagesByPage.has(p));
+    const renderedImages = renderPagesToJpeg(pdfBuffer, formPages, 150);
+    imagesByPage = renderedImages; // hoist for gap-fill pass below
+    const renderedPages = formPages.filter(p => renderedImages.has(p));
     if (renderedPages.length < formPages.length) {
       logger.warn('Some Fragebogen pages failed to render', {
         requested: formPages.length,
         rendered: renderedPages.length,
-        missing: formPages.filter(p => !imagesByPage.has(p)).map(p => p + 1),
+        missing: formPages.filter(p => !renderedImages.has(p)).map(p => p + 1),
       });
     }
     const batches = chunk(renderedPages, 4);
     const tasks = batches.map((batchPages) => async () => {
       // Cache the static prompt across all batches (5 min TTL → ~90% input savings on follow-ups)
-      return await callHandwritingBatch(batchPages, imagesByPage, promptSuffix, true);
+      return await callHandwritingBatch(batchPages, renderedImages, promptSuffix, true);
     });
     const settled = await runWithConcurrency(tasks, 2);
     const mergedBatches: Record<string, { wert: unknown; quelle: string }> = {};
@@ -814,6 +783,21 @@ export async function extractHandwrittenFormFields(
       quelle: `${parsed.betriebsrat.quelle} (Handschrift-Extraktion)`,
     };
     merged++;
+  }
+
+  // Gap-Fill: for each critical field still empty after the main pass,
+  // send a focused single-field probe to Claude using the same images
+  // the main pass rendered. Only runs in image-batched mode (where
+  // imagesByPage is populated).
+  if (imagesByPage && modeUsed === 'image-batched') {
+    const gap = await runHandwritingGapFill({
+      result,
+      pageIndices: formPages,
+      imagesByPage,
+    });
+    // Count gap-filled fields toward the main `merged` counter so the
+    // completion log reflects the total improvement.
+    merged += gap.gapsFilled;
   }
 
   // Inject synthetic OCR entries for handwriting findings so frontend Ctrl-F
