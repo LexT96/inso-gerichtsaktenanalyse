@@ -271,11 +271,16 @@ def patch_document_rels(target: DocxBundle) -> dict[str, str]:
         existing_ids.add(f"rId{i}")
         return f"rId{i}"
 
+    # Master's convention (from Briefkopf_TBS.docx):
+    #   header1.xml = default (page 2+, empty shell)
+    #   header2.xml = first (page 1, logo-dekobar)
+    #   footer1.xml = default (page 2+, "Seite X von Y")
+    #   footer2.xml = first (page 1, logo-dekobar)
     wanted = [
-        ("first-header", "header1.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"),
-        ("first-footer", "footer1.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer"),
-        ("default-header", "header2.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"),
-        ("default-footer", "footer2.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer"),
+        ("first-header", "header2.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"),
+        ("first-footer", "footer2.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer"),
+        ("default-header", "header1.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"),
+        ("default-footer", "footer1.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer"),
     ]
 
     rid_map: dict[str, str] = {}
