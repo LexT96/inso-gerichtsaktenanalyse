@@ -25,6 +25,7 @@ import { analyzeAnfechtung } from '../utils/anfechtungsAnalyzer';
 import { renderPagesToJpeg } from '../utils/pageImageRenderer';
 import { enrichmentReview } from '../utils/enrichmentReview';
 import { buildMainPrompt, HANDWRITING_FIELDS } from '../utils/handwritingFieldRegistry';
+import { runHandwritingGapFill } from './handwritingGapFill';
 import { PDFDocument } from 'pdf-lib';
 import type { ExtractionResult } from '../types/extraction';
 
@@ -583,6 +584,10 @@ export async function extractHandwrittenFormFields(
   const pageMapping = formPages.map((p, i) => `PDF-Seite ${i + 1} = Originalseite ${p + 1}`).join(', ');
   const promptSuffix = `\n\nSeitenzuordnung: ${pageMapping}\nBitte verwende die Originalseitennummern in der quelle.`;
 
+  // Rendered Fragebogen images — populated by the image-batched branch,
+  // reused by the gap-fill pass below (stays null for native-pdf / text modes)
+  let imagesByPage: Map<number, string> | null = null;
+
   // Three-way branch: native-pdf (best, direct Anthropic), image-batched
   // (Langdock-compatible), or text-mode fallback (last-resort if no PDF)
   let parsed: Record<string, { wert: unknown; quelle: string }> | null = null;
@@ -632,19 +637,20 @@ export async function extractHandwrittenFormFields(
   } else if (pdfBuffer) {
     modeUsed = 'image-batched';
     // Langdock-compatible path: render Fragebogen pages as JPEGs and batch them
-    const imagesByPage = renderPagesToJpeg(pdfBuffer, formPages, 150);
-    const renderedPages = formPages.filter(p => imagesByPage.has(p));
+    const renderedImages = renderPagesToJpeg(pdfBuffer, formPages, 150);
+    imagesByPage = renderedImages; // hoist for gap-fill pass below
+    const renderedPages = formPages.filter(p => renderedImages.has(p));
     if (renderedPages.length < formPages.length) {
       logger.warn('Some Fragebogen pages failed to render', {
         requested: formPages.length,
         rendered: renderedPages.length,
-        missing: formPages.filter(p => !imagesByPage.has(p)).map(p => p + 1),
+        missing: formPages.filter(p => !renderedImages.has(p)).map(p => p + 1),
       });
     }
     const batches = chunk(renderedPages, 4);
     const tasks = batches.map((batchPages) => async () => {
       // Cache the static prompt across all batches (5 min TTL → ~90% input savings on follow-ups)
-      return await callHandwritingBatch(batchPages, imagesByPage, promptSuffix, true);
+      return await callHandwritingBatch(batchPages, renderedImages, promptSuffix, true);
     });
     const settled = await runWithConcurrency(tasks, 2);
     const mergedBatches: Record<string, { wert: unknown; quelle: string }> = {};
@@ -777,6 +783,21 @@ export async function extractHandwrittenFormFields(
       quelle: `${parsed.betriebsrat.quelle} (Handschrift-Extraktion)`,
     };
     merged++;
+  }
+
+  // Gap-Fill: for each critical field still empty after the main pass,
+  // send a focused single-field probe to Claude using the same images
+  // the main pass rendered. Only runs in image-batched mode (where
+  // imagesByPage is populated).
+  if (imagesByPage && modeUsed === 'image-batched') {
+    const gap = await runHandwritingGapFill({
+      result,
+      pageIndices: formPages,
+      imagesByPage,
+    });
+    // Count gap-filled fields toward the main `merged` counter so the
+    // completion log reflects the total improvement.
+    merged += gap.gapsFilled;
   }
 
   // Inject synthetic OCR entries for handwriting findings so frontend Ctrl-F
