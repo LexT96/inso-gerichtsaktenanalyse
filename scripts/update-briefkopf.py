@@ -94,21 +94,31 @@ def sync_template(
         return
     target = DocxBundle.read(target_path)
 
-    sync_sdts(target, master, BRIEFKOPF_SDT_TAGS)
-    sync_header_footer(target, master)
-    sync_media(target, master)
-    patch_content_types(target)
-    rid_map = patch_document_rels(target)
+    is_gutachten = target_path.parent == GUTACHTEN_DIR
 
-    doc = etree.fromstring(target.read_part("word/document.xml"))
-    ensure_section_properties(doc, rid_map)
-    target.write_part(
-        "word/document.xml",
-        etree.tostring(doc, xml_declaration=True, encoding="UTF-8", standalone=True),
-    )
+    if is_gutachten:
+        # Gutachten templates already carry the full briefkopf inline in their
+        # body — they ARE the source of the master, after all. Inserting the
+        # briefkopf-block SDT here would duplicate it. So we limit the sync
+        # to refreshing the partner sidebar from kanzlei.json.
+        print("  (Gutachten: sidebar-only sync)")
+    else:
+        sync_sdts(target, master, BRIEFKOPF_SDT_TAGS)
+        sync_header_footer(target, master)
+        sync_media(target, master)
+        patch_content_types(target)
+        rid_map = patch_document_rels(target)
 
-    # Render the partner sidebar from kanzlei.json (replaces the master's
-    # static partner list with the current canonical data)
+        doc = etree.fromstring(target.read_part("word/document.xml"))
+        ensure_section_properties(doc, rid_map)
+        target.write_part(
+            "word/document.xml",
+            etree.tostring(doc, xml_declaration=True, encoding="UTF-8", standalone=True),
+        )
+
+    # Render the partner sidebar from kanzlei.json (replaces the static
+    # partner list with the current canonical data — applies to both
+    # Anschreiben and Gutachten)
     if kanzlei_data is not None:
         new_doc = render_sidebar_in_doc(target.read_part("word/document.xml"), kanzlei_data)
         target.write_part("word/document.xml", new_doc)
