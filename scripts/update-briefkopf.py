@@ -24,7 +24,10 @@ from lxml import etree
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
+import json  # noqa: E402
+
 from scripts.briefkopf_lib.docx_zip import DocxBundle  # noqa: E402
+from scripts.briefkopf_lib.sidebar_render import render_sidebar_in_doc  # noqa: E402
 from scripts.briefkopf_lib.sync import (  # noqa: E402
     BRIEFKOPF_SDT_TAGS,
     ensure_section_properties,
@@ -36,6 +39,7 @@ from scripts.briefkopf_lib.sync import (  # noqa: E402
 )
 
 MASTER_PATH = REPO / "briefkopf" / "briefkopf-master.docx"
+KANZLEI_JSON = REPO / "gutachtenvorlagen" / "kanzlei.json"
 
 GUTACHTEN_DIR = REPO / "gutachtenvorlagen"
 ANSCHREIBEN_DIR = REPO / "standardschreiben" / "templates"
@@ -78,7 +82,12 @@ def resolve_targets(args: argparse.Namespace) -> list[Path]:
     raise SystemExit("must pass --all or --only or --template")
 
 
-def sync_template(target_path: Path, master: DocxBundle, dry_run: bool) -> None:
+def sync_template(
+    target_path: Path,
+    master: DocxBundle,
+    kanzlei_data: dict | None,
+    dry_run: bool,
+) -> None:
     print(f"\n→ {target_path.relative_to(REPO)}")
     if not target_path.exists():
         print("  SKIP: file missing")
@@ -97,6 +106,13 @@ def sync_template(target_path: Path, master: DocxBundle, dry_run: bool) -> None:
         "word/document.xml",
         etree.tostring(doc, xml_declaration=True, encoding="UTF-8", standalone=True),
     )
+
+    # Render the partner sidebar from kanzlei.json (replaces the master's
+    # static partner list with the current canonical data)
+    if kanzlei_data is not None:
+        new_doc = render_sidebar_in_doc(target.read_part("word/document.xml"), kanzlei_data)
+        target.write_part("word/document.xml", new_doc)
+        print("  ✓ sidebar rendered from kanzlei.json")
 
     if dry_run:
         print("  [dry-run] would write")
@@ -120,8 +136,16 @@ def main() -> None:
         )
     master = DocxBundle.read(MASTER_PATH)
 
+    kanzlei_data: dict | None = None
+    if KANZLEI_JSON.exists():
+        kanzlei_data = json.loads(KANZLEI_JSON.read_text("utf-8"))
+        print(f"Loaded kanzlei.json ({len(kanzlei_data.get('partner', []))} partners, "
+              f"{len(kanzlei_data.get('standorte', {}))} standorte)")
+    else:
+        print(f"WARN: {KANZLEI_JSON} not found — sidebar stays as master snapshot")
+
     for t in resolve_targets(args):
-        sync_template(t, master, args.dry_run)
+        sync_template(t, master, kanzlei_data, args.dry_run)
 
 
 if __name__ == "__main__":
