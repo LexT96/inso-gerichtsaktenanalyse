@@ -59,7 +59,11 @@ def parse_args() -> argparse.Namespace:
 
 def resolve_targets(args: argparse.Namespace) -> list[Path]:
     gutachten = [GUTACHTEN_DIR / n for n in GUTACHTEN_TEMPLATES]
-    anschreiben = sorted(ANSCHREIBEN_DIR.glob("*.docx"))
+    anschreiben = sorted(
+        p for p in ANSCHREIBEN_DIR.glob("*.docx")
+        if not p.name.startswith("~$")
+        and not p.name.endswith(".backup.docx")
+    )
     if args.all:
         return gutachten + anschreiben
     if args.only == "gutachten":
