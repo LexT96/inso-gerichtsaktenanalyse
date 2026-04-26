@@ -84,7 +84,7 @@ export function PdfUploader({ file, onFileSelect, onAnalyze, onDemo, loading, pr
           <div className="text-[11px] text-text-muted mt-1.5 tracking-wide">
             Max. 50 MB · PDF-Dateien
           </div>
-          {onDemo && (import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_FLOW === '1') && (
+          {onDemo && isAdmin && (import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_FLOW === '1') && (
             <button
               onClick={(e) => { e.stopPropagation(); onDemo(); }}
               disabled={loading}
