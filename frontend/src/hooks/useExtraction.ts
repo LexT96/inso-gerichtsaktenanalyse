@@ -328,7 +328,7 @@ export function useExtraction() {
         loading: false,
         progress: '',
         progressPercent: 0,
-        result: mockResult as ExtractionResult,
+        result: mockResult as unknown as ExtractionResult,
         error: null,
         extractionId: null,
         statsFound: found,

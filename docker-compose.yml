@@ -69,6 +69,9 @@ services:
         - VITE_AZURE_TENANT_ID=${VITE_AZURE_TENANT_ID:-}
         - VITE_AZURE_CLIENT_ID=${VITE_AZURE_CLIENT_ID:-}
         - VITE_APP_TITLE=${VITE_APP_TITLE:-Aktenanalyse}
+        # Demo-Button ist im Frontend zusätzlich auf isAdmin gegated; hier
+        # immer auf 1 zu lassen ist daher safe für prod und demo.
+        - VITE_ENABLE_DEMO_FLOW=1
     expose:
       - "80"
     depends_on:
