@@ -1,3 +1,4 @@
+import type Database from 'better-sqlite3';
 import { initDatabase, getDb } from '../../db/database';
 
 /**
@@ -6,7 +7,7 @@ import { initDatabase, getDb } from '../../db/database';
  * Re-running this overrides the module-level `db` with a new in-memory instance.
  * Returns the seeded DB.
  */
-export function setupTestDb() {
+export function setupTestDb(): Database.Database {
   initDatabase(':memory:');
   const db = getDb();
 

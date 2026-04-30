@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
+import { requireExtractionAccess } from '../middleware/extractionAccess';
 import { heavyOperationRateLimit } from '../middleware/rateLimit';
 import { getDb } from '../db/database';
 import { readResultJson } from '../db/resultJson';
@@ -52,26 +53,25 @@ function parseUserInputs(body: Record<string, unknown>): GutachtenUserInputs | n
   };
 }
 
-function loadExtraction(extractionId: number, userId: number): ExtractionResult | null {
+function loadExtraction(extractionId: number): ExtractionResult | null {
   const db = getDb();
   const row = db.prepare(
-    `SELECT result_json FROM extractions WHERE id = ? AND user_id = ? AND status = 'completed'`
-  ).get(extractionId, userId) as { result_json: string } | undefined;
+    `SELECT result_json FROM extractions WHERE id = ? AND status = 'completed'`
+  ).get(extractionId) as { result_json: string } | undefined;
   if (!row?.result_json) return null;
   return readResultJson<ExtractionResult>(row.result_json)!;
 }
 
 // POST /:extractionId/missing-fields — fast sync call to detect empty KI_* placeholders
 // used for the Wizard's "Fehlende Werte" step before the slow /prepare call
-router.post('/:extractionId/missing-fields', authMiddleware, (req: Request, res: Response): void => {
+router.post('/:extractionId/missing-fields', authMiddleware, requireExtractionAccess(), (req: Request, res: Response): void => {
   try {
-    const extractionId = parseInt(String(req.params['extractionId'] ?? ''), 10);
-    if (isNaN(extractionId)) { res.status(400).json({ error: 'Ungültige Extraktions-ID' }); return; }
+    const { extractionId } = req.access!;
 
     const userInputs = parseUserInputs(req.body);
     if (!userInputs) { res.status(400).json({ error: 'verwalter_diktatzeichen und verwalter_geschlecht sind erforderlich' }); return; }
 
-    const result = loadExtraction(extractionId, req.user!.userId);
+    const result = loadExtraction(extractionId);
     if (!result) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
 
     const rechtsform = String(result.schuldner?.rechtsform?.wert ?? '');
@@ -85,15 +85,14 @@ router.post('/:extractionId/missing-fields', authMiddleware, (req: Request, res:
 });
 
 // POST /:extractionId/prepare — extract slots, fill via Claude, return JSON
-router.post('/:extractionId/prepare', authMiddleware, heavyOperationRateLimit, async (req: Request, res: Response): Promise<void> => {
+router.post('/:extractionId/prepare', authMiddleware, requireExtractionAccess(), heavyOperationRateLimit, async (req: Request, res: Response): Promise<void> => {
   try {
-    const extractionId = parseInt(String(req.params['extractionId'] ?? ''), 10);
-    if (isNaN(extractionId)) { res.status(400).json({ error: 'Ungültige Extraktions-ID' }); return; }
+    const { extractionId } = req.access!;
 
     const userInputs = parseUserInputs(req.body);
     if (!userInputs) { res.status(400).json({ error: 'verwalter_diktatzeichen und verwalter_geschlecht sind erforderlich' }); return; }
 
-    const result = loadExtraction(extractionId, req.user!.userId);
+    const result = loadExtraction(extractionId);
     if (!result) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
 
     const prepared = await prepareGutachten(result, userInputs);
@@ -105,10 +104,9 @@ router.post('/:extractionId/prepare', authMiddleware, heavyOperationRateLimit, a
 });
 
 // POST /:extractionId/generate — apply slot values, return DOCX
-router.post('/:extractionId/generate', authMiddleware, (req: Request, res: Response): void => {
+router.post('/:extractionId/generate', authMiddleware, requireExtractionAccess(), (req: Request, res: Response): void => {
   try {
-    const extractionId = parseInt(String(req.params['extractionId'] ?? ''), 10);
-    if (isNaN(extractionId)) { res.status(400).json({ error: 'Ungültige Extraktions-ID' }); return; }
+    const { extractionId } = req.access!;
 
     const { userInputs: rawInputs, slots } = req.body as { userInputs?: Record<string, unknown>; slots?: { id: string; value: string }[] };
 
@@ -116,7 +114,7 @@ router.post('/:extractionId/generate', authMiddleware, (req: Request, res: Respo
     if (!userInputs) { res.status(400).json({ error: 'userInputs mit verwalter_diktatzeichen und verwalter_geschlecht erforderlich' }); return; }
     if (!Array.isArray(slots)) { res.status(400).json({ error: 'slots Array erforderlich' }); return; }
 
-    const result = loadExtraction(extractionId, req.user!.userId);
+    const result = loadExtraction(extractionId);
     if (!result) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
 
     const buffer = generateGutachtenFinal(result, userInputs, slots);
