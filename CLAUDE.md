@@ -167,6 +167,25 @@ PDF → pdfProcessor (watermark removal) → pageTexts
 - `POST /:typ/rollback` — restore from `.backup.docx` and delete the backup.
 - AdminPage "BRIEFE" tab (`LetterTemplatesSection`) drives all four actions.
 
+### Briefkopf System (`briefkopf/` + `scripts/briefkopf_lib/`)
+
+Shared header for all 13 templates (3 Gutachten + 10 Anschreiben). Single source: `briefkopf/briefkopf-master.docx`, generated programmatically from `gutachtenvorlagen/Gutachten Muster natürliche Person.docx` (the Gutachten already has the correct DIN-5008 layout).
+
+- **Master:** `briefkopf/briefkopf-master.docx`. The first ~33 body paragraphs of the Gutachten Muster (everything before the "Gutachten" title — Empfänger-Block, Absenderzeile, Sachbearbeiter-Block, floating Sidebar with partner list, DEKRA + VID Siegel, "per beA"-Zeile, Ort+Datum-Zeile) wrapped in a single `<w:sdt w:tag="briefkopf-block">` SDT. `KI_*` placeholders renamed to `FELD_*` so the Letter-Generator can fill them. Explicit line-spacing (360, 1.5) + font-size (22, 11pt) on every SDT paragraph so rendering doesn't depend on target's Normal-style.
+- **`scripts/create_briefkopf_master.py`** — one-shot rebuild: takes a Gutachten Muster as `--source`, outputs `briefkopf/briefkopf-master.docx` with the SDT-wrapped briefkopf section. Run only when the briefkopf layout changes (rare).
+- **`scripts/update-briefkopf.py`** — main sync. Iterates 13 targets:
+  - **Anschreiben (10):** full sync — `sync_sdts` (replace existing or insert briefkopf-block at body[0]), `sync_header_footer` (header1/2 + footer1/2), `sync_media` (collision-safe rename `briefkopf_*` prefix), `patch_content_types` + `patch_document_rels` (content-types + rIds), `ensure_section_properties` (titlePg + 4 header/footer refs).
+  - **Gutachten (3):** sidebar-only (a no-op currently — Gutachten body still owns its briefkopf inline; running full sync would duplicate it). Detected by parent-dir == `gutachtenvorlagen/`.
+  - SDT image-embed remap: blip rIds inside the copied SDTs are remapped to fresh non-conflicting rIds in target's `document.xml.rels`, so DEKRA/VID Siegel images render.
+- **`scripts/briefkopf_lib/`** — helpers:
+  - `docx_zip.py`: `DocxBundle` — read DOCX as zip, mutate parts in-memory, save atomically.
+  - `sdt.py`: find/replace SDTs by `<w:tag w:val="...">`.
+  - `sync.py`: top-level orchestration (sync_sdts / sync_header_footer / sync_media / sectPr / Content-Types / rels).
+  - `sidebar_render.py`: kanzlei.json-driven partner-sidebar rendering (currently NOT wired into the sync — kept for future use).
+- **Workflow for TBS:** Layout-Änderungen → Gutachten Muster in Word ändern → `create_briefkopf_master.py` → `update-briefkopf.py --all`. Sidebar-Anpassungen (Partner, Standorte) → direkt im Master in Word ändern → `update-briefkopf.py --all`. Body-Texte einzelner Anschreiben → direkt im jeweiligen Template (außerhalb des `briefkopf-block` SDT) editieren — wird vom Sync nicht angefasst.
+- **Backup:** Erster Sync erzeugt pro Template `*.backup.docx`. Spätere Syncs überschreiben das Backup nicht. Rollback: `cp template.backup.docx template.docx`.
+- **`briefkopf/README.md`** — Bedienungsanleitung für TBS.
+
 ## Key Patterns
 
 - **SourcedValue pattern**: Every extracted data field uses `{wert: T | null, quelle: string, verifiziert?: boolean, pruefstatus?: Pruefstatus}`. The `quelle` must reference the exact page ("Seite X, ..."). This pattern is central to the entire data model.
