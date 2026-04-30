@@ -22,6 +22,8 @@ export interface LoginResponse {
 
 export type ExtractionStatus = 'processing' | 'completed' | 'failed' | 'expired' | 'deleted_art17';
 
+export type AccessRole = 'owner' | 'collaborator' | 'admin';
+
 export interface ExtractionResponse {
   id: number;
   filename: string;
@@ -32,6 +34,8 @@ export interface ExtractionResponse {
   statsLettersReady: number;
   processingTimeMs: number | null;
   createdAt: string;
+  accessRole?: AccessRole;
+  ownerName?: string;
 }
 
 export interface HistoryItem {
@@ -46,6 +50,8 @@ export interface HistoryItem {
   createdAt: string;
   progressMessage?: string | null;
   progressPercent?: number | null;
+  accessRole: AccessRole;
+  ownerName?: string;
 }
 
 export interface ApiError {

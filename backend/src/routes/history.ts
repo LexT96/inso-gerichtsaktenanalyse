@@ -11,21 +11,47 @@ import type { HistoryItem, ExtractionResponse } from '../types/api';
 
 const router = Router();
 
+type HistoryRow = {
+  id: number; filename: string; file_size: number; status: string;
+  stats_found: number; stats_missing: number; stats_letters_ready: number;
+  processing_time_ms: number | null; created_at: string;
+  progress_message: string | null; progress_percent: number | null;
+  access_role: string; owner_name: string | null;
+};
+
 router.get('/', authMiddleware, (req: Request, res: Response): void => {
   const db = getDb();
   const userId = req.user!.userId;
+  const isAdmin = req.user!.role === 'admin';
 
-  const rows = db.prepare(
-    `SELECT id, filename, file_size, status, stats_found, stats_missing,
-            stats_letters_ready, processing_time_ms, created_at,
-            progress_message, progress_percent
-     FROM extractions WHERE user_id = ? ORDER BY created_at DESC LIMIT 100`
-  ).all(userId) as Array<{
-    id: number; filename: string; file_size: number; status: string;
-    stats_found: number; stats_missing: number; stats_letters_ready: number;
-    processing_time_ms: number | null; created_at: string;
-    progress_message: string | null; progress_percent: number | null;
-  }>;
+  const rows: HistoryRow[] = isAdmin
+    ? db.prepare(
+        `SELECT e.id, e.filename, e.file_size, e.status, e.stats_found, e.stats_missing,
+                e.stats_letters_ready, e.processing_time_ms, e.created_at,
+                e.progress_message, e.progress_percent,
+                'admin' AS access_role, u.display_name AS owner_name
+         FROM extractions e
+         JOIN users u ON u.id = e.user_id
+         ORDER BY e.created_at DESC LIMIT 100`
+      ).all() as HistoryRow[]
+    : db.prepare(
+        `SELECT e.id, e.filename, e.file_size, e.status, e.stats_found, e.stats_missing,
+                e.stats_letters_ready, e.processing_time_ms, e.created_at,
+                e.progress_message, e.progress_percent,
+                'owner' AS access_role, NULL AS owner_name
+         FROM extractions e
+         WHERE e.user_id = ?
+         UNION ALL
+         SELECT e.id, e.filename, e.file_size, e.status, e.stats_found, e.stats_missing,
+                e.stats_letters_ready, e.processing_time_ms, e.created_at,
+                e.progress_message, e.progress_percent,
+                'collaborator' AS access_role, u.display_name AS owner_name
+         FROM extractions e
+         JOIN extraction_shares s ON s.extraction_id = e.id
+         JOIN users u ON u.id = e.user_id
+         WHERE s.user_id = ?
+         ORDER BY created_at DESC LIMIT 100`
+      ).all(userId, userId) as HistoryRow[];
 
   const items: HistoryItem[] = rows.map(row => ({
     id: row.id,
@@ -37,6 +63,8 @@ router.get('/', authMiddleware, (req: Request, res: Response): void => {
     statsLettersReady: row.stats_letters_ready,
     processingTimeMs: row.processing_time_ms,
     createdAt: row.created_at,
+    accessRole: row.access_role as HistoryItem['accessRole'],
+    ...(row.owner_name ? { ownerName: row.owner_name } : {}),
     ...(row.status === 'processing' ? {
       progressMessage: row.progress_message,
       progressPercent: row.progress_percent,
