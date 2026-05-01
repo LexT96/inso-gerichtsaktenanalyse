@@ -138,6 +138,33 @@ export function cleanupExpiredExtractions(retentionHours?: number): void {
 }
 
 /**
+ * Drop audit_log rows older than `retentionDays`. Coarse BRAO rule: 5 years from
+ * creation, regardless of mandate end. Set retentionDays to 0 to disable.
+ *
+ * Returns the number of rows deleted, mainly for tests.
+ */
+export function cleanupOldAuditLog(retentionDays?: number): number {
+  if (!db) return 0;
+  const days = retentionDays ?? 1825;
+  if (days <= 0) return 0;
+  try {
+    const result = db.prepare(
+      `DELETE FROM audit_log
+       WHERE created_at < datetime('now', '-' || ? || ' days')`
+    ).run(String(days));
+    if (result.changes > 0) {
+      logger.info('Alte Audit-Log-Einträge bereinigt', { count: result.changes, retentionDays: days });
+    }
+    return result.changes;
+  } catch (err) {
+    logger.error('Fehler bei der Bereinigung des Audit-Logs', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return 0;
+  }
+}
+
+/**
  * One-time migration: encrypt any existing unencrypted result_json rows.
  * Detects legacy rows by checking if value starts with '{' (plain JSON) rather than '$ENC$'.
  */

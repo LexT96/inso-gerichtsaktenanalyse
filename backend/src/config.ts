@@ -24,6 +24,9 @@ const envSchema = z.object({
     ).optional()
   ),
   DATA_RETENTION_HOURS: z.coerce.number().default(72),
+  // BRAO retention for the audit log: typ. 5 years (1825 days) after access.
+  // Coarse rule — does not key on Mandatsende. Set to 0 to disable cleanup entirely.
+  AUDIT_LOG_RETENTION_DAYS: z.coerce.number().default(1825),
   DB_ENCRYPTION_KEY: z.string().min(32, 'DB_ENCRYPTION_KEY muss mindestens 32 Zeichen haben (256-bit Hex empfohlen)'),
   // Azure Document Intelligence (optional — enables OCR for scanned PDFs)
   AZURE_DOC_INTEL_ENDPOINT: z.preprocess(
