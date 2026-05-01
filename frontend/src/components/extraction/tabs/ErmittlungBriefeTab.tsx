@@ -3,6 +3,7 @@ import { Section } from '../Section';
 import { apiClient } from '../../../api/client';
 import { StrafakteInputsModal } from '../StrafakteInputsModal';
 import { useVerwalter } from '../../../hooks/useVerwalter';
+import { usePdf } from '../../../contexts/PdfContext';
 import { findMatchingVerwalter, normalizeVerwalterName } from '../../../utils/matchVerwalter';
 import type {
   ExtractionResult,
@@ -152,6 +153,7 @@ export function ErmittlungBriefeTab({
   missingInfo,
   extractionId,
 }: ErmittlungBriefeTabProps) {
+  const { goToPageAndHighlight, totalPages } = usePdf();
   const letterMap = useMemo(() => {
     const map = new Map<string, Standardanschreiben>();
     for (const l of letters) map.set(l.typ, l);
@@ -351,9 +353,21 @@ export function ErmittlungBriefeTab({
                     {/* Ref */}
                     <td className="py-1.5 px-2 text-center">
                       {pageMatch ? (
-                        <span className="text-[8px] font-mono text-ie-blue" title={quelle}>
+                        <button
+                          type="button"
+                          disabled={totalPages === 0}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            const pageNum = parseInt(pageMatch[1], 10);
+                            if (totalPages > 0 && !isNaN(pageNum)) {
+                              goToPageAndHighlight(pageNum, undefined, quelle);
+                            }
+                          }}
+                          className="text-[8px] font-mono text-ie-blue hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={totalPages === 0 ? 'PDF nicht geladen' : quelle}
+                        >
                           S.{pageMatch[1]}
-                        </span>
+                        </button>
                       ) : (
                         <span className="text-text-muted">{'—'}</span>
                       )}
