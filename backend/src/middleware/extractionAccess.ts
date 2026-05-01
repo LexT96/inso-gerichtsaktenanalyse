@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { getExtractionAccess, type ExtractionAccess } from '../utils/extractionAccess';
 import { getDb } from '../db/database';
+import { logger } from '../utils/logger';
 
 declare global {
   namespace Express {
@@ -56,9 +57,18 @@ export function requireExtractionAccess(opts: RequireAccessOpts = {}): RequestHa
             'INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)'
           ).run(req.user!.userId, action, details, req.ip ?? null);
         } catch (err) {
-          // Audit failure must not break the response.
-          // eslint-disable-next-line no-console
-          console.error('audit insert failed', err);
+          // Audit failure must not break the response. BRAO/§203 demands the failure
+          // is captured somewhere — Winston rotates to disk, so a DB-down scenario
+          // still leaves a tamper-evident record of the un-audited access.
+          logger.error('AUDIT_FAILURE', {
+            userId: req.user!.userId,
+            action,
+            extractionId: id,
+            method: req.method,
+            path: req.path,
+            role: access.role,
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
       });
     }
