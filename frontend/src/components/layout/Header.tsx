@@ -5,13 +5,14 @@ import { DocumentJobsBadge } from './DocumentJobsBadge';
 
 interface HeaderProps {
   onExport?: () => void;
+  onShare?: () => void;
   onNewFile?: () => void;
   onKanzlei?: () => void;
   /** Show compact extraction progress in the header */
   extractionProgress?: { message: string; percent: number } | null;
 }
 
-export function Header({ onExport, onNewFile, onKanzlei, extractionProgress }: HeaderProps = {}) {
+export function Header({ onExport, onShare, onNewFile, onKanzlei, extractionProgress }: HeaderProps = {}) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -46,6 +47,11 @@ export function Header({ onExport, onNewFile, onKanzlei, extractionProgress }: H
         />
       )}
       <DocumentJobsBadge />
+      {onShare && (
+        <button onClick={onShare} className={navBtn}>
+          Teilen
+        </button>
+      )}
       {onExport && (
         <button onClick={onExport} className={navBtn}>
           Export
