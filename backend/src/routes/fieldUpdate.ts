@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
+import { requireExtractionAccess } from '../middleware/extractionAccess';
 import { getDb } from '../db/database';
 import { readResultJson, writeResultJson } from '../db/resultJson';
 import { recordCorrection } from '../utils/fewShotCollector';
@@ -16,16 +17,10 @@ const router = Router();
 
 const VALID_PRUEFSTATUS = new Set<Pruefstatus>(['bestaetigt', 'korrigiert', 'manuell']);
 
-router.patch('/:id/fields', authMiddleware, (req: Request, res: Response): void => {
+router.patch('/:id/fields', authMiddleware, requireExtractionAccess(), (req: Request, res: Response): void => {
+  const { extractionId } = req.access!;
   const db = getDb();
   const userId = req.user!.userId;
-  const idParam = req.params['id'];
-  const id = parseInt(Array.isArray(idParam) ? idParam[0] : idParam ?? '', 10);
-
-  if (isNaN(id)) {
-    res.status(400).json({ error: 'Ungültige ID' });
-    return;
-  }
 
   const { fieldPath, wert, pruefstatus } = req.body as {
     fieldPath: string;
@@ -43,12 +38,9 @@ router.patch('/:id/fields', authMiddleware, (req: Request, res: Response): void 
     return;
   }
 
-  const isAdmin = req.user!.role === 'admin';
   const row = db.prepare(
-    isAdmin
-      ? 'SELECT result_json FROM extractions WHERE id = ?'
-      : 'SELECT result_json FROM extractions WHERE id = ? AND user_id = ?'
-  ).get(...(isAdmin ? [id] : [id, userId])) as { result_json: string | null } | undefined;
+    'SELECT result_json FROM extractions WHERE id = ?'
+  ).get(extractionId) as { result_json: string | null } | undefined;
 
   if (!row) {
     res.status(404).json({ error: 'Extraktion nicht gefunden' });
@@ -90,18 +82,13 @@ router.patch('/:id/fields', authMiddleware, (req: Request, res: Response): void 
   // Recompute stats so history dashboard stays in sync with the live view
   const stats = computeExtractionStats(result as unknown as ExtractionResult);
   db.prepare(
-    isAdmin
-      ? 'UPDATE extractions SET result_json = ?, stats_found = ?, stats_missing = ?, stats_letters_ready = ? WHERE id = ?'
-      : 'UPDATE extractions SET result_json = ?, stats_found = ?, stats_missing = ?, stats_letters_ready = ? WHERE id = ? AND user_id = ?'
-  ).run(...(isAdmin
-    ? [writeResultJson(result), stats.found, stats.missing, stats.lettersReady, id]
-    : [writeResultJson(result), stats.found, stats.missing, stats.lettersReady, id, userId]
-  ));
+    'UPDATE extractions SET result_json = ?, stats_found = ?, stats_missing = ?, stats_letters_ready = ? WHERE id = ?'
+  ).run(writeResultJson(result), stats.found, stats.missing, stats.lettersReady, extractionId);
 
   // Audit log
   db.prepare(
     'INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)'
-  ).run(userId, 'field_update', JSON.stringify({ extractionId: id, field: fieldPath, pruefstatus }), req.ip);
+  ).run(userId, 'field_update', JSON.stringify({ extractionId, field: fieldPath, pruefstatus }), req.ip);
 
   res.json({
     ok: true,

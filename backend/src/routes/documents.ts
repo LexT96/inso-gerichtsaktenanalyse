@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
+import { requireExtractionAccess } from '../middleware/extractionAccess';
 import { uploadMiddleware, validatePdfBuffer } from '../middleware/upload';
 import { getDb } from '../db/database';
 import { readResultJson, writeResultJson } from '../db/resultJson';
@@ -48,6 +49,7 @@ function nextDocIndex(extractionId: number): number {
 router.post(
   '/:extractionId/documents',
   authMiddleware,
+  requireExtractionAccess(),
   (req: Request, res: Response, next) => {
     uploadMiddleware(req, res, (err) => {
       if (err) return next(err);
@@ -56,8 +58,7 @@ router.post(
   },
   async (req: Request, res: Response): Promise<void> => {
     const userId = req.user!.userId;
-    const extractionId = parseInt(parseParam(req.params['extractionId']), 10);
-    if (isNaN(extractionId)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
+    const { extractionId } = req.access!;
 
     if (!req.file) { res.status(400).json({ error: 'Keine PDF-Datei hochgeladen' }); return; }
 
@@ -67,14 +68,10 @@ router.post(
       res.status(400).json({ error: 'Datei ist kein gültiges PDF.' }); return;
     }
 
-    // Verify extraction exists and belongs to user
     const db = getDb();
-    const isAdmin = req.user!.role === 'admin';
     const extraction = db.prepare(
-      isAdmin
-        ? 'SELECT id, status, result_json FROM extractions WHERE id = ?'
-        : 'SELECT id, status, result_json FROM extractions WHERE id = ? AND user_id = ?'
-    ).get(...(isAdmin ? [extractionId] : [extractionId, userId])) as { id: number; status: string; result_json: string | null } | undefined;
+      'SELECT id, status, result_json FROM extractions WHERE id = ?'
+    ).get(extractionId) as { id: number; status: string; result_json: string | null } | undefined;
 
     if (!extraction) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
     if (extraction.status !== 'completed') { res.status(400).json({ error: 'Nur abgeschlossene Extraktionen können ergänzt werden' }); return; }
@@ -142,20 +139,15 @@ router.post(
 // so it can take >60s. Returns 202 immediately and runs the job in the background;
 // clients poll GET /status or /jobs/active for progress.
 
-router.post('/:extractionId/documents/:docId/extract', authMiddleware, (req: Request, res: Response): void => {
-  const userId = req.user!.userId;
-  const extractionId = parseInt(parseParam(req.params['extractionId']), 10);
+router.post('/:extractionId/documents/:docId/extract', authMiddleware, requireExtractionAccess(), (req: Request, res: Response): void => {
+  const { extractionId } = req.access!;
   const docId = parseInt(parseParam(req.params['docId']), 10);
-  if (isNaN(extractionId) || isNaN(docId)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
+  if (isNaN(docId)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
 
   const db = getDb();
-  const isAdmin = req.user!.role === 'admin';
-
   const extraction = db.prepare(
-    isAdmin
-      ? 'SELECT id FROM extractions WHERE id = ? AND status = ?'
-      : 'SELECT id FROM extractions WHERE id = ? AND user_id = ? AND status = ?'
-  ).get(...(isAdmin ? [extractionId, 'completed'] : [extractionId, userId, 'completed'])) as { id: number } | undefined;
+    'SELECT id FROM extractions WHERE id = ? AND status = ?'
+  ).get(extractionId, 'completed') as { id: number } | undefined;
   if (!extraction) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
 
   const doc = db.prepare('SELECT * FROM documents WHERE id = ? AND extraction_id = ?')
@@ -191,20 +183,9 @@ router.post('/:extractionId/documents/:docId/extract', authMiddleware, (req: Req
 
 // --- 2b. Job status for a single document ---
 
-router.get('/:extractionId/documents/:docId/status', authMiddleware, (req: Request, res: Response): void => {
-  const userId = req.user!.userId;
-  const extractionId = parseInt(parseParam(req.params['extractionId']), 10);
+router.get('/:extractionId/documents/:docId/status', authMiddleware, requireExtractionAccess(), (req: Request, res: Response): void => {
   const docId = parseInt(parseParam(req.params['docId']), 10);
-  if (isNaN(extractionId) || isNaN(docId)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
-
-  const db = getDb();
-  const isAdmin = req.user!.role === 'admin';
-  const extraction = db.prepare(
-    isAdmin
-      ? 'SELECT id FROM extractions WHERE id = ?'
-      : 'SELECT id FROM extractions WHERE id = ? AND user_id = ?'
-  ).get(...(isAdmin ? [extractionId] : [extractionId, userId])) as { id: number } | undefined;
-  if (!extraction) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
+  if (isNaN(docId)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
 
   const state = getJobState(docId);
   if (!state) { res.status(404).json({ error: 'Dokument nicht gefunden' }); return; }
@@ -235,31 +216,28 @@ router.get('/documents/jobs/active', authMiddleware, (req: Request, res: Respons
                 d.job_finished_at as finishedAt
          FROM documents d
          JOIN extractions e ON e.id = d.extraction_id
-         WHERE e.user_id = ?
+         WHERE (e.user_id = ?
+                OR EXISTS (SELECT 1 FROM extraction_shares s WHERE s.extraction_id = e.id AND s.user_id = ?))
            AND d.job_status IN ('pending', 'processing', 'completed', 'failed')
            AND (d.job_finished_at IS NULL OR d.job_finished_at > datetime('now', '-10 minutes'))
          ORDER BY COALESCE(d.job_started_at, d.uploaded_at) DESC`
-  ).all(...(isAdmin ? [] : [userId]));
+  ).all(...(isAdmin ? [] : [userId, userId]));
 
   res.json(rows);
 });
 
 // --- 3. Apply ---
 
-router.post('/:extractionId/documents/:docId/apply', authMiddleware, (req: Request, res: Response): void => {
+router.post('/:extractionId/documents/:docId/apply', authMiddleware, requireExtractionAccess(), (req: Request, res: Response): void => {
   const userId = req.user!.userId;
-  const extractionId = parseInt(parseParam(req.params['extractionId']), 10);
+  const { extractionId } = req.access!;
   const docId = parseInt(parseParam(req.params['docId']), 10);
-  if (isNaN(extractionId) || isNaN(docId)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
+  if (isNaN(docId)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
 
   const db = getDb();
-  const isAdmin = req.user!.role === 'admin';
-
   const extraction = db.prepare(
-    isAdmin
-      ? 'SELECT id, result_json FROM extractions WHERE id = ? AND status = ?'
-      : 'SELECT id, result_json FROM extractions WHERE id = ? AND user_id = ? AND status = ?'
-  ).get(...(isAdmin ? [extractionId, 'completed'] : [extractionId, userId, 'completed'])) as { id: number; result_json: string | null } | undefined;
+    'SELECT id, result_json FROM extractions WHERE id = ? AND status = ?'
+  ).get(extractionId, 'completed') as { id: number; result_json: string | null } | undefined;
 
   if (!extraction || !extraction.result_json) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
 
@@ -349,22 +327,9 @@ router.post('/:extractionId/documents/:docId/apply', authMiddleware, (req: Reque
 
 // --- 4. List documents for an extraction ---
 
-router.get('/:extractionId/documents', authMiddleware, (req: Request, res: Response): void => {
-  const extractionId = parseInt(parseParam(req.params['extractionId']), 10);
-  if (isNaN(extractionId)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
-
-  const userId = req.user!.userId;
-  const isAdmin = req.user!.role === 'admin';
+router.get('/:extractionId/documents', authMiddleware, requireExtractionAccess(), (req: Request, res: Response): void => {
+  const { extractionId } = req.access!;
   const db = getDb();
-
-  // Verify ownership
-  const extraction = db.prepare(
-    isAdmin
-      ? 'SELECT id FROM extractions WHERE id = ?'
-      : 'SELECT id FROM extractions WHERE id = ? AND user_id = ?'
-  ).get(...(isAdmin ? [extractionId] : [extractionId, userId])) as { id: number } | undefined;
-
-  if (!extraction) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
 
   const docs = db.prepare('SELECT * FROM documents WHERE extraction_id = ? ORDER BY doc_index')
     .all(extractionId) as DocumentInfo[];
@@ -374,24 +339,12 @@ router.get('/:extractionId/documents', authMiddleware, (req: Request, res: Respo
 
 // --- 5. Serve a specific document's PDF ---
 
-router.get('/:extractionId/documents/:docId/pdf', authMiddleware, (req: Request, res: Response): void => {
-  const extractionId = parseInt(parseParam(req.params['extractionId']), 10);
+router.get('/:extractionId/documents/:docId/pdf', authMiddleware, requireExtractionAccess(), (req: Request, res: Response): void => {
+  const { extractionId } = req.access!;
   const docId = parseInt(parseParam(req.params['docId']), 10);
-  if (isNaN(extractionId) || isNaN(docId)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
+  if (isNaN(docId)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
 
-  const userId = req.user!.userId;
-  const isAdmin = req.user!.role === 'admin';
   const db = getDb();
-
-  // Verify ownership
-  const extraction = db.prepare(
-    isAdmin
-      ? 'SELECT id FROM extractions WHERE id = ?'
-      : 'SELECT id FROM extractions WHERE id = ? AND user_id = ?'
-  ).get(...(isAdmin ? [extractionId] : [extractionId, userId])) as { id: number } | undefined;
-
-  if (!extraction) { res.status(404).json({ error: 'Extraktion nicht gefunden' }); return; }
-
   const doc = db.prepare('SELECT * FROM documents WHERE id = ? AND extraction_id = ?')
     .get(docId, extractionId) as DocumentInfo | undefined;
   if (!doc) { res.status(404).json({ error: 'Dokument nicht gefunden' }); return; }

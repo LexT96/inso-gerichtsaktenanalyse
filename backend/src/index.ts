@@ -19,6 +19,8 @@ import sachbearbeiterRoutes from './routes/sachbearbeiter';
 import adminRoutes from './routes/admin';
 import kanzleiRoutes from './routes/kanzlei';
 import letterTemplatesRoutes from './routes/letterTemplates';
+import sharesRoutes from './routes/shares';
+import usersRoutes from './routes/users';
 import bcrypt from 'bcrypt';
 
 const app = express();
@@ -45,6 +47,8 @@ app.use('/api/sachbearbeiter', sachbearbeiterRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/kanzlei', kanzleiRoutes);
 app.use('/api/letter-templates', letterTemplatesRoutes);
+app.use('/api/extractions', sharesRoutes);
+app.use('/api/users', usersRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

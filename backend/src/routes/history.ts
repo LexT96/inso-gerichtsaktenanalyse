@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { authMiddleware } from '../middleware/auth';
+import { requireExtractionAccess } from '../middleware/extractionAccess';
 import { getDb } from '../db/database';
 import { config } from '../config';
 import { readResultJson } from '../db/resultJson';
@@ -11,21 +12,47 @@ import type { HistoryItem, ExtractionResponse } from '../types/api';
 
 const router = Router();
 
+type HistoryRow = {
+  id: number; filename: string; file_size: number; status: string;
+  stats_found: number; stats_missing: number; stats_letters_ready: number;
+  processing_time_ms: number | null; created_at: string;
+  progress_message: string | null; progress_percent: number | null;
+  access_role: string; owner_name: string | null;
+};
+
 router.get('/', authMiddleware, (req: Request, res: Response): void => {
   const db = getDb();
   const userId = req.user!.userId;
+  const isAdmin = req.user!.role === 'admin';
 
-  const rows = db.prepare(
-    `SELECT id, filename, file_size, status, stats_found, stats_missing,
-            stats_letters_ready, processing_time_ms, created_at,
-            progress_message, progress_percent
-     FROM extractions WHERE user_id = ? ORDER BY created_at DESC LIMIT 100`
-  ).all(userId) as Array<{
-    id: number; filename: string; file_size: number; status: string;
-    stats_found: number; stats_missing: number; stats_letters_ready: number;
-    processing_time_ms: number | null; created_at: string;
-    progress_message: string | null; progress_percent: number | null;
-  }>;
+  const rows: HistoryRow[] = isAdmin
+    ? db.prepare(
+        `SELECT e.id, e.filename, e.file_size, e.status, e.stats_found, e.stats_missing,
+                e.stats_letters_ready, e.processing_time_ms, e.created_at,
+                e.progress_message, e.progress_percent,
+                'admin' AS access_role, u.display_name AS owner_name
+         FROM extractions e
+         JOIN users u ON u.id = e.user_id
+         ORDER BY e.created_at DESC LIMIT 100`
+      ).all() as HistoryRow[]
+    : db.prepare(
+        `SELECT e.id, e.filename, e.file_size, e.status, e.stats_found, e.stats_missing,
+                e.stats_letters_ready, e.processing_time_ms, e.created_at,
+                e.progress_message, e.progress_percent,
+                'owner' AS access_role, NULL AS owner_name
+         FROM extractions e
+         WHERE e.user_id = ?
+         UNION ALL
+         SELECT e.id, e.filename, e.file_size, e.status, e.stats_found, e.stats_missing,
+                e.stats_letters_ready, e.processing_time_ms, e.created_at,
+                e.progress_message, e.progress_percent,
+                'collaborator' AS access_role, u.display_name AS owner_name
+         FROM extractions e
+         JOIN extraction_shares s ON s.extraction_id = e.id
+         JOIN users u ON u.id = e.user_id
+         WHERE s.user_id = ?
+         ORDER BY created_at DESC LIMIT 100`
+      ).all(userId, userId) as HistoryRow[];
 
   const items: HistoryItem[] = rows.map(row => ({
     id: row.id,
@@ -37,6 +64,8 @@ router.get('/', authMiddleware, (req: Request, res: Response): void => {
     statsLettersReady: row.stats_letters_ready,
     processingTimeMs: row.processing_time_ms,
     createdAt: row.created_at,
+    accessRole: row.access_role as HistoryItem['accessRole'],
+    ...(row.owner_name ? { ownerName: row.owner_name } : {}),
     ...(row.status === 'processing' ? {
       progressMessage: row.progress_message,
       progressPercent: row.progress_percent,
@@ -46,33 +75,21 @@ router.get('/', authMiddleware, (req: Request, res: Response): void => {
   res.json(items);
 });
 
-router.get('/:id', authMiddleware, (req: Request, res: Response): void => {
+router.get('/:id', authMiddleware, requireExtractionAccess(), (req: Request, res: Response): void => {
+  const { extractionId } = req.access!;
   const db = getDb();
-  const userId = req.user!.userId;
-  const idParam = req.params['id'];
-  const id = parseInt(Array.isArray(idParam) ? idParam[0] : idParam ?? '', 10);
 
-  if (isNaN(id)) {
-    res.status(400).json({ error: 'Ungültige ID' });
-    return;
-  }
-
-  const isAdmin = req.user!.role === 'admin';
   const row = db.prepare(
-    isAdmin
-      ? `SELECT id, filename, file_size, result_json, status, error_message,
-              stats_found, stats_missing, stats_letters_ready, processing_time_ms, created_at,
-              progress_message, progress_percent
-         FROM extractions WHERE id = ?`
-      : `SELECT id, filename, file_size, result_json, status, error_message,
-              stats_found, stats_missing, stats_letters_ready, processing_time_ms, created_at,
-              progress_message, progress_percent
-         FROM extractions WHERE id = ? AND user_id = ?`
-  ).get(...(isAdmin ? [id] : [id, userId])) as {
+    `SELECT id, filename, file_size, result_json, status, error_message,
+            stats_found, stats_missing, stats_letters_ready, processing_time_ms, created_at,
+            progress_message, progress_percent
+     FROM extractions WHERE id = ?`
+  ).get(extractionId) as {
     id: number; filename: string; file_size: number; result_json: string | null;
     status: string; error_message: string | null;
     stats_found: number; stats_missing: number; stats_letters_ready: number;
     processing_time_ms: number | null; created_at: string;
+    progress_message: string | null; progress_percent: number | null;
   } | undefined;
 
   if (!row) {
@@ -89,7 +106,13 @@ router.get('/:id', authMiddleware, (req: Request, res: Response): void => {
     return;
   }
 
-  const response: ExtractionResponse & { progressMessage?: string; progressPercent?: number } = {
+  // For non-owners, surface ownerName so the frontend can show the CollaboratorBanner
+  const ownerName = req.access!.role !== 'owner'
+    ? (db.prepare('SELECT display_name FROM users WHERE id = ?')
+         .get(req.access!.ownerId) as { display_name: string } | undefined)?.display_name
+    : undefined;
+
+  const response: ExtractionResponse & { progressMessage?: string; progressPercent?: number | null } = {
     id: row.id,
     filename: row.filename,
     status: row.status as ExtractionResponse['status'],
@@ -99,9 +122,11 @@ router.get('/:id', authMiddleware, (req: Request, res: Response): void => {
     statsLettersReady: row.stats_letters_ready,
     processingTimeMs: row.processing_time_ms,
     createdAt: row.created_at,
-    ...((row as any).progress_message ? {
-      progressMessage: (row as any).progress_message,
-      progressPercent: (row as any).progress_percent,
+    accessRole: req.access!.role,
+    ...(ownerName ? { ownerName } : {}),
+    ...(row.progress_message ? {
+      progressMessage: row.progress_message,
+      progressPercent: row.progress_percent,
     } : {}),
   };
 
@@ -109,29 +134,18 @@ router.get('/:id', authMiddleware, (req: Request, res: Response): void => {
 });
 
 // Serve stored PDF for extraction
-router.get('/:id/pdf', authMiddleware, (req: Request, res: Response): void => {
-  const userId = req.user!.userId;
-  const idParam = req.params['id'];
-  const id = parseInt(Array.isArray(idParam) ? idParam[0] : idParam ?? '', 10);
-  if (isNaN(id)) { res.status(400).json({ error: 'Ungültige ID' }); return; }
-
-  // Verify user owns this extraction (admins can access any)
+router.get('/:id/pdf', authMiddleware, requireExtractionAccess(), (req: Request, res: Response): void => {
+  const { extractionId } = req.access!;
   const db = getDb();
-  const isAdmin = req.user!.role === 'admin';
-  const row = db.prepare(
-    isAdmin
-      ? 'SELECT id, filename FROM extractions WHERE id = ?'
-      : 'SELECT id, filename FROM extractions WHERE id = ? AND user_id = ?'
-  ).get(...(isAdmin ? [id] : [id, userId])) as { id: number; filename: string } | undefined;
+  const row = db.prepare('SELECT id, filename FROM extractions WHERE id = ?').get(extractionId) as { id: number; filename: string } | undefined;
   if (!row) { res.status(404).json({ error: 'Nicht gefunden' }); return; }
 
   const pdfDir = path.resolve(path.dirname(config.DATABASE_PATH || './data/insolvenz.db'), 'pdfs');
   // Try new per-extraction directory structure first, fall back to old flat structure
-  const extractionPdfDir = path.join(pdfDir, String(id));
+  const extractionPdfDir = path.join(pdfDir, String(extractionId));
   let pdfPath = path.join(extractionPdfDir, '0_gerichtsakte.pdf');
   if (!fs.existsSync(pdfPath)) {
-    // Fallback to old flat structure
-    pdfPath = path.join(pdfDir, `${id}.pdf`);
+    pdfPath = path.join(pdfDir, `${extractionId}.pdf`);
   }
   if (!fs.existsSync(pdfPath)) {
     res.status(404).json({ error: 'PDF nicht mehr verfügbar' });
@@ -143,17 +157,11 @@ router.get('/:id/pdf', authMiddleware, (req: Request, res: Response): void => {
   fs.createReadStream(pdfPath).pipe(res);
 });
 
-// Export encrypted extraction result
-router.post('/:id/export', authMiddleware, (req: Request, res: Response): void => {
-  const db = getDb();
+// Export encrypted extraction result (owner-only — data leaves the system)
+router.post('/:id/export', authMiddleware, requireExtractionAccess({ ownerOnly: true }), (req: Request, res: Response): void => {
+  const { extractionId } = req.access!;
   const userId = req.user!.userId;
-  const idParam = req.params['id'];
-  const id = parseInt(Array.isArray(idParam) ? idParam[0] : idParam ?? '', 10);
-
-  if (isNaN(id)) {
-    res.status(400).json({ error: 'Ungültige ID' });
-    return;
-  }
+  const db = getDb();
 
   const { password } = req.body as { password?: string };
   if (!password || password.length < 8) {
@@ -163,8 +171,8 @@ router.post('/:id/export', authMiddleware, (req: Request, res: Response): void =
 
   const row = db.prepare(
     `SELECT id, filename, result_json, status, stats_found, stats_missing, stats_letters_ready, created_at
-     FROM extractions WHERE id = ? AND user_id = ?`
-  ).get(id, userId) as {
+     FROM extractions WHERE id = ?`
+  ).get(extractionId) as {
     id: number; filename: string; result_json: string | null; status: string;
     stats_found: number; stats_missing: number; stats_letters_ready: number;
     created_at: string;
@@ -199,12 +207,11 @@ router.post('/:id/export', authMiddleware, (req: Request, res: Response): void =
     },
   };
 
-  // Audit log
   db.prepare(
     'INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)'
-  ).run(userId, 'export', JSON.stringify({ extractionId: id, filename: row.filename }), req.ip);
+  ).run(userId, 'export', JSON.stringify({ extractionId, filename: row.filename }), req.ip);
 
-  logger.info('Extraktion exportiert', { extractionId: id, userId });
+  logger.info('Extraktion exportiert', { extractionId, userId });
 
   const sanitizedName = row.filename.replace(/\.pdf$/i, '').replace(/[^a-zA-Z0-9äöüÄÖÜß_\-. ]/g, '_');
   const exportFilename = sanitizedName + '.iae';
@@ -281,21 +288,15 @@ router.post('/import', authMiddleware, (req: Request, res: Response): void => {
   }
 });
 
-// Delete extraction data (DSGVO Art. 17)
-router.delete('/:id', authMiddleware, (req: Request, res: Response): void => {
-  const db = getDb();
+// Delete extraction data (DSGVO Art. 17, owner-only)
+router.delete('/:id', authMiddleware, requireExtractionAccess({ ownerOnly: true }), (req: Request, res: Response): void => {
+  const { extractionId } = req.access!;
   const userId = req.user!.userId;
-  const idParam = req.params['id'];
-  const id = parseInt(Array.isArray(idParam) ? idParam[0] : idParam ?? '', 10);
-
-  if (isNaN(id)) {
-    res.status(400).json({ error: 'Ungültige ID' });
-    return;
-  }
+  const db = getDb();
 
   const row = db.prepare(
-    'SELECT id, filename FROM extractions WHERE id = ? AND user_id = ?'
-  ).get(id, userId) as { id: number; filename: string } | undefined;
+    'SELECT id, filename FROM extractions WHERE id = ?'
+  ).get(extractionId) as { id: number; filename: string } | undefined;
 
   if (!row) {
     res.status(404).json({ error: 'Extraktion nicht gefunden' });
@@ -304,14 +305,16 @@ router.delete('/:id', authMiddleware, (req: Request, res: Response): void => {
 
   db.prepare(
     `UPDATE extractions SET result_json = NULL, status = 'deleted_art17' WHERE id = ?`
-  ).run(id);
+  ).run(extractionId);
 
-  // Audit log
+  // Cleanup shares — collaborators lose access immediately
+  db.prepare('DELETE FROM extraction_shares WHERE extraction_id = ?').run(extractionId);
+
   db.prepare(
     'INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)'
-  ).run(userId, 'deletion_art17', JSON.stringify({ extractionId: id, filename: row.filename }), req.ip);
+  ).run(userId, 'deletion_art17', JSON.stringify({ extractionId, filename: row.filename }), req.ip);
 
-  logger.info('Extraktion gelöscht (Art. 17 DSGVO)', { extractionId: id, userId });
+  logger.info('Extraktion gelöscht (Art. 17 DSGVO)', { extractionId, userId });
 
   res.status(204).send();
 });

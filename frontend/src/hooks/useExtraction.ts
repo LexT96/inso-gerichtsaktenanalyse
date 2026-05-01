@@ -25,6 +25,8 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   }
 }
 
+type AccessRole = 'owner' | 'collaborator' | 'admin';
+
 interface ExtractionState {
   loading: boolean;
   progress: string;
@@ -37,6 +39,8 @@ interface ExtractionState {
   statsLettersReady: number;
   processingTimeMs: number | null;
   pdfFile: File | null;
+  accessRole: AccessRole;
+  ownerName: string | null;
 }
 
 export function useExtraction() {
@@ -52,6 +56,8 @@ export function useExtraction() {
     statsLettersReady: 0,
     processingTimeMs: null,
     pdfFile: null,
+    accessRole: 'owner',
+    ownerName: null,
   });
 
   const abortRef = useRef<AbortController | null>(null);
@@ -126,6 +132,8 @@ export function useExtraction() {
                 statsLettersReady: event.statsLettersReady,
                 processingTimeMs: event.processingTimeMs,
                 pdfFile: null,
+                accessRole: 'owner',
+                ownerName: null,
               });
             } else if (event.type === 'error') {
               setState(s => ({
@@ -194,6 +202,8 @@ export function useExtraction() {
               statsLettersReady: updated.statsLettersReady ?? 0,
               processingTimeMs: updated.processingTimeMs ?? null,
               pdfFile: null,
+              accessRole: (updated.accessRole as AccessRole) ?? 'owner',
+              ownerName: updated.ownerName ?? null,
             });
           } else if (updated.status === 'processing') {
             // Update progress from DB
@@ -240,6 +250,8 @@ export function useExtraction() {
       statsLettersReady: 0,
       processingTimeMs: null,
       pdfFile: null,
+      accessRole: 'owner',
+      ownerName: null,
     });
   }, []);
 
@@ -272,6 +284,8 @@ export function useExtraction() {
         statsLettersReady: data.statsLettersReady,
         processingTimeMs: data.processingTimeMs,
         pdfFile: null,
+        accessRole: (data.accessRole as AccessRole) ?? 'owner',
+        ownerName: data.ownerName ?? null,
       });
 
       // Try to load stored PDF for the viewer
@@ -328,7 +342,7 @@ export function useExtraction() {
         loading: false,
         progress: '',
         progressPercent: 0,
-        result: mockResult as ExtractionResult,
+        result: mockResult as unknown as ExtractionResult,
         error: null,
         extractionId: null,
         statsFound: found,
@@ -336,6 +350,8 @@ export function useExtraction() {
         statsLettersReady: 1,
         processingTimeMs: 0,
         pdfFile: null,
+        accessRole: 'owner',
+        ownerName: null,
       });
       return file;
     } catch (err) {
@@ -363,6 +379,8 @@ export function useExtraction() {
       statsLettersReady: 0,
       processingTimeMs: null,
       pdfFile: null,
+      accessRole: 'owner',
+      ownerName: null,
     });
   }, []);
 

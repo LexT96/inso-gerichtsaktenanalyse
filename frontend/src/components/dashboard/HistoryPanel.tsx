@@ -14,6 +14,8 @@ interface HistoryItem {
   statsLettersReady: number;
   processingTimeMs: number | null;
   createdAt: string;
+  accessRole?: 'owner' | 'collaborator' | 'admin';
+  ownerName?: string;
 }
 
 interface HistoryPanelProps {
@@ -86,6 +88,11 @@ export function HistoryPanel({ onSelect, currentId }: HistoryPanelProps) {
                     <div className="flex-1 min-w-0">
                       <div className={`text-[12px] font-medium font-sans truncate ${item.status === 'deleted_art17' ? 'text-text-muted line-through' : 'text-text'}`}>
                         {item.filename}
+                        {item.accessRole === 'collaborator' && item.ownerName && (
+                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[9px] rounded-full bg-blue-50 text-blue-800 border border-blue-200 align-middle">
+                            Geteilt von {item.ownerName}
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-text-muted mt-0.5 flex items-center gap-2">
                         <span>{formatDate(item.createdAt)}</span>

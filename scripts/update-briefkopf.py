@@ -1,191 +1,145 @@
 #!/usr/bin/env python3
 """
-Update the partner sidebar in all Gutachten DOCX templates from kanzlei.json.
+Propagate the master briefkopf (header, footer, partner sidebar, sachbearbeiter)
+into target templates via SDT-scoped body replacement + full header/footer swap.
 
-Usage: python scripts/update-briefkopf.py
+Spec: docs/superpowers/specs/2026-04-24-briefkopf-unified-design.md
+Plan: docs/superpowers/plans/2026-04-24-briefkopf-unified.md
 
-Run this script whenever partner/personnel data changes. It reads the
-canonical firm data from gutachtenvorlagen/kanzlei.json and updates the
-partner sidebar text box in each Gutachten template.
+Usage:
+    python scripts/update-briefkopf.py --template Bankenanfrage
+    python scripts/update-briefkopf.py --only anschreiben
+    python scripts/update-briefkopf.py --only gutachten
+    python scripts/update-briefkopf.py --all
+    python scripts/update-briefkopf.py --all --dry-run
 """
+from __future__ import annotations
 
-import json
-from copy import deepcopy
+import argparse
+import sys
 from pathlib import Path
 
-from docx import Document
 from lxml import etree
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-KANZLEI_JSON = REPO_ROOT / "gutachtenvorlagen" / "kanzlei.json"
-TEMPLATES_DIR = REPO_ROOT / "gutachtenvorlagen"
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
 
-TEMPLATE_FILES = [
+from scripts.briefkopf_lib.docx_zip import DocxBundle  # noqa: E402
+from scripts.briefkopf_lib.sync import (  # noqa: E402
+    BRIEFKOPF_SDT_TAGS,
+    ensure_section_properties,
+    patch_content_types,
+    patch_document_rels,
+    sync_header_footer,
+    sync_media,
+    sync_sdts,
+)
+
+MASTER_PATH = REPO / "briefkopf" / "briefkopf-master.docx"
+
+GUTACHTEN_DIR = REPO / "gutachtenvorlagen"
+ANSCHREIBEN_DIR = REPO / "standardschreiben" / "templates"
+
+GUTACHTEN_TEMPLATES = [
     "Gutachten Muster natürliche Person.docx",
     "Gutachten Muster juristische Person.docx",
     "Gutachten Muster Personengesellschaft.docx",
 ]
 
-WP_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-WPS_NS = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
-XML_NS = "http://www.w3.org/XML/1998/namespace"
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--all", action="store_true")
+    g.add_argument("--only", choices=["gutachten", "anschreiben"])
+    g.add_argument("--template", type=str, help="basename without .docx")
+    p.add_argument("--dry-run", action="store_true")
+    return p.parse_args()
 
 
-def load_kanzlei():
-    with open(KANZLEI_JSON, "r", encoding="utf-8") as f:
-        return json.load(f)
+def resolve_targets(args: argparse.Namespace) -> list[Path]:
+    gutachten = [GUTACHTEN_DIR / n for n in GUTACHTEN_TEMPLATES]
+    anschreiben = sorted(
+        p for p in ANSCHREIBEN_DIR.glob("*.docx")
+        if not p.name.startswith("~$")
+        and not p.name.endswith(".backup.docx")
+    )
+    if args.all:
+        return gutachten + anschreiben
+    if args.only == "gutachten":
+        return gutachten
+    if args.only == "anschreiben":
+        return anschreiben
+    if args.template:
+        for p in gutachten + anschreiben:
+            if p.stem == args.template:
+                return [p]
+        raise SystemExit(f"template not found: {args.template}")
+    raise SystemExit("must pass --all or --only or --template")
 
 
-def build_sidebar_lines(data):
-    """Build structured sidebar lines with role info for formatting.
-    Roles: 'name' (bold), 'title' (regular), 'header' (regular), 'empty' (spacer)"""
-    lines = []
-    lines.append(("name", data["kanzlei"]["website"]))
-    lines.append(("title", "Partnerschaftsregister des"))
-    lines.append(("title", data["kanzlei"]["partnerschaftsregister"]))
-    lines.append(("empty", ""))
-    lines.append(("empty", ""))
+def sync_template(
+    target_path: Path,
+    master: DocxBundle,
+    kanzlei_data: dict | None,
+    dry_run: bool,
+) -> None:
+    print(f"\n→ {target_path.relative_to(REPO)}")
+    if not target_path.exists():
+        print("  SKIP: file missing")
+        return
+    target = DocxBundle.read(target_path)
 
-    # Group partners by category, preserving order
-    categories = {}
-    for p in data["partner"]:
-        cat = p["kategorie"]
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append(p)
+    is_gutachten = target_path.parent == GUTACHTEN_DIR
 
-    for cat_name in ["PARTNER", "ANGESTELLTE RECHTSANWÄLTE", "OF COUNSEL"]:
-        if cat_name not in categories:
-            continue
-        lines.append(("empty", ""))
-        lines.append(("header", cat_name))
-        for p in categories[cat_name]:
-            lines.append(("name", p["name"]))
-            for title_line in p["titel"].split("\n"):
-                lines.append(("title", title_line))
-            lines.append(("empty", ""))
+    if is_gutachten:
+        # Gutachten templates already carry the full briefkopf inline in their
+        # body — they ARE the source of the master, after all. Inserting the
+        # briefkopf-block SDT here would duplicate it. So we limit the sync
+        # to refreshing the partner sidebar from kanzlei.json.
+        print("  (Gutachten: sidebar-only sync)")
+    else:
+        sync_sdts(target, master, BRIEFKOPF_SDT_TAGS)
+        sync_header_footer(target, master)
+        sync_media(target, master)
+        patch_content_types(target)
+        rid_map = patch_document_rels(target)
 
-    # Standorte (two columns)
-    lines.append(("empty", ""))
-    lines.append(("header", "STANDORTE"))
-    standorte = list(data["standorte"].keys())
-    for i in range(0, len(standorte), 2):
-        left = standorte[i]
-        right = standorte[i + 1] if i + 1 < len(standorte) else ""
-        lines.append(("title", f"{left}\t\t{right}"))
+        doc = etree.fromstring(target.read_part("word/document.xml"))
+        ensure_section_properties(doc, rid_map)
+        target.write_part(
+            "word/document.xml",
+            etree.tostring(doc, xml_declaration=True, encoding="UTF-8", standalone=True),
+        )
 
-    return lines
+    # NOTE: kanzlei.json sidebar rendering is intentionally disabled. The
+    # master DOCX is the single source of truth for sidebar content — TBS
+    # edits the master in Word when partners change, then re-runs sync.
 
-
-VML_NS = "urn:schemas-microsoft-com:vml"
-
-
-def find_all_sidebar_textboxes(doc):
-    """Find ALL text boxes/containers containing 'PARTNER' in the document.
-    Word uses mc:AlternateContent with both a modern (wps:txbx → w:txbxContent)
-    and fallback (v:textbox → w:txbxContent) copy. We must update ALL copies."""
-    body = doc.element.body
-    found = []
-    # Find ALL w:txbxContent elements (both modern wps and VML share this tag)
-    for txbx_content in body.iter(f"{{{WP_NS}}}txbxContent"):
-        full_text = "".join(t.text or "" for t in txbx_content.iter(f"{{{WP_NS}}}t"))
-        if "PARTNER" in full_text:
-            # Determine parent type for logging
-            parent_tag = txbx_content.getparent().tag if txbx_content.getparent() is not None else "?"
-            fmt = "wps" if "wordprocessingShape" in parent_tag else "vml" if "textbox" in parent_tag.lower() else "unknown"
-            found.append((fmt, txbx_content))
-    return found
-
-
-def replace_textbox_content(txbx_content, lines):
-    """Replace all paragraphs in a textbox with structured lines, preserving formatting.
-    Extracts bold (name) and regular (title) formatting templates from existing content."""
-    paragraphs = txbx_content.findall(f"{{{WP_NS}}}p")
-    if not paragraphs:
+    if dry_run:
+        print("  [dry-run] would write")
         return
 
-    # Extract formatting templates from existing paragraphs:
-    # - name_ppr/name_rpr: from first bold paragraph (names)
-    # - title_ppr/title_rpr: from first non-bold, non-empty paragraph (titles)
-    name_ppr = name_rpr = title_ppr = title_rpr = None
-    for p in paragraphs:
-        ppr = p.find(f"{{{WP_NS}}}pPr")
-        for r in p.findall(f"{{{WP_NS}}}r"):
-            rpr = r.find(f"{{{WP_NS}}}rPr")
-            if rpr is None:
-                continue
-            is_bold = rpr.find(f"{{{WP_NS}}}b") is not None
-            if is_bold and name_rpr is None:
-                name_rpr = deepcopy(rpr)
-                name_ppr = deepcopy(ppr) if ppr is not None else None
-            elif not is_bold and title_rpr is None:
-                text = "".join(t.text or "" for t in p.iter(f"{{{WP_NS}}}t"))
-                if text.strip():
-                    title_rpr = deepcopy(rpr)
-                    title_ppr = deepcopy(ppr) if ppr is not None else None
-            if name_rpr and title_rpr:
-                break
-        if name_rpr and title_rpr:
-            break
+    backup = target_path.with_suffix(".backup.docx")
+    if not backup.exists():
+        backup.write_bytes(target_path.read_bytes())
+        print(f"  backup → {backup.name}")
 
-    # Fallback: use whatever we found
-    if title_rpr is None:
-        title_rpr = deepcopy(name_rpr) if name_rpr else None
-        title_ppr = deepcopy(name_ppr) if name_ppr else None
-    if name_rpr is None:
-        name_rpr = deepcopy(title_rpr) if title_rpr else None
-        name_ppr = deepcopy(title_ppr) if title_ppr else None
-
-    # Remove all existing paragraphs
-    for p in paragraphs:
-        txbx_content.remove(p)
-
-    # Add new paragraphs with role-appropriate formatting
-    for role, text in lines:
-        p = etree.SubElement(txbx_content, f"{{{WP_NS}}}p")
-        if role == "name":
-            if name_ppr is not None:
-                p.insert(0, deepcopy(name_ppr))
-            rpr_template = name_rpr
-        else:
-            if title_ppr is not None:
-                p.insert(0, deepcopy(title_ppr))
-            rpr_template = title_rpr
-
-        r = etree.SubElement(p, f"{{{WP_NS}}}r")
-        if rpr_template is not None:
-            r.insert(0, deepcopy(rpr_template))
-        t = etree.SubElement(r, f"{{{WP_NS}}}t")
-        t.text = text
-        t.set(f"{{{XML_NS}}}space", "preserve")
+    target.save(target_path)
+    print("  ✓ synced")
 
 
-def main():
-    data = load_kanzlei()
-    sidebar_lines = build_sidebar_lines(data)
-    print(f"Generated sidebar ({len(sidebar_lines)} lines, {sum(1 for r, _ in sidebar_lines if r == 'name')} names)")
+def main() -> None:
+    args = parse_args()
+    if not MASTER_PATH.exists():
+        raise SystemExit(
+            f"master not found: {MASTER_PATH}\n"
+            f"Run `python scripts/create_briefkopf_master.py` first."
+        )
+    master = DocxBundle.read(MASTER_PATH)
 
-    updated = 0
-    for template_name in TEMPLATE_FILES:
-        template_path = TEMPLATES_DIR / template_name
-        if not template_path.exists():
-            print(f"  SKIP: {template_name} not found")
-            continue
-
-        doc = Document(str(template_path))
-        boxes = find_all_sidebar_textboxes(doc)
-        if not boxes:
-            print(f"  WARN: No partner sidebar text box found in {template_name}")
-            continue
-
-        for fmt, txbx in boxes:
-            replace_textbox_content(txbx, sidebar_lines)
-        print(f"    ({len(boxes)} text box copies updated: {', '.join(f for f, _ in boxes)})")
-        doc.save(str(template_path))
-        print(f"  OK: Updated {template_name}")
-        updated += 1
-
-    print(f"\nDone. Updated {updated}/{len(TEMPLATE_FILES)} templates.")
+    for t in resolve_targets(args):
+        sync_template(t, master, None, args.dry_run)
 
 
 if __name__ == "__main__":

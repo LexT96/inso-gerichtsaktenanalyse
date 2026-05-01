@@ -8,6 +8,8 @@ import { ExtractionProgressBar } from '../components/common/ExtractionProgressBa
 import { ErrorDisplay } from '../components/common/ErrorDisplay';
 import { ExportDialog } from '../components/common/ExportDialog';
 import { ImportDialog } from '../components/common/ImportDialog';
+import { ShareModal } from '../components/share/ShareModal';
+import { CollaboratorBanner } from '../components/share/CollaboratorBanner';
 import { OverviewTab } from '../components/extraction/tabs/OverviewTab';
 import { QuellenTab } from '../components/extraction/tabs/QuellenTab';
 import { BeteiligteTab } from '../components/extraction/tabs/BeteiligteTab';
@@ -24,6 +26,7 @@ import { apiClient } from '../api/client';
 import { useExtraction } from '../hooks/useExtraction';
 import { ExtractionProvider } from '../contexts/ExtractionContext';
 import { HistoryPanel } from '../components/dashboard/HistoryPanel';
+import { useAuth } from '../hooks/useAuth';
 import type { ExtractionResult } from '../types/extraction';
 // Shared stats computation — single source of truth with backend
 import { computeExtractionStats, type FieldDetail } from '@shared/utils/computeStats';
@@ -35,14 +38,18 @@ function computeStats(result: ExtractionResult) {
 
 
 export function DashboardPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [file, setFile] = useState<File | null>(null);
   const [tab, setTab] = useState('overview');
   const [proMode, setProMode] = useState(false);
-  const { loading, progress, progressPercent, result, error, extractionId, pdfFile, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField, resumeIfProcessing } = useExtraction();
+  const { loading, progress, progressPercent, result, error, extractionId, pdfFile, accessRole, ownerName, extract, reset, loadDemo, loadFromHistory, loadFromImport, updateField, resumeIfProcessing } = useExtraction();
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [showKanzlei, setShowKanzlei] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const canShare = accessRole === 'owner' || accessRole === 'admin';
   const [importedFilename, setImportedFilename] = useState<string | null>(null);
   const [extraDocs, setExtraDocs] = useState<Array<{ file: File; label: string }>>([]);
   const [docRefreshKey, setDocRefreshKey] = useState(0);
@@ -191,6 +198,9 @@ export function DashboardPage() {
   const resultsContent = result && (
     <ExtractionProvider value={{ extractionId }}>
     <div className="animate-fade-up-fast">
+      {accessRole === 'collaborator' && ownerName && (
+        <CollaboratorBanner ownerName={ownerName} />
+      )}
       <TabNavigation
         tabs={tabs}
         groups={groups}
@@ -255,7 +265,8 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-bg text-text font-mono">
       <Header
-        onExport={extractionId ? () => setShowExport(true) : undefined}
+        onExport={extractionId && canShare ? () => setShowExport(true) : undefined}
+        onShare={extractionId && canShare ? () => setShowShare(true) : undefined}
         onNewFile={result ? handleNewFile : undefined}
         onKanzlei={() => setShowKanzlei(true)}
         extractionProgress={loading && progress ? { message: progress, percent: progressPercent } : null}
@@ -326,6 +337,7 @@ export function DashboardPage() {
                 loading={loading}
                 proMode={proMode}
                 onProModeChange={setProMode}
+                isAdmin={isAdmin}
               />
               <HistoryPanel
                 onSelect={handleHistorySelect}
@@ -369,6 +381,14 @@ export function DashboardPage() {
           extractionId={extractionId}
           filename={file?.name || importedFilename || 'extraktion'}
           onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {extractionId && (
+        <ShareModal
+          extractionId={extractionId}
+          open={showShare}
+          onClose={() => setShowShare(false)}
         />
       )}
 

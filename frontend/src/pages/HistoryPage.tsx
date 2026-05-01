@@ -16,6 +16,8 @@ interface HistoryItem {
   statsLettersReady: number;
   processingTimeMs: number | null;
   createdAt: string;
+  accessRole?: 'owner' | 'collaborator' | 'admin';
+  ownerName?: string;
 }
 
 export function HistoryPage() {
@@ -99,6 +101,11 @@ export function HistoryPage() {
                   <div className="flex-1">
                     <div className={`text-xs font-semibold font-sans ${isDeleted ? 'text-text-muted' : 'text-text'}`}>
                       {item.filename}
+                      {item.accessRole === 'collaborator' && item.ownerName && (
+                        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 text-[9px] rounded-full bg-blue-50 text-blue-800 border border-blue-200 align-middle">
+                          Geteilt von {item.ownerName}
+                        </span>
+                      )}
                     </div>
                     <div className="text-[10px] text-text-muted mt-0.5">
                       {new Date(item.createdAt.endsWith('Z') ? item.createdAt : item.createdAt + 'Z').toLocaleString('de-DE')} · {(item.fileSize / 1024 / 1024).toFixed(2)} MB

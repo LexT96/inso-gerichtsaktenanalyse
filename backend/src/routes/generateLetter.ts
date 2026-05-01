@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { authMiddleware } from '../middleware/auth';
+import { requireExtractionAccess } from '../middleware/extractionAccess';
 import { getDb } from '../db/database';
 import { readResultJson } from '../db/resultJson';
 import { generateLetterFromTemplate, type LetterVerwalterProfile, type LetterExtras } from '../utils/letterGenerator';
@@ -70,21 +71,20 @@ function loadVerwalterProfile(
 
 // POST /:extractionId/:typ  body: { verwalterId?: number, extras?: LetterExtras }
 // extras.verwalter_art overrides the default 'Insolvenzverwalter' for FELD_Verwalter_Art
-router.post('/:extractionId/:typ', authMiddleware, (req: Request, res: Response): void => {
+router.post('/:extractionId/:typ', authMiddleware, requireExtractionAccess(), (req: Request, res: Response): void => {
   const db = getDb();
-  const userId = req.user!.userId;
-  const extractionId = parseInt(String(req.params['extractionId'] ?? ''), 10);
+  const { extractionId } = req.access!;
   const typ = decodeURIComponent(String(req.params['typ'] ?? ''));
 
-  if (isNaN(extractionId) || !typ) {
+  if (!typ) {
     res.status(400).json({ error: 'Ungültige Parameter' });
     return;
   }
 
   const row = db.prepare(
     `SELECT result_json, verwalter_id FROM extractions
-     WHERE id = ? AND user_id = ? AND status = 'completed'`,
-  ).get(extractionId, userId) as
+     WHERE id = ? AND status = 'completed'`,
+  ).get(extractionId) as
     | { result_json: string; verwalter_id: number | null }
     | undefined;
 
