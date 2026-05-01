@@ -117,16 +117,34 @@ def wrap_as_briefkopf_block(body: etree._Element, split_index: int) -> None:
 
 
 def _enforce_explicit_spacing_in_sdt(body: etree._Element) -> None:
-    """Give every paragraph inside the briefkopf-block SDT explicit line spacing
-    + font size, so rendering in target templates doesn't depend on the target's
-    Normal-style defaults (which differ between Gutachten and Anschreiben)."""
+    """Give every BODY paragraph inside the briefkopf-block SDT explicit line
+    spacing + font size, so rendering in target templates doesn't depend on the
+    target's Normal-style defaults (which differ between Gutachten and Anschreiben).
+
+    SKIPS paragraphs inside <w:txbxContent> (the floating Sidebar textbox). The
+    Sidebar carries its own compact spacing in the source (240/276) — overriding
+    it with 1.5x line height makes the partner list overflow vertically and
+    cuts off the bottom half of the sidebar (PARTNER list runs past the
+    page edge into the footer area).
+    """
     LINE = "360"  # 1.5 line spacing (matches Gutachten Normal style)
     SZ = "22"     # 11pt (matches Gutachten Normal style)
+    txbx_tag = f"{_W}txbxContent"
     for sdt in body.iter(f"{_W}sdt"):
         tag_el = sdt.find(f".//{_W}tag")
         if tag_el is None or tag_el.get(f"{_W}val") != "briefkopf-block":
             continue
         for p in sdt.iter(f"{_W}p"):
+            # Walk ancestors — skip if this paragraph lives inside a textbox
+            inside_textbox = False
+            ancestor = p.getparent()
+            while ancestor is not None:
+                if ancestor.tag == txbx_tag:
+                    inside_textbox = True
+                    break
+                ancestor = ancestor.getparent()
+            if inside_textbox:
+                continue
             pPr = p.find(f"{_W}pPr")
             if pPr is None:
                 pPr = etree.Element(f"{_W}pPr")
