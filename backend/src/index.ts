@@ -4,7 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { config } from './config';
-import { initDatabase, closeDatabase, getDb, cleanupExpiredExtractions, encryptExistingResults } from './db/database';
+import { initDatabase, closeDatabase, getDb, cleanupExpiredExtractions, cleanupOldAuditLog, encryptExistingResults } from './db/database';
 import { logger } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth';
@@ -93,6 +93,10 @@ async function start(): Promise<void> {
   // Data retention: cleanup expired extractions on startup and every hour
   cleanupExpiredExtractions(config.DATA_RETENTION_HOURS);
   setInterval(() => cleanupExpiredExtractions(config.DATA_RETENTION_HOURS), 60 * 60 * 1000);
+
+  // Audit-log retention: BRAO 5y default. Run on startup + once a day.
+  cleanupOldAuditLog(config.AUDIT_LOG_RETENTION_DAYS);
+  setInterval(() => cleanupOldAuditLog(config.AUDIT_LOG_RETENTION_DAYS), 24 * 60 * 60 * 1000);
 
   app.listen(config.PORT, () => {
     logger.info(`Server gestartet auf Port ${config.PORT}`);
