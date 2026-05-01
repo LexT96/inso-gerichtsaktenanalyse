@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
 import { requireExtractionAccess } from '../middleware/extractionAccess';
+import { heavyOperationRateLimit } from '../middleware/rateLimit';
 import { getDb } from '../db/database';
 import { logger } from '../utils/logger';
 
@@ -30,6 +31,7 @@ router.post(
   '/:id/shares',
   authMiddleware,
   requireExtractionAccess({ ownerOnly: true, skipAudit: true }),
+  heavyOperationRateLimit,
   (req: Request, res: Response): void => {
     const { extractionId, ownerId } = req.access!;
     const body = req.body as { userId?: number };
@@ -85,6 +87,7 @@ router.delete(
   '/:id/shares/:userId',
   authMiddleware,
   requireExtractionAccess({ ownerOnly: true, skipAudit: true }),
+  heavyOperationRateLimit,
   (req: Request, res: Response): void => {
     const { extractionId } = req.access!;
     const recipientId = parseInt(String(req.params['userId']), 10);
