@@ -32,3 +32,19 @@ export async function listShareCandidates(): Promise<ShareCandidate[]> {
   const res = await apiClient.get('/users/share-candidates');
   return res.data;
 }
+
+export type AccessLogAction = 'share_read' | 'share_edit' | 'share_granted' | 'share_revoked';
+
+export interface AccessLogEntry {
+  id: number;
+  userId: number | null;
+  actorName: string | null;
+  action: AccessLogAction;
+  details: string;
+  createdAt: string;
+}
+
+export async function listAccessLog(extractionId: number): Promise<AccessLogEntry[]> {
+  const res = await apiClient.get(`/extractions/${extractionId}/access-log`);
+  return res.data;
+}

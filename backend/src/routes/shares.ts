@@ -115,4 +115,24 @@ router.delete(
   }
 );
 
+// GET /:id/access-log — chronological audit entries (owner+admin only)
+router.get(
+  '/:id/access-log',
+  authMiddleware,
+  requireExtractionAccess({ ownerOnly: true, skipAudit: true }),
+  (req: Request, res: Response): void => {
+    const { extractionId } = req.access!;
+    const rows = getDb().prepare(
+      `SELECT a.id, a.user_id AS userId, u.display_name AS actorName,
+              a.action, a.details, a.created_at AS createdAt
+       FROM audit_log a
+       LEFT JOIN users u ON u.id = a.user_id
+       WHERE a.action IN ('share_read','share_edit','share_granted','share_revoked')
+         AND json_extract(a.details, '$.extractionId') = ?
+       ORDER BY a.id DESC LIMIT 200`
+    ).all(extractionId);
+    res.json(rows);
+  }
+);
+
 export default router;
