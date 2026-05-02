@@ -40,6 +40,41 @@ _W = f"{{{NS_W}}}"
 # start-of-body marker — everything BEFORE is the briefkopf block.
 BODY_START_MARKERS = ("Gutachten",)
 
+# Concrete TBS values → FELD_ placeholders. Only applied to paragraphs OUTSIDE
+# the sidebar textbox. Order matters: longer keys first so substring containment
+# (e.g. "Amtsgericht Trier" inside "Amtsgericht Trier, Az. 23 IN 156/25") is
+# resolved correctly. Used to convert a real outgoing letter (Briefkopf_TBS.docx)
+# back into a generic template when used as --source.
+CONCRETE_TO_FELD: dict[str, str] = {
+    # Mein Zeichen — most specific first to win the overlap with "Amtsgericht Trier"
+    "Amtsgericht Trier, Az. 23 IN 156/25": "FELD_Mein_Zeichen",
+    # Empfänger-Block (top-left framed paragraphs)
+    "Justizstraße 2-6": "FELD_Gericht_Adresse",
+    "54290 Trier": "FELD_Gericht_PLZ_Ort",
+    "Amtsgericht Trier": "FELD_Gericht_Ort",
+    # Sachbearbeiter-Block (top-right)
+    "RA Ingo Grünewald": "FELD_Sachbearbeiter_Name",
+    "0651 / 170 830 - 131": "FELD_Sachbearbeiter_Durchwahl",
+    "0651 / 170 830 - 0": "FELD_Standort_Telefon",
+    # E-Mail row: source has "Ingo.Gruenewald" + "@tbs-insolvenzverwalter.de"
+    # split across two runs. Convention from old Gutachten Muster:
+    # FELD_Sachbearbeiter_ + Email → letter-generator joins the two halves.
+    "Ingo.Gruenewald": "FELD_Sachbearbeiter_",
+    "@tbs-insolvenzverwalter.de": "Email",
+    # Ihr Zeichen (after Mein Zeichen replacement consumed the "Az."-bearing line)
+    "23 IN 156/25": "FELD_Ihr_Zeichen",
+}
+
+# Date paragraph is split across many tiny runs ('1', '4', '.0', '4', '.2026').
+# In the TBS source it's a standalone paragraph with text like
+# "Trier, den 14.04.2026". The "per beA" line lives in a separate paragraph
+# above and stays as static text.
+import re as _re
+_DATE_LINE_PATTERN = _re.compile(
+    r"^([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß \-]*?)(,\s*den\s*)(\d{1,2}\.\d{2}\.\d{4})\s*$"
+)
+_DATE_LINE_REPLACEMENT = r"FELD_Briefkopf_Ort\2FELD_Briefkopf_Datum"
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
@@ -63,6 +98,7 @@ def main() -> None:
 
     wrap_as_briefkopf_block(body, split_index)
     _rename_ki_to_feld_in_sdt(body)
+    _replace_concrete_with_feld_in_sdt(body)
     _enforce_explicit_spacing_in_sdt(body)
 
     _strip_body_after_briefkopf(body)
@@ -162,6 +198,71 @@ def _enforce_explicit_spacing_in_sdt(body: etree._Element) -> None:
             if sz is None:
                 sz = etree.SubElement(ppr_rpr, f"{_W}sz")
             sz.set(f"{_W}val", SZ)
+
+
+def _replace_concrete_with_feld_in_sdt(body: etree._Element) -> None:
+    """Convert concrete TBS values (used in a real outgoing letter) back into
+    FELD_ placeholders. Walks paragraphs in the briefkopf-block SDT, skips
+    those inside the sidebar textbox (w:txbxContent), and replaces text at
+    paragraph level (handles run-splitting via flatten-and-reflow).
+
+    Non-Briefkopf-source DOCX (where text is already FELD_/KI_ placeholders)
+    are unaffected because the concrete strings simply don't match.
+    """
+    txbx_tag = f"{_W}txbxContent"
+    drawing_tag = f"{_W}drawing"
+
+    def is_inside(p: etree._Element, target_tag: str) -> bool:
+        ancestor = p.getparent()
+        while ancestor is not None:
+            if ancestor.tag == target_tag:
+                return True
+            ancestor = ancestor.getparent()
+        return False
+
+    for sdt in body.iter(f"{_W}sdt"):
+        tag_el = sdt.find(f".//{_W}tag")
+        if tag_el is None or tag_el.get(f"{_W}val") != "briefkopf-block":
+            continue
+
+        for p in sdt.iter(f"{_W}p"):
+            # Skip Sidebar (textbox content) and any drawing-internal paragraphs
+            if is_inside(p, txbx_tag) or is_inside(p, drawing_tag):
+                continue
+
+            # Get all <w:t> in this paragraph that are NOT inside a drawing
+            # (anchors for floating images can sit inside a paragraph)
+            ts = []
+            for t in p.iter(f"{_W}t"):
+                inside_drawing = False
+                a = t.getparent()
+                while a is not None and a is not p:
+                    if a.tag == drawing_tag:
+                        inside_drawing = True
+                        break
+                    a = a.getparent()
+                if not inside_drawing:
+                    ts.append(t)
+            if not ts:
+                continue
+
+            full = "".join(t.text or "" for t in ts)
+            new = full
+
+            # Apply concrete-to-FELD mapping (longest keys first via dict order)
+            for old_text, feld in CONCRETE_TO_FELD.items():
+                new = new.replace(old_text, feld)
+
+            # Special-case the per-beA + Ort + Datum line (split across many runs)
+            new = _DATE_LINE_PATTERN.sub(_DATE_LINE_REPLACEMENT, new)
+
+            if new == full:
+                continue
+
+            # Flatten-and-reflow: write everything into the first <w:t>, blank the rest
+            ts[0].text = new
+            for t in ts[1:]:
+                t.text = ""
 
 
 def _rename_ki_to_feld_in_sdt(body: etree._Element) -> None:
