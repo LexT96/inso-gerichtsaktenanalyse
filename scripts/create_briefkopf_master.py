@@ -99,9 +99,11 @@ def main() -> None:
     wrap_as_briefkopf_block(body, split_index)
     _rename_ki_to_feld_in_sdt(body)
     _replace_concrete_with_feld_in_sdt(body)
-    _enforce_explicit_spacing_in_sdt(body)
-    _inline_siegel_logos_into_sidebar(body)
-    _trim_sidebar_top_spacers(body)
+    # NB: explicit spacing override / inline-siegel / trim-spacers were attempts
+    # to "fix" the layout but caused more problems than they solved. The TBS
+    # source renders correctly as-is — leave its formatting (line-spacing,
+    # font-size, floating siegel anchors, top spacers) untouched. Only do the
+    # concrete-to-FELD conversion needed for templating.
 
     _strip_body_after_briefkopf(body)
 
